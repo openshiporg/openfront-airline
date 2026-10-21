@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "steps": [
+    { "key": "carrier_profile", "label": "Carrier identity", "dependsOn": [] },
+    { "key": "network_catalog", "label": "Route and commercial catalog", "dependsOn": ["carrier_profile"] },
+    { "key": "dated_service", "label": "Sellable dated service", "dependsOn": ["network_catalog"] },
+    { "key": "station_scope", "label": "Station authorization", "dependsOn": ["carrier_profile"] },
+    { "key": "settlement_boundary", "label": "External settlement evidence", "dependsOn": ["carrier_profile"] },
+    { "key": "launch_review", "label": "Bounded launch review", "dependsOn": ["dated_service", "station_scope", "settlement_boundary"] }
+  ],
+  "supportedCurrencies": ["USD", "EUR", "GBP", "CAD", "AUD"],
+  "timezoneExamples": ["America/New_York", "Europe/London", "Asia/Singapore"],
+  "launchScope": "One carrier, direct-only, nonstop standard fares, externally evidenced manual settlement, internal ticketing, station-scoped passenger service, and operator-led same-route recovery."
+}

@@ -1,163 +1,221 @@
-# Next.js + KeystoneJS Starter
+# Openfront Airline
 
-A modern full-stack application combining Next.js 15 with KeystoneJS 6, featuring admin dashboard implementation and sophisticated role-based permissions.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fopenshiporg%2Fopenfront-airline&env=DATABASE_URL%2CSESSION_SECRET%2CS3_BUCKET_NAME%2CS3_REGION%2CS3_ACCESS_KEY_ID%2CS3_SECRET_ACCESS_KEY)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjunaid33%2Fnext-keystone-starter%2F&stores=[{"type"%3A"postgres"}])
+Openfront Airline is a self-hostable airline retailing and passenger-service application. Customers can explore flight options and manage bookings, while airline teams manage network schedules, dated flights, inventory, offers, passengers, departures, payments, and disruption recovery.
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/TK5wC1?referralCode=I_tWSs)
+## Demo
 
-## Architecture Overview
+Explore the application locally using the setup instructions below.
 
-This project features a **modern admin architecture** with:
+| | |
+|---|---|
+| **Public application** | `/` on your development URL |
+| **Dashboard** | `/dashboard` on your development URL |
 
-- **Backend**: KeystoneJS 6 providing GraphQL API, authentication, and database operations
-- **Frontend**: Custom Next.js admin dashboard with enhanced UI components
-- **Image Support**: S3-compatible image storage and management 
+[Learn more →](https://openship.org/products/openfront-airline)
 
-## Tech Stack
+[Documentation →](https://docs.openship.org/docs/openfront/airline/)
 
-### Frontend
-- **Next.js 15** with App Router
-- **React 19** with TypeScript
-- **Radix UI** primitives for accessible components
-- **Tailwind CSS 4** for styling
-- **Remix Icons** (@remixicon/react) for icons
-- **SWR** for client-side data fetching
-- **TipTap** for rich text editing
-- **React Hook Form** for form management
-- **Zod** for schema validation
+## The Openfront Ecosystem
 
-### Backend
-- **KeystoneJS 6** for GraphQL API and admin interface
-- **Prisma ORM** for database operations
-- **GraphQL Yoga** for GraphQL server
-- **PostgreSQL** database
-- **S3-compatible storage** for image management
+Openfront is part of an ecosystem of open-source commerce tools:
 
-### Key Features
-- **Role-based access control** with granular permissions
-- **Dynamic field controllers** with conditional behavior
-- **Rich text editing** with document fields
-- **Relationship management** with inline editing capabilities
-- **Image upload and management** with S3 storage
-- **Inline create/edit components** for seamless UX
-- **Advanced filtering system** for all field types
-- **Responsive design** with mobile support
+- **[Openfront E-commerce](https://github.com/openshiporg/openfront)**: Headless e-commerce for retail.
+- **[Openfront Restaurant](https://github.com/openshiporg/openfront-restaurant)**: Restaurant ordering, point of sale, and kitchen operations.
+- **[Openship](https://github.com/openshiporg/openship)**: Order routing for multi-channel fulfillment.
+- **Openfront Airline**: (This repository) a self-hostable airline retailing and passenger-service application.
+
+## Core Features
+
+### Admin Dashboard
+Manage settings, offers, disruptions, payments, bookings, store settings, departures, schedules, passengers, inventory, manifests through dedicated dashboard workspaces and permission-controlled data screens.
+
+### Storefront
+Public pages include flight discovery, `/manage-booking`, `/manage`, `/check-in`, and `/status`. Customer booking operations use a record locator together with a private access token.
+
+### Offers, Inventory & Booking
+Configure routes, schedules, dated flights, cabins, fare brands, rules, ancillaries, inventory buckets, and holds. Create offers and bookings with immutable booking lines.
+
+### Passenger & Airport Operations
+Maintain passengers, travel-document verification, tickets and coupons, seats, check-in, boarding passes, bags, manifests, boarding, and offloading.
+
+### Servicing & Recovery
+Record disruptions, reaccommodation, exchanges, refunds, settlement evidence, and outbox recovery. The registered payment adapter is manual reconciliation, not a live card-acquiring or global distribution connection.
+
+## Architecture
+
+### Technology Stack
+- **Frontend**: Next.js 16 with App Router and React 19.
+- **Backend**: KeystoneJS 6 with a GraphQL API.
+- **Database**: PostgreSQL with Prisma ORM.
+- **Styling**: Tailwind CSS 4 and shared shadcn/ui components.
+- **Authentication**: Password-based user accounts and session-based access with role capabilities.
+
+### Application Structure
+```text
+openfront-airline/
+├── app/                    # Public pages, dashboard routes, and HTTP endpoints
+├── features/
+│   ├── keystone/           # Backend models, access rules, and GraphQL workflows
+│   ├── platform/           # Operator workspaces and onboarding
+│   ├── storefront/         # Public application components and screens
+│   └── dashboard/          # Authentication and shared dashboard shell
+└── components/             # Shared UI components
+```
+
+### Data Models
+The [model registry](features/keystone/models/index.ts) and [Prisma schema](schema.prisma) cover:
+
+- Carriers, airports, stations, agents, routes, schedules, and flight instances.
+- Cabins, inventory, fares, ancillaries, offers, holds, bookings, and journeys.
+- Passengers, documents, tickets, coupons, seats, check-in, boarding, and baggage.
+- Payments, reconciliation, exchanges, refunds, disruptions, provider records, credentials, audit events, and outbox.
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ 
-- PostgreSQL database
+- Node.js 22, compatible with the [package requirements](package.json) and Next.js 16.
+- A PostgreSQL database you can migrate.
+- npm.
 
 ### Setup
 
 1. **Clone and install dependencies:**
    ```bash
-   git clone https://github.com/junaid33/next-keystone-starter
-   cd next-keystone-starter
+   git clone https://github.com/openshiporg/openfront-airline.git
+   cd openfront-airline
    npm install
    ```
 
 2. **Configure environment variables:**
    ```bash
-   cp env.example .env
+   cp .env.example .env
    ```
-   
-   Update `.env` with your database configuration:
+
+   Review the [example configuration](.env.example) and replace its placeholders. Keep only the local settings you need; do not copy production-mode or infrastructure examples unchanged.
+
    ```env
-   DATABASE_URL=postgresql://username:password@localhost:5432/database_name
-   SESSION_SECRET=your-super-secret-session-key-change-this-in-production
+   DATABASE_URL=postgresql://user:password@host/database
+   SESSION_SECRET=replace-with-a-new-private-random-secret
    ```
+
+   Generate the session secret with `openssl rand -hex 32`; use the generated value, not the placeholder. Never commit `.env`.
+
+   Review [runtime configuration](features/keystone/index.ts) for additional application settings before building or deploying. Configure enabled integrations separately; the two values above are not a complete production configuration.
+
+   Production also requires configured object storage. Set `S3_BUCKET_NAME`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`, and supply the S3-compatible endpoint described in the source. Review mail and application-specific security settings there as well.
 
 3. **Start development server:**
    ```bash
    npm run dev
    ```
 
-   This will:
-   - Build KeystoneJS schema
-   - Run database migrations
-   - Start Next.js development server with Turbopack
+   The development script prepares the backend schema, applies checked-in migrations, and starts Next.js.
 
 4. **Access the application:**
-   - Frontend: [http://localhost:3000](http://localhost:3000)
-   - Dashboard: [http://localhost:3000/dashboard](http://localhost:3000/dashboard)
-   - GraphQL API: [http://localhost:3000/api/graphql](http://localhost:3000/api/graphql)
+   Open the URL `npm run dev` prints, then use these paths:
+
+   - **Public application**: `/`
+   - **Admin dashboard**: `/dashboard`
+   - **GraphQL API**: `/api/graphql`
+
+5. **Create your first admin user:**
+   Use `/dashboard/init` only when initial operator setup is enabled, as defined in [the Keystone configuration](features/keystone/index.ts). Production setup is explicitly gated; disable initial setup again after creating the first carrier administrator.
+
+6. **Run application onboarding:**
+   Complete carrier onboarding, review network and dated-flight inventory, and configure station authority, provider records, and customer sales settings before opening direct sales.
 
 ## Development Commands
 
-- `npm run dev` - Build Keystone + migrate + start Next.js dev server
-- `npm run build` - Build Keystone + migrate + build Next.js for production
-- `npm run migrate:gen` - Generate and apply new database migrations
-- `npm run migrate` - Deploy existing migrations to database
-- `npm run lint` - Run ESLint
+- `npm run dev` - Prepare the backend schema, apply migrations, and start Next.js development.
+- `npm run build` - Build the backend and Next.js for production; does not apply migrations.
+- `npm start` - Validate production runtime requirements and start the web server.
+- `npm run migrate:gen` - Create migration SQL, run the migration-safety check, then apply development migrations.
+- `npm run migrate` - Apply checked-in Prisma migrations.
+- `npm run lint` - Run the repository's ESLint script.
+- `npm run typecheck` - Run the configured TypeScript check.
+- `npm run test` - Run the repository's configured test suite.
+- `npm run worker` - Run the application's background worker.
 
-## API Endpoints
+Use a disposable development database for migration generation. Review the script before running it against any existing data.
 
-### GraphQL API
-- **Endpoint**: `/api/graphql`
-- **Features**: Full CRUD operations, relationships, authentication
-- **Playground**: Available in development mode
+### Airline Provider Integration
+The [payment registry](features/integrations/payment/index.ts) includes manual reconciliation only. The [airline commands](features/keystone/mutations/index.ts) cover booking, flight provisioning, departures, customer access, disruptions, and outbox recovery. Configure specialist provider connections explicitly rather than treating ticket or payment records as external execution.
 
-## Data Models
+## Documentation
 
-### Core Models
-- **User** - Authentication and user management
-- **Role** - Role-based access control
-- **Todo** - Example content model with relationships
-- **TodoImage** - Image management for Todo items with S3 storage
+See the [Openfront Airline documentation](https://docs.openship.org/docs/openfront/airline/) for the application guide. The [backend models](features/keystone/models), [registered business workflows](features/keystone/mutations/index.ts), [access rules](features/keystone/access.ts), and [application routes](app) document the implementation in this repository.
 
-### Permission System
-Sophisticated role-based permissions including:
-- `canAccessDashboard`, `canManagePeople`, `canManageRoles`
-- `canCreateTodos`, `canManageAllTodos`
-- `canSeeOtherPeople`, `canEditOtherPeople`
+## Security & Permissions
 
-## Project Structure
+### Role-Based Access Control
+- `canAccessDashboard` - Access dashboard.
+- `canManageNetwork` - Manage network.
+- `canManageInventory` - Manage inventory.
+- `canManageBookings` - Manage bookings.
+- `canManagePassengers` - Manage passengers.
+- `canManageSecurePassengerData` - Manage secure passenger data.
 
-```
-├── app/                    # Next.js App Router
-│   ├── api/
-│   │   └── graphql.ts     # GraphQL API endpoint
-│   └── dashboard/         # Admin dashboard pages
-├── features/
-│   ├── keystone/          # Backend configuration
-│   │   ├── models/        # Keystone list definitions
-│   │   ├── access.ts      # Permission logic
-│   │   └── mutations/     # Custom GraphQL mutations
-│   └── dashboard/         # Admin interface implementation
-│       ├── actions/       # Server actions
-│       ├── components/    # Reusable UI components
-│       ├── screens/       # Page-level components
-│       └── views/         # Field type implementations
-├── keystone.ts            # KeystoneJS configuration
-└── schema.prisma          # Database schema
-```
+### Security Features
+- Session-based authentication for signed-in users.
+- Backend list access and workflow authorization, rather than dashboard visibility alone.
+- Carrier filters and current-permission checks scope operational data; station-scoped commands add local operating authority. Tenant ownership is immutable once assigned, and customer booking access is separate from operator authority.
 
-## Development Notes
+Review the [access implementation](features/keystone/access.ts) and individual workflow checks before extending permissions.
 
-- **GraphQL endpoint** available at `/api/graphql`
-- **Field implementations** follow KeystoneJS controller patterns
-- **Permission checks** are integrated throughout the UI layer
-- **Server actions** used for data mutations in dashboard components
-- **Inline editing** components provide seamless UX for relationship management
-- **Image uploads** configured for S3-compatible storage
-- **Advanced filtering** supports all field types including documents, JSON, and images
+## Platform Components
+
+### Admin Platform (`/dashboard`)
+- **Settings**: `/dashboard/platform/settings`.
+- **Offers**: `/dashboard/platform/offers`.
+- **Disruptions**: `/dashboard/platform/disruptions`.
+- **Payments**: `/dashboard/platform/payments`.
+- **Bookings**: `/dashboard/platform/bookings`.
+- **Store Settings**: `/dashboard/platform/store-settings`.
+- **Departures**: `/dashboard/platform/departures`.
+- **Schedules**: `/dashboard/platform/schedules`.
+- **Passengers**: `/dashboard/platform/passengers`.
+- **Inventory**: `/dashboard/platform/inventory`.
+- **Manifests**: `/dashboard/platform/manifests`.
+
+### Storefront Experience
+Public pages include flight discovery, `/manage-booking`, `/manage`, `/check-in`, and `/status`. Customer booking operations use a record locator together with a private access token.
+
+Configure routes, schedules, dated flights, cabins, fare brands, rules, ancillaries, inventory buckets, and holds. Create offers and bookings with immutable booking lines.
 
 ## Deployment
 
-The application can be deployed to any platform supporting Node.js and PostgreSQL:
+### Production Deployment
+The Vercel button imports this application's own repository. Provision PostgreSQL and configure the application's complete runtime requirements, storage, mail, and enabled providers before building. Importing the source does not configure these services or grant regulatory approval.
 
-1. Set up PostgreSQL database
-2. Configure environment variables
-3. Run `npm run build`
-4. Run `npm start`
+Build the application and apply checked-in migrations as a release step before starting the server. Back up existing data before migration.
+
+```bash
+npm run build
+npm run migrate
+npm start
+```
+
+The included [Railway configuration](railway.toml) defines this app's build and startup lifecycle. Provision services and secrets separately.
+
+### Scaling Considerations
+Run `npm run worker` separately for hold reaping, unpaid-booking expiry, and outbox delivery. Configure the expected worker identity and heartbeat before using production readiness checks. `npm start` validates production configuration before starting the web server.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
+Use the development commands above when preparing changes. Keep model changes and their migrations together, and describe workflow and permission changes in pull requests.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
+
+## Support
+
+- **Documentation**: [Openfront Airline guide](https://docs.openship.org/docs/openfront/airline/).
+- **Issues**: [Report bugs and feature requests](https://github.com/openshiporg/openfront-airline/issues).
+- **Product**: [Learn more about Openfront Airline](https://openship.org/products/openfront-airline).
+
+---
+
+Built with [Next.js](https://nextjs.org) and [KeystoneJS](https://keystonejs.com).

@@ -1,7 +1,12 @@
-# Railway can't access internal databases during build, so we move
-# npm run migrate from build to start command
+# Railway cannot access internal databases during image build. The web service
+# is the sole migration owner and deploys migrations once in pre-deploy.
 [build]
 buildCommand = "keystone build --no-ui && next build"
 
 [deploy]
-startCommand = "npm run migrate && next start"
+preDeployCommand = "npm run migrate"
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

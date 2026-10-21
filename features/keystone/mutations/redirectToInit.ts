@@ -1,13 +1,18 @@
-import type { Context } from '.keystone/types';
+import type { Context } from '.keystone/types'
 
-async function redirectToInit(root: any, args: any, context: Context) {
-  // 1. Query the current user see if they are signed in
-  const userCount = await context.sudo().query.User.count({});
+import { initialOperatorSetupEnabled } from '../lib/initial-operator-setup'
 
-  if (userCount === 0) {
-    return true;
-  }
-  return false;
+export async function shouldRedirectToInitialOperatorSetup(
+  context: Pick<Context, 'sudo'>,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  if (!initialOperatorSetupEnabled(env)) return false
+  const userCount = await context.sudo().query.User.count({})
+  return userCount === 0
 }
 
-export default redirectToInit;
+async function redirectToInit(_root: unknown, _args: unknown, context: Context) {
+  return shouldRedirectToInitialOperatorSetup(context)
+}
+
+export default redirectToInit

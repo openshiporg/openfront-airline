@@ -1,0 +1,8 @@
+[build]
+buildCommand = "keystone build --no-ui && next build"
+
+[deploy]
+# The web service is the single serialized migration owner.
+startCommand = "npm run worker"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

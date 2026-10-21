@@ -1,9 +1,4 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { 
-  Tool,
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { 
   getIntrospectionQuery, 
   buildClientSchema, 
@@ -12,7 +7,13 @@ import {
   isListType,
   isInputObjectType,
 } from 'graphql';
-import { getBaseUrl } from '@/features/dashboard/lib/getBaseUrl';
+import { resolveServerBaseUrl } from '@/features/keystone/lib/server-base-url';
+import {
+  assertGraphQLOperation,
+  assertGraphQLSelection,
+  boundedSearchLimit,
+  graphqlStringLiteral,
+} from '../graphql-input';
 
 // Get simple type name for display
 function getSimpleTypeName(type: any): string {
@@ -71,15 +72,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
   let dataHasChanged = false;
   
   try {
+    if (process.env.NODE_ENV === 'production' && process.env.AI_ASSISTANT_ENABLED !== 'true') return new Response('Not found', { status: 404 })
     const { transport } = await params;
-    
+    if (transport !== 'http') {
+      return new Response(JSON.stringify({
+        jsonrpc: '2.0', id: null,
+        error: { code: -32600, message: 'Unsupported transport' },
+      }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
     // Construct GraphQL endpoint
-    const baseUrl = await getBaseUrl();
+    const baseUrl = resolveServerBaseUrl();
     const graphqlEndpoint = `${baseUrl}/api/graphql`;
     
-    // Extract cookie from request
+    // Extract cookie from request and fail before introspection for anonymous callers.
     const cookie = request.headers.get('cookie') || ''
-  
+    const authResult = await executeGraphQL('query { authenticatedItem { ... on User { id } } }', graphqlEndpoint, cookie)
+    if (!authResult.data?.authenticatedItem?.id) return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Authentication required' } }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+
     // Get the GraphQL schema
     const schema = await getGraphQLSchema(graphqlEndpoint, cookie);
     
@@ -132,7 +142,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             operation: {
               type: 'string',
-              description: 'The GraphQL operation name (e.g., "users", "todos", "roles")'
+              description: 'The GraphQL operation name (e.g., "users", "bookings", "passengers")'
             },
             fields: {
               type: 'string',
@@ -149,7 +159,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             searchTerm: {
               type: 'string',
-              description: 'The search term to find models (e.g., "User", "Todo", "Role")'
+              description: 'The search term to find models (e.g., "User", "Booking", "Passenger")'
             }
           },
           required: ['searchTerm']
@@ -162,7 +172,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             typeName: {
               type: 'string',
-              description: 'The GraphQL type name to get fields for (e.g., "User", "Todo", "Role")'
+              description: 'The GraphQL type name to get fields for (e.g., "User", "Booking", "Passenger")'
             }
           },
           required: ['typeName']
@@ -175,7 +185,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             inputTypeName: {
               type: 'string',
-              description: 'The GraphQL input type name (e.g., "UserCreateInput", "TodoUpdateInput")'
+              description: 'The GraphQL input type name (e.g., "PassengerCreateInput", "BookingUpdateInput")'
             }
           },
           required: ['inputTypeName']
@@ -188,7 +198,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             operation: {
               type: 'string',
-              description: 'The GraphQL create mutation name (e.g., "createUser", "createTodo")'
+              description: 'The GraphQL create mutation name (e.g., "createPassenger", "createBooking")'
             },
             data: {
               type: 'string',
@@ -209,7 +219,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             operation: {
               type: 'string',
-              description: 'The GraphQL update mutation name (e.g., "updateUser", "updateTodo")'
+              description: 'The GraphQL update mutation name (e.g., "updatePassenger", "updateBooking")'
             },
             where: {
               type: 'string',
@@ -234,7 +244,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             operation: {
               type: 'string',
-              description: 'The GraphQL delete mutation name (e.g., "deleteUser", "deleteTodo")'
+              description: 'The GraphQL delete mutation name (e.g., "deletePassenger", "deleteBooking")'
             },
             where: {
               type: 'string',
@@ -255,7 +265,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           properties: {
             modelName: {
               type: 'string',
-              description: 'The model name to search (e.g., "Product", "User", "Todo"). Will be automatically converted to the correct GraphQL operation name.'
+              description: 'The model name to search (e.g., "Booking", "User", "Passenger"). Will be automatically converted to the correct GraphQL operation name.'
             },
             searchQuery: {
               type: 'string',
@@ -353,12 +363,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
         
         if (name === 'queryData') {
           const { operation, fields } = args;
-          
+          const safeOperation = assertGraphQLOperation(schema, operation, 'query');
+          const safeFields = assertGraphQLSelection(fields);
+
           // Build a simple GraphQL query
           const queryString = `
-            query ${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation} {
-                ${fields}
+            query ${safeOperation.charAt(0).toUpperCase() + safeOperation.slice(1)} {
+              ${safeOperation} {
+                ${safeFields}
               }
             }
           `.trim();
@@ -604,14 +616,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
         
         if (name === 'createData') {
           const { operation, data, fields } = args;
-          
+          const safeOperation = assertGraphQLOperation(schema, operation, 'mutation');
+          const safeFields = assertGraphQLSelection(fields);
+
           // Parse the data JSON string
           const dataObject = JSON.parse(data);
-          
+
           const mutationString = `
-            mutation Create${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation}(data: ${JSON.stringify(dataObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
-                ${fields}
+            mutation Create${safeOperation.charAt(0).toUpperCase() + safeOperation.slice(1)} {
+              ${safeOperation}(data: ${JSON.stringify(dataObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
+                ${safeFields}
               }
             }
           `.trim();
@@ -642,15 +656,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
         
         if (name === 'updateData') {
           const { operation, where, data, fields } = args;
-          
+          const safeOperation = assertGraphQLOperation(schema, operation, 'mutation');
+          const safeFields = assertGraphQLSelection(fields);
+
           // Parse the JSON strings
           const whereObject = JSON.parse(where);
           const dataObject = JSON.parse(data);
-          
+
           const mutationString = `
-            mutation Update${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation}(where: ${JSON.stringify(whereObject).replace(/\"([^\"]+)\":/g, '$1:')}, data: ${JSON.stringify(dataObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
-                ${fields}
+            mutation Update${safeOperation.charAt(0).toUpperCase() + safeOperation.slice(1)} {
+              ${safeOperation}(where: ${JSON.stringify(whereObject).replace(/\"([^\"]+)\":/g, '$1:')}, data: ${JSON.stringify(dataObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
+                ${safeFields}
               }
             }
           `.trim();
@@ -681,14 +697,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
         
         if (name === 'deleteData') {
           const { operation, where, fields } = args;
-          
+          const safeOperation = assertGraphQLOperation(schema, operation, 'mutation');
+          const safeFields = assertGraphQLSelection(fields);
+
           // Parse the where JSON string
           const whereObject = JSON.parse(where);
-          
+
           const mutationString = `
-            mutation Delete${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation}(where: ${JSON.stringify(whereObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
-                ${fields}
+            mutation Delete${safeOperation.charAt(0).toUpperCase() + safeOperation.slice(1)} {
+              ${safeOperation}(where: ${JSON.stringify(whereObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
+                ${safeFields}
               }
             }
           `.trim();
@@ -719,7 +737,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
         
         if (name === 'modelSpecificSearch') {
           const { modelName, searchQuery, fields, limit = 10 } = args;
-          
+          const safeFields = assertGraphQLSelection(fields);
+          const safeLimit = boundedSearchLimit(limit);
+          const searchLiteral = graphqlStringLiteral(searchQuery.trim());
+
           // Get all types from schema to find the correct model
           const typeMap = schema.getTypeMap();
           let foundModel = null;
@@ -796,8 +817,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
             });
           }
           
+          const safeOperationName = assertGraphQLOperation(schema, operationName, 'query');
+
           // Get the actual fields available on this model by checking the GraphQL schema
-          const queryField = schema.getQueryType()?.getFields()[operationName];
+          const queryField = schema.getQueryType()?.getFields()[safeOperationName];
           const returnType = queryField?.type;
           let availableFields: string[] = [];
           
@@ -818,7 +841,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           
           // Add ID search (exact match) - ID should always exist
           if (searchTerm && availableFields.includes('id')) {
-            searchConditions.push(`{ id: { equals: "${searchTerm}" } }`);
+            searchConditions.push(`{ id: { equals: ${searchLiteral} } }`);
           }
           
           // Add text field search (case-insensitive contains) for fields that exist
@@ -826,7 +849,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           const validSearchFields = commonSearchFields.filter(field => availableFields.includes(field));
           
           for (const fieldName of validSearchFields) {
-            searchConditions.push(`{ ${fieldName}: { contains: "${searchTerm}", mode: insensitive } }`);
+            searchConditions.push(`{ ${fieldName}: { contains: ${searchLiteral}, mode: insensitive } }`);
           }
           
           // Build the GraphQL query manually to avoid JSON.stringify issues with enums
@@ -837,11 +860,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           
           const queryString = `
             query Search${foundModel} {
-              ${operationName}(
+              ${safeOperationName}(
                 ${whereClause}
-                take: ${limit}
+                take: ${safeLimit}
               ) {
-                ${fields}
+                ${safeFields}
               }
             }
           `.trim();
@@ -858,12 +881,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
                 text: JSON.stringify({
                   searchQuery: searchTerm,
                   modelName: foundModel,
-                  operationName,
+                  operationName: safeOperationName,
                   availableFields,
                   validSearchFields,
                   queryUsed: queryString,
                   results: result,
-                  total: result?.data?.[operationName]?.length || 0
+                  total: result?.data?.[safeOperationName]?.length || 0
                 }, null, 2),
               }],
             }
@@ -906,7 +929,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
       error: { 
         code: -32603, 
         message: 'Internal error',
-        data: error instanceof Error ? error.message : String(error)
+        data: process.env.NODE_ENV === 'production'
+          ? undefined
+          : error instanceof Error ? error.message : String(error)
       }
     }), {
       status: 500,
@@ -916,11 +941,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ transport: string }> }) {
+  if (process.env.NODE_ENV === 'production' && process.env.AI_ASSISTANT_ENABLED !== 'true') return new Response('Not found', { status: 404 })
   const { transport } = await params;
-  
-  const baseUrl = await getBaseUrl();
+  if (transport !== 'http') {
+    return new Response(JSON.stringify({ error: 'Unsupported transport' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const baseUrl = resolveServerBaseUrl();
   const graphqlEndpoint = `${baseUrl}/api/graphql`;
-  
+  const authResult = await executeGraphQL('query { authenticatedItem { ... on User { id } } }', graphqlEndpoint, request.headers.get('cookie') || '')
+  if (!authResult.data?.authenticatedItem?.id) return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+
   return new Response(JSON.stringify({ 
     message: 'Simple MCP Server is running',
     transport: transport,

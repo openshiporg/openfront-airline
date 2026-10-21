@@ -12,69 +12,2497 @@ generator client {
 }
 
 model User {
-  id                      String    @id @default(cuid())
-  name                    String    @default("")
-  email                   String    @unique @default("")
-  password                String
-  role                    Role?     @relation("User_role", fields: [roleId], references: [id])
-  roleId                  String?   @map("role")
-  tasks                   Todo[]    @relation("Todo_assignedTo")
-  passwordResetToken      String?
-  passwordResetIssuedAt   DateTime?
-  passwordResetRedeemedAt DateTime?
+  id                             String                    @id @default(cuid())
+  name                           String                    @default("")
+  email                          String                    @unique @default("")
+  password                       String
+  carrier                        Carrier?                  @relation("User_carrier", fields: [carrierId], references: [id])
+  carrierId                      String?                   @map("carrier")
+  role                           Role?                     @relation("User_role", fields: [roleId], references: [id])
+  roleId                         String?                   @map("role")
+  approvedAgent                  ApprovedAgent?            @relation("User_approvedAgent", fields: [approvedAgentId], references: [id])
+  approvedAgentId                String?                   @map("approvedAgent")
+  onboardingStatus               UserOnboardingStatusType? @default(not_started)
+  passengerProfile               Passenger?                @relation("Passenger_userAccount")
+  offers                         Offer[]                   @relation("Offer_customer")
+  bookings                       Booking[]                 @relation("Booking_customer")
+  auditEvents                    AuditEvent[]              @relation("AuditEvent_actor")
+  stationAssignments             StationAssignment[]       @relation("StationAssignment_user")
+  documentVerifications          DocumentVerification[]    @relation("DocumentVerification_verifiedBy")
+  submittedPaymentEvidence       ManualPaymentEvidence[]   @relation("ManualPaymentEvidence_submittedBy")
+  approvedPaymentEvidence        ManualPaymentEvidence[]   @relation("ManualPaymentEvidence_approvedBy")
+  onboardingSteps                OnboardingStep[]          @relation("OnboardingStep_user")
+  createdAt                      DateTime                  @default(now())
+  updatedAt                      DateTime                  @default(now()) @updatedAt
+  passwordResetToken             String?
+  passwordResetIssuedAt          DateTime?
+  passwordResetRedeemedAt        DateTime?
+  from_TravelDocument_verifiedBy TravelDocument[]          @relation("TravelDocument_verifiedBy")
+  from_IdempotencyKey_actor      IdempotencyKey[]          @relation("IdempotencyKey_actor")
 
+  @@index([carrierId])
   @@index([roleId])
+  @@index([approvedAgentId])
 }
 
 model Role {
-  id                 String  @id @default(cuid())
-  name               String  @default("")
-  canCreateTodos     Boolean @default(false)
-  canManageAllTodos  Boolean @default(false)
-  canSeeOtherPeople  Boolean @default(false)
-  canEditOtherPeople Boolean @default(false)
-  canManagePeople    Boolean @default(false)
-  canManageRoles     Boolean @default(false)
-  canAccessDashboard Boolean @default(false)
-  assignedTo         User[]  @relation("User_role")
+  id                           String   @id @default(cuid())
+  name                         String   @default("")
+  carrier                      Carrier? @relation("Role_carrier", fields: [carrierId], references: [id])
+  carrierId                    String?  @map("carrier")
+  canAccessDashboard           Boolean  @default(false)
+  canManageCarriers            Boolean  @default(false)
+  canReadUsers                 Boolean  @default(false)
+  canManageUsers               Boolean  @default(false)
+  canReadRoles                 Boolean  @default(false)
+  canManageRoles               Boolean  @default(false)
+  canManageAgents              Boolean  @default(false)
+  canReadNetwork               Boolean  @default(false)
+  canManageNetwork             Boolean  @default(false)
+  canReadInventory             Boolean  @default(false)
+  canManageInventory           Boolean  @default(false)
+  canReadOffers                Boolean  @default(false)
+  canManageOffers              Boolean  @default(false)
+  canReadBookings              Boolean  @default(false)
+  canManageBookings            Boolean  @default(false)
+  canReadPassengers            Boolean  @default(false)
+  canManagePassengers          Boolean  @default(false)
+  canManageSecurePassengerData Boolean  @default(false)
+  canReadTicketing             Boolean  @default(false)
+  canManageTicketing           Boolean  @default(false)
+  canReadPayments              Boolean  @default(false)
+  canManagePayments            Boolean  @default(false)
+  canReadAirportService        Boolean  @default(false)
+  canManageAirportService      Boolean  @default(false)
+  canReadDisruptions           Boolean  @default(false)
+  canManageDisruptions         Boolean  @default(false)
+  canReadIntegrations          Boolean  @default(false)
+  canManageIntegrations        Boolean  @default(false)
+  canReadAudit                 Boolean  @default(false)
+  canManageOnboarding          Boolean  @default(false)
+  assignedTo                   User[]   @relation("User_role")
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @default(now()) @updatedAt
+
+  @@index([carrierId])
 }
 
-model Todo {
-  id                   String      @id @default(cuid())
-  label                String      @default("")
-  description          Json        @default("[{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]}]")
-  isComplete           Boolean     @default(false)
-  status               String?     @default("todo")
-  priority             Int?        @default(1)
-  tags                 Json        @default("[]")
-  dueDate              DateTime?
-  weight               Float?      @default(1)
-  budget               Decimal?    @default("0.00") @postgresql.Decimal(10, 2)
-  isPrivate            Boolean     @default(false)
-  largeNumber          BigInt?
-  metadata             Json?
-  secretNote           String?
-  coverImage_id        String?
-  coverImage_filesize  Int?
-  coverImage_width     Int?
-  coverImage_height    Int?
-  coverImage_extension String?
-  todoImages           TodoImage[] @relation("Todo_todoImages")
-  assignedTo           User?       @relation("Todo_assignedTo", fields: [assignedToId], references: [id])
-  assignedToId         String?     @map("assignedTo")
-
-  @@index([assignedToId])
+model Carrier {
+  id                                   String                   @id @default(cuid())
+  name                                 String                   @default("")
+  legalName                            String                   @default("")
+  code                                 String                   @unique @default("")
+  icaoCode                             String?                  @unique
+  callsign                             String                   @default("")
+  defaultCurrencyCode                  String                   @default("USD")
+  defaultTimezone                      String                   @default("UTC")
+  status                               CarrierStatusType        @default(active)
+  directSalesEnabled                   Boolean                  @default(true)
+  storefrontBrandColor                 String?
+  storefrontHomepageTitle              String?
+  storefrontHomepageDescription        String?
+  users                                User[]                   @relation("User_carrier")
+  roles                                Role[]                   @relation("Role_carrier")
+  approvedAgents                       ApprovedAgent[]          @relation("ApprovedAgent_carrier")
+  routes                               Route[]                  @relation("Route_carrier")
+  schedules                            FlightSchedule[]         @relation("FlightSchedule_carrier")
+  flightInstances                      FlightInstance[]         @relation("FlightInstance_carrier")
+  bookings                             Booking[]                @relation("Booking_carrier")
+  serviceObligations                   ServiceObligation[]      @relation("ServiceObligation_carrier")
+  ticketCouponLineages                 TicketCouponLineage[]    @relation("TicketCouponLineage_carrier")
+  providerConnections                  ProviderConnection[]     @relation("ProviderConnection_carrier")
+  stationAssignments                   StationAssignment[]      @relation("StationAssignment_carrier")
+  documentVerifications                DocumentVerification[]   @relation("DocumentVerification_carrier")
+  machineCredentials                   MachineCredential[]      @relation("MachineCredential_carrier")
+  outboxEvents                         OutboxEvent[]            @relation("OutboxEvent_carrier")
+  manualPaymentEvidence                ManualPaymentEvidence[]  @relation("ManualPaymentEvidence_carrier")
+  settlementLedgerEntries              SettlementLedgerEntry[]  @relation("SettlementLedgerEntry_carrier")
+  onboardingSteps                      OnboardingStep[]         @relation("OnboardingStep_carrier")
+  createdAt                            DateTime                 @default(now())
+  updatedAt                            DateTime                 @default(now()) @updatedAt
+  from_FlightSchedule_operatingCarrier FlightSchedule[]         @relation("FlightSchedule_operatingCarrier")
+  from_FlightInstance_operatingCarrier FlightInstance[]         @relation("FlightInstance_operatingCarrier")
+  from_Cabin_carrier                   Cabin[]                  @relation("Cabin_carrier")
+  from_InventoryBucket_carrier         InventoryBucket[]        @relation("InventoryBucket_carrier")
+  from_InventoryHold_carrier           InventoryHold[]          @relation("InventoryHold_carrier")
+  from_FareBrand_carrier               FareBrand[]              @relation("FareBrand_carrier")
+  from_FareRule_carrier                FareRule[]               @relation("FareRule_carrier")
+  from_AncillaryProduct_carrier        AncillaryProduct[]       @relation("AncillaryProduct_carrier")
+  from_Offer_carrier                   Offer[]                  @relation("Offer_carrier")
+  from_OfferItem_carrier               OfferItem[]              @relation("OfferItem_carrier")
+  from_Passenger_carrier               Passenger[]              @relation("Passenger_carrier")
+  from_TravelDocument_carrier          TravelDocument[]         @relation("TravelDocument_carrier")
+  from_BookingPassenger_carrier        BookingPassenger[]       @relation("BookingPassenger_carrier")
+  from_Journey_carrier                 Journey[]                @relation("Journey_carrier")
+  from_BookingSegment_carrier          BookingSegment[]         @relation("BookingSegment_carrier")
+  from_BookingLineItem_carrier         BookingLineItem[]        @relation("BookingLineItem_carrier")
+  from_ServiceRequest_carrier          ServiceRequest[]         @relation("ServiceRequest_carrier")
+  from_Ticket_carrier                  Ticket[]                 @relation("Ticket_carrier")
+  from_TicketCoupon_carrier            TicketCoupon[]           @relation("TicketCoupon_carrier")
+  from_ElectronicMiscDocument_carrier  ElectronicMiscDocument[] @relation("ElectronicMiscDocument_carrier")
+  from_ElectronicMiscCoupon_carrier    ElectronicMiscCoupon[]   @relation("ElectronicMiscCoupon_carrier")
+  from_SeatMap_carrier                 SeatMap[]                @relation("SeatMap_carrier")
+  from_Seat_carrier                    Seat[]                   @relation("Seat_carrier")
+  from_SeatAssignment_carrier          SeatAssignment[]         @relation("SeatAssignment_carrier")
+  from_PaymentProvider_carrier         PaymentProvider[]        @relation("PaymentProvider_carrier")
+  from_PaymentSession_carrier          PaymentSession[]         @relation("PaymentSession_carrier")
+  from_Payment_carrier                 Payment[]                @relation("Payment_carrier")
+  from_Refund_carrier                  Refund[]                 @relation("Refund_carrier")
+  from_Exchange_carrier                Exchange[]               @relation("Exchange_carrier")
+  from_CheckIn_carrier                 CheckIn[]                @relation("CheckIn_carrier")
+  from_BoardingPass_carrier            BoardingPass[]           @relation("BoardingPass_carrier")
+  from_Bag_carrier                     Bag[]                    @relation("Bag_carrier")
+  from_BagEvent_carrier                BagEvent[]               @relation("BagEvent_carrier")
+  from_Disruption_carrier              Disruption[]             @relation("Disruption_carrier")
+  from_Reaccommodation_carrier         Reaccommodation[]        @relation("Reaccommodation_carrier")
+  from_IntegrationProvider_carrier     IntegrationProvider[]    @relation("IntegrationProvider_carrier")
+  from_WebhookEndpoint_carrier         WebhookEndpoint[]        @relation("WebhookEndpoint_carrier")
+  from_WebhookEvent_carrier            WebhookEvent[]           @relation("WebhookEvent_carrier")
+  from_IdempotencyKey_carrier          IdempotencyKey[]         @relation("IdempotencyKey_carrier")
+  from_AuditEvent_carrier              AuditEvent[]             @relation("AuditEvent_carrier")
 }
 
-model TodoImage {
-  id              String  @id @default(cuid())
-  image_id        String?
-  image_filesize  Int?
-  image_width     Int?
-  image_height    Int?
-  image_extension String?
-  imagePath       String  @default("")
-  altText         String  @default("")
-  todos           Todo[]  @relation("Todo_todoImages")
-  metadata        Json?
+model Airport {
+  id                              String              @id @default(cuid())
+  iataCode                        String              @unique @default("")
+  icaoCode                        String?             @unique
+  name                            String              @default("")
+  city                            String              @default("")
+  subdivisionCode                 String              @default("")
+  countryCode                     String              @default("")
+  timezone                        String              @default("")
+  isActive                        Boolean             @default(true)
+  departingRoutes                 Route[]             @relation("Route_origin")
+  arrivingRoutes                  Route[]             @relation("Route_destination")
+  departingFlights                FlightInstance[]    @relation("FlightInstance_origin")
+  arrivingFlights                 FlightInstance[]    @relation("FlightInstance_destination")
+  bagEvents                       BagEvent[]          @relation("BagEvent_airport")
+  stationAssignments              StationAssignment[] @relation("StationAssignment_airport")
+  createdAt                       DateTime            @default(now())
+  updatedAt                       DateTime            @default(now()) @updatedAt
+  from_Journey_origin             Journey[]           @relation("Journey_origin")
+  from_Journey_destination        Journey[]           @relation("Journey_destination")
+  from_BookingSegment_origin      BookingSegment[]    @relation("BookingSegment_origin")
+  from_BookingSegment_destination BookingSegment[]    @relation("BookingSegment_destination")
+  from_Bag_origin                 Bag[]               @relation("Bag_origin")
+  from_Bag_destination            Bag[]               @relation("Bag_destination")
+}
+
+model ApprovedAgent {
+  id                                String                              @id @default(cuid())
+  carrier                           Carrier?                            @relation("ApprovedAgent_carrier", fields: [carrierId], references: [id])
+  carrierId                         String?                             @map("carrier")
+  legalName                         String                              @default("")
+  tradingName                       String                              @default("")
+  externalReference                 String                              @default("")
+  accreditationType                 ApprovedAgentAccreditationTypeType? @default(other)
+  accreditationNumber               String                              @default("")
+  status                            ApprovedAgentStatusType             @default(pending)
+  validFrom                         DateTime?
+  validTo                           DateTime?
+  salesChannels                     Json?                               @default("[]")
+  servicingScopes                   Json?                               @default("[]")
+  contactEmail                      String                              @default("")
+  contactPhone                      String                              @default("")
+  users                             User[]                              @relation("User_approvedAgent")
+  offers                            Offer[]                             @relation("Offer_approvedAgent")
+  bookings                          Booking[]                           @relation("Booking_approvedAgent")
+  createdAt                         DateTime                            @default(now())
+  updatedAt                         DateTime                            @default(now()) @updatedAt
+  from_IdempotencyKey_approvedAgent IdempotencyKey[]                    @relation("IdempotencyKey_approvedAgent")
+  from_AuditEvent_approvedAgent     AuditEvent[]                        @relation("AuditEvent_approvedAgent")
+
+  @@index([carrierId])
+  @@index([externalReference])
+  @@index([accreditationNumber])
+}
+
+model Route {
+  id                       String           @id @default(cuid())
+  carrier                  Carrier?         @relation("Route_carrier", fields: [carrierId], references: [id])
+  carrierId                String?          @map("carrier")
+  routeKey                 String           @unique @default("")
+  origin                   Airport?         @relation("Route_origin", fields: [originId], references: [id])
+  originId                 String?          @map("origin")
+  destination              Airport?         @relation("Route_destination", fields: [destinationId], references: [id])
+  destinationId            String?          @map("destination")
+  status                   RouteStatusType  @default(active)
+  distanceKilometers       Int?
+  minimumConnectionMinutes Int?
+  isInternational          Boolean          @default(false)
+  schedules                FlightSchedule[] @relation("FlightSchedule_route")
+  flightInstances          FlightInstance[] @relation("FlightInstance_route")
+  fareRules                FareRule[]       @relation("FareRule_route")
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([originId])
+  @@index([destinationId])
+}
+
+model FlightSchedule {
+  id                 String                   @id @default(cuid())
+  carrier            Carrier?                 @relation("FlightSchedule_carrier", fields: [carrierId], references: [id])
+  carrierId          String?                  @map("carrier")
+  scheduleKey        String                   @unique @default("")
+  route              Route?                   @relation("FlightSchedule_route", fields: [routeId], references: [id])
+  routeId            String?                  @map("route")
+  operatingCarrier   Carrier?                 @relation("FlightSchedule_operatingCarrier", fields: [operatingCarrierId], references: [id])
+  operatingCarrierId String?                  @map("operatingCarrier")
+  flightNumber       String                   @default("")
+  serviceSuffix      String                   @default("")
+  departureLocalTime String                   @default("")
+  arrivalLocalTime   String                   @default("")
+  arrivalDayOffset   Int?                     @default(0)
+  daysOfWeek         Json?                    @default("[]")
+  effectiveFrom      DateTime?
+  effectiveTo        DateTime?
+  status             FlightScheduleStatusType @default(draft)
+  instances          FlightInstance[]         @relation("FlightInstance_schedule")
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([routeId])
+  @@index([operatingCarrierId])
+}
+
+model FlightInstance {
+  id                            String                   @id @default(cuid())
+  carrier                       Carrier?                 @relation("FlightInstance_carrier", fields: [carrierId], references: [id])
+  carrierId                     String?                  @map("carrier")
+  instanceKey                   String                   @unique @default("")
+  schedule                      FlightSchedule?          @relation("FlightInstance_schedule", fields: [scheduleId], references: [id])
+  scheduleId                    String?                  @map("schedule")
+  route                         Route?                   @relation("FlightInstance_route", fields: [routeId], references: [id])
+  routeId                       String?                  @map("route")
+  origin                        Airport?                 @relation("FlightInstance_origin", fields: [originId], references: [id])
+  originId                      String?                  @map("origin")
+  destination                   Airport?                 @relation("FlightInstance_destination", fields: [destinationId], references: [id])
+  destinationId                 String?                  @map("destination")
+  operatingCarrier              Carrier?                 @relation("FlightInstance_operatingCarrier", fields: [operatingCarrierId], references: [id])
+  operatingCarrierId            String?                  @map("operatingCarrier")
+  flightNumber                  String                   @default("")
+  serviceDate                   DateTime
+  scheduledDepartureAt          DateTime
+  scheduledArrivalAt            DateTime
+  estimatedDepartureAt          DateTime?
+  estimatedArrivalAt            DateTime?
+  actualDepartureAt             DateTime?
+  actualArrivalAt               DateTime?
+  departureTerminal             String                   @default("")
+  departureGate                 String                   @default("")
+  arrivalTerminal               String                   @default("")
+  arrivalGate                   String                   @default("")
+  status                        FlightInstanceStatusType @default(scheduled)
+  inventoryBuckets              InventoryBucket[]        @relation("InventoryBucket_flightInstance")
+  seatMaps                      SeatMap[]                @relation("SeatMap_flightInstance")
+  bookingSegments               BookingSegment[]         @relation("BookingSegment_flightInstance")
+  checkIns                      CheckIn[]                @relation("CheckIn_flightInstance")
+  bags                          Bag[]                    @relation("Bag_flightInstance")
+  disruptions                   Disruption[]             @relation("Disruption_flightInstance")
+  createdAt                     DateTime                 @default(now())
+  updatedAt                     DateTime                 @default(now()) @updatedAt
+  from_OfferItem_flightInstance OfferItem[]              @relation("OfferItem_flightInstance")
+
+  @@index([carrierId])
+  @@index([scheduleId])
+  @@index([routeId])
+  @@index([originId])
+  @@index([destinationId])
+  @@index([operatingCarrierId])
+  @@index([serviceDate])
+  @@index([scheduledDepartureAt])
+  @@index([scheduledArrivalAt])
+}
+
+model Cabin {
+  id               String              @id @default(cuid())
+  carrier          Carrier?            @relation("Cabin_carrier", fields: [carrierId], references: [id])
+  carrierId        String?             @map("carrier")
+  code             String              @default("")
+  name             String              @default("")
+  cabinClass       CabinCabinClassType
+  displayOrder     Int?                @default(0)
+  fareBrands       FareBrand[]         @relation("FareBrand_cabin")
+  inventoryBuckets InventoryBucket[]   @relation("InventoryBucket_cabin")
+  seats            Seat[]              @relation("Seat_cabin")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @default(now()) @updatedAt
+
+  @@index([carrierId])
+}
+
+model InventoryBucket {
+  id               String                    @id @default(cuid())
+  carrier          Carrier?                  @relation("InventoryBucket_carrier", fields: [carrierId], references: [id])
+  carrierId        String?                   @map("carrier")
+  bucketKey        String                    @unique @default("")
+  flightInstance   FlightInstance?           @relation("InventoryBucket_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId String?                   @map("flightInstance")
+  cabin            Cabin?                    @relation("InventoryBucket_cabin", fields: [cabinId], references: [id])
+  cabinId          String?                   @map("cabin")
+  fareBrand        FareBrand?                @relation("InventoryBucket_fareBrand", fields: [fareBrandId], references: [id])
+  fareBrandId      String?                   @map("fareBrand")
+  bookingClassCode String                    @default("")
+  capacity         Int                       @default(0)
+  authorized       Int                       @default(0)
+  sold             Int                       @default(0)
+  held             Int                       @default(0)
+  blocked          Int                       @default(0)
+  baseAmount       Int                       @default(0)
+  taxAmount        Int                       @default(0)
+  currencyCode     String                    @default("USD")
+  status           InventoryBucketStatusType @default(open)
+  holds            InventoryHold[]           @relation("InventoryHold_inventoryBucket")
+  offerItems       OfferItem[]               @relation("OfferItem_inventoryBucket")
+  bookingSegments  BookingSegment[]          @relation("BookingSegment_inventoryBucket")
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([flightInstanceId])
+  @@index([cabinId])
+  @@index([fareBrandId])
+}
+
+model InventoryHold {
+  id                String                  @id @default(cuid())
+  carrier           Carrier?                @relation("InventoryHold_carrier", fields: [carrierId], references: [id])
+  carrierId         String?                 @map("carrier")
+  holdKey           String                  @unique @default("")
+  inventoryBucket   InventoryBucket?        @relation("InventoryHold_inventoryBucket", fields: [inventoryBucketId], references: [id])
+  inventoryBucketId String?                 @map("inventoryBucket")
+  offer             Offer?                  @relation("InventoryHold_offer", fields: [offerId], references: [id])
+  offerId           String?                 @map("offer")
+  quantity          Int
+  status            InventoryHoldStatusType @default(active)
+  expiresAt         DateTime
+  convertedAt       DateTime?
+  releasedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([inventoryBucketId])
+  @@index([offerId])
+  @@index([expiresAt])
+}
+
+model FareBrand {
+  id                   String              @id @default(cuid())
+  carrier              Carrier?            @relation("FareBrand_carrier", fields: [carrierId], references: [id])
+  carrierId            String?             @map("carrier")
+  code                 String              @default("")
+  name                 String              @default("")
+  description          String              @default("")
+  cabin                Cabin?              @relation("FareBrand_cabin", fields: [cabinId], references: [id])
+  cabinId              String?             @map("cabin")
+  status               FareBrandStatusType @default(draft)
+  displayOrder         Int?                @default(0)
+  includedBaggage      Json?               @default("{}")
+  benefits             Json?               @default("[]")
+  refundabilitySummary String              @default("")
+  changeabilitySummary String              @default("")
+  seatSelectionSummary String              @default("")
+  rules                FareRule[]          @relation("FareRule_fareBrand")
+  inventoryBuckets     InventoryBucket[]   @relation("InventoryBucket_fareBrand")
+  offerItems           OfferItem[]         @relation("OfferItem_fareBrand")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([cabinId])
+}
+
+model FareRule {
+  id                          String              @id @default(cuid())
+  carrier                     Carrier?            @relation("FareRule_carrier", fields: [carrierId], references: [id])
+  carrierId                   String?             @map("carrier")
+  ruleKey                     String              @unique @default("")
+  fareBrand                   FareBrand?          @relation("FareRule_fareBrand", fields: [fareBrandId], references: [id])
+  fareBrandId                 String?             @map("fareBrand")
+  route                       Route?              @relation("FareRule_route", fields: [routeId], references: [id])
+  routeId                     String?             @map("route")
+  fareBasisPattern            String              @default("")
+  status                      FareRuleStatusType? @default(draft)
+  effectiveFrom               DateTime?
+  effectiveTo                 DateTime?
+  travelFrom                  DateTime?
+  travelTo                    DateTime?
+  salesChannels               Json?               @default("[]")
+  passengerTypes              Json?               @default("[\"adult\"]")
+  minimumStayDays             Int?
+  maximumStayDays             Int?
+  minimumAdvancePurchaseHours Int?
+  isRefundable                Boolean             @default(false)
+  isChangeable                Boolean             @default(false)
+  changeFeeAmount             Int?                @default(0)
+  cancellationFeeAmount       Int?                @default(0)
+  noShowFeeAmount             Int?                @default(0)
+  currencyCode                String              @default("USD")
+  restrictions                Json?               @default("{}")
+  offerItems                  OfferItem[]         @relation("OfferItem_fareRule")
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([fareBrandId])
+  @@index([routeId])
+}
+
+model AncillaryProduct {
+  id                                           String                               @id @default(cuid())
+  carrier                                      Carrier?                             @relation("AncillaryProduct_carrier", fields: [carrierId], references: [id])
+  carrierId                                    String?                              @map("carrier")
+  productKey                                   String                               @unique @default("")
+  code                                         String                               @default("")
+  name                                         String                               @default("")
+  description                                  String                               @default("")
+  type                                         AncillaryProductTypeType
+  status                                       AncillaryProductStatusType?          @default(draft)
+  fulfillmentType                              AncillaryProductFulfillmentTypeType? @default(associated)
+  defaultPriceAmount                           Int?                                 @default(0)
+  taxAmount                                    Int?                                 @default(0)
+  currencyCode                                 String                               @default("USD")
+  requiresInventory                            Boolean                              @default(false)
+  attributes                                   Json?                                @default("{}")
+  offerItems                                   OfferItem[]                          @relation("OfferItem_ancillaryProduct")
+  bookingLineItems                             BookingLineItem[]                    @relation("BookingLineItem_ancillaryProduct")
+  electronicMiscCoupons                        ElectronicMiscCoupon[]               @relation("ElectronicMiscCoupon_ancillaryProduct")
+  createdAt                                    DateTime                             @default(now())
+  updatedAt                                    DateTime                             @default(now()) @updatedAt
+  from_ElectronicMiscDocument_ancillaryProduct ElectronicMiscDocument[]             @relation("ElectronicMiscDocument_ancillaryProduct")
+
+  @@index([carrierId])
+}
+
+model Offer {
+  id                                    String            @id @default(cuid())
+  carrier                               Carrier?          @relation("Offer_carrier", fields: [carrierId], references: [id])
+  carrierId                             String?           @map("carrier")
+  offerNumber                           String            @unique @default("")
+  shoppingSessionId                     String            @default("")
+  idempotencyKey                        String            @unique @default("")
+  status                                OfferStatusType   @default(draft)
+  source                                OfferSourceType?  @default(direct)
+  expiresAt                             DateTime?
+  baseAmount                            Int?              @default(0)
+  taxAmount                             Int?              @default(0)
+  feeAmount                             Int?              @default(0)
+  discountAmount                        Int?              @default(0)
+  totalAmount                           Int?              @default(0)
+  currencyCode                          String            @default("USD")
+  customer                              User?             @relation("Offer_customer", fields: [customerId], references: [id])
+  customerId                            String?           @map("customer")
+  approvedAgent                         ApprovedAgent?    @relation("Offer_approvedAgent", fields: [approvedAgentId], references: [id])
+  approvedAgentId                       String?           @map("approvedAgent")
+  passengers                            Passenger[]       @relation("Offer_passengers")
+  passengerCriteria                     Json?             @default("[]")
+  items                                 OfferItem[]       @relation("OfferItem_offer")
+  inventoryHolds                        InventoryHold[]   @relation("InventoryHold_offer")
+  booking                               Booking?          @relation("Booking_sourceOffer")
+  externalReferences                    Json?             @default("{}")
+  metadata                              Json?             @default("{}")
+  createdAt                             DateTime          @default(now())
+  updatedAt                             DateTime          @default(now()) @updatedAt
+  from_Reaccommodation_replacementOffer Reaccommodation[] @relation("Reaccommodation_replacementOffer")
+
+  @@index([carrierId])
+  @@index([shoppingSessionId])
+  @@index([expiresAt])
+  @@index([customerId])
+  @@index([approvedAgentId])
+}
+
+model OfferItem {
+  id                  String                @id @default(cuid())
+  carrier             Carrier?              @relation("OfferItem_carrier", fields: [carrierId], references: [id])
+  carrierId           String?               @map("carrier")
+  itemKey             String                @unique @default("")
+  offer               Offer?                @relation("OfferItem_offer", fields: [offerId], references: [id])
+  offerId             String?               @map("offer")
+  itemType            OfferItemItemTypeType
+  description         String                @default("")
+  quantity            Int                   @default(1)
+  unitAmount          Int                   @default(0)
+  baseAmount          Int                   @default(0)
+  taxAmount           Int                   @default(0)
+  feeAmount           Int                   @default(0)
+  totalAmount         Int                   @default(0)
+  currencyCode        String                @default("")
+  flightInstance      FlightInstance?       @relation("OfferItem_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId    String?               @map("flightInstance")
+  inventoryBucket     InventoryBucket?      @relation("OfferItem_inventoryBucket", fields: [inventoryBucketId], references: [id])
+  inventoryBucketId   String?               @map("inventoryBucket")
+  fareBrand           FareBrand?            @relation("OfferItem_fareBrand", fields: [fareBrandId], references: [id])
+  fareBrandId         String?               @map("fareBrand")
+  fareRule            FareRule?             @relation("OfferItem_fareRule", fields: [fareRuleId], references: [id])
+  fareRuleId          String?               @map("fareRule")
+  ancillaryProduct    AncillaryProduct?     @relation("OfferItem_ancillaryProduct", fields: [ancillaryProductId], references: [id])
+  ancillaryProductId  String?               @map("ancillaryProduct")
+  passengerReferences Json?                 @default("[]")
+  segmentSnapshot     Json?                 @default("{}")
+  productSnapshot     Json?                 @default("{}")
+  bookingLineItems    BookingLineItem[]     @relation("BookingLineItem_sourceOfferItem")
+  bookingSegments     BookingSegment[]      @relation("BookingSegment_sourceOfferItem")
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([offerId])
+  @@index([flightInstanceId])
+  @@index([inventoryBucketId])
+  @@index([fareBrandId])
+  @@index([fareRuleId])
+  @@index([ancillaryProductId])
+}
+
+model Passenger {
+  id                      String                     @id @default(cuid())
+  carrier                 Carrier?                   @relation("Passenger_carrier", fields: [carrierId], references: [id])
+  carrierId               String?                    @map("carrier")
+  passengerKey            String                     @unique @default("")
+  title                   String                     @default("")
+  givenName               String                     @default("")
+  middleNames             String                     @default("")
+  familyName              String                     @default("")
+  suffix                  String                     @default("")
+  dateOfBirth             DateTime?
+  genderMarker            PassengerGenderMarkerType?
+  nationalityCode         String?
+  email                   String                     @default("")
+  phone                   String                     @default("")
+  preferredLanguage       String                     @default("en")
+  status                  PassengerStatusType?       @default(active)
+  loyaltyPrograms         Json?                      @default("[]")
+  preferences             Json?                      @default("{}")
+  userAccount             User?                      @relation("Passenger_userAccount", fields: [userAccountId], references: [id])
+  userAccountId           String?                    @unique @map("userAccount")
+  travelDocuments         TravelDocument[]           @relation("TravelDocument_passenger")
+  documentVerifications   DocumentVerification[]     @relation("DocumentVerification_passenger")
+  bookingPassengers       BookingPassenger[]         @relation("BookingPassenger_passenger")
+  offers                  Offer[]                    @relation("Offer_passengers")
+  serviceRequests         ServiceRequest[]           @relation("ServiceRequest_passenger")
+  tickets                 Ticket[]                   @relation("Ticket_passenger")
+  electronicMiscDocuments ElectronicMiscDocument[]   @relation("ElectronicMiscDocument_passenger")
+  seatAssignments         SeatAssignment[]           @relation("SeatAssignment_passenger")
+  checkIns                CheckIn[]                  @relation("CheckIn_passenger")
+  boardingPasses          BoardingPass[]             @relation("BoardingPass_passenger")
+  bags                    Bag[]                      @relation("Bag_passenger")
+  reaccommodations        Reaccommodation[]          @relation("Reaccommodation_passenger")
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @default(now()) @updatedAt
+
+  @@index([carrierId])
+}
+
+model TravelDocument {
+  id                            String                         @id @default(cuid())
+  carrier                       Carrier?                       @relation("TravelDocument_carrier", fields: [carrierId], references: [id])
+  carrierId                     String?                        @map("carrier")
+  passenger                     Passenger?                     @relation("TravelDocument_passenger", fields: [passengerId], references: [id])
+  passengerId                   String?                        @map("passenger")
+  documentType                  TravelDocumentDocumentTypeType
+  documentNumberToken           String?
+  documentNumberHash            String?
+  encryptedPayload              String?                        @postgresql.Text
+  documentNumberLast4           String?
+  issuingCountryCode            String                         @default("")
+  nationalityCode               String?
+  issuedAt                      DateTime?
+  expiresAt                     DateTime?
+  status                        TravelDocumentStatusType?      @default(unverified)
+  verificationProviderReference String                         @default("")
+  verifiedAt                    DateTime?
+  verifiedBy                    User?                          @relation("TravelDocument_verifiedBy", fields: [verifiedById], references: [id])
+  verifiedById                  String?                        @map("verifiedBy")
+  verifications                 DocumentVerification[]         @relation("DocumentVerification_travelDocument")
+  createdAt                     DateTime                       @default(now())
+  updatedAt                     DateTime                       @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([passengerId])
+  @@index([documentNumberHash])
+  @@index([verifiedById])
+}
+
+model DocumentVerification {
+  id                String                          @id @default(cuid())
+  carrier           Carrier?                        @relation("DocumentVerification_carrier", fields: [carrierId], references: [id])
+  carrierId         String?                         @map("carrier")
+  verificationKey   String                          @unique @default("")
+  passenger         Passenger?                      @relation("DocumentVerification_passenger", fields: [passengerId], references: [id])
+  passengerId       String?                         @map("passenger")
+  travelDocument    TravelDocument?                 @relation("DocumentVerification_travelDocument", fields: [travelDocumentId], references: [id])
+  travelDocumentId  String?                         @map("travelDocument")
+  bookingSegment    BookingSegment?                 @relation("DocumentVerification_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId  String?                         @map("bookingSegment")
+  status            DocumentVerificationStatusType? @default(verified)
+  evidenceVersion   String                          @default("")
+  providerReference String                          @default("")
+  verifiedBy        User?                           @relation("DocumentVerification_verifiedBy", fields: [verifiedById], references: [id])
+  verifiedById      String?                         @map("verifiedBy")
+  verifiedAt        DateTime?                       @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([passengerId])
+  @@index([travelDocumentId])
+  @@index([bookingSegmentId])
+  @@index([verifiedById])
+}
+
+model Booking {
+  id                      String                      @id @default(cuid())
+  carrier                 Carrier?                    @relation("Booking_carrier", fields: [carrierId], references: [id])
+  carrierId               String?                     @map("carrier")
+  bookingKey              String                      @unique @default("")
+  recordLocator           String                      @default("")
+  orderNumber             String                      @unique @default("")
+  idempotencyKey          String                      @unique @default("")
+  accessTokenHash         String?
+  accessTokenExpiresAt    DateTime?
+  accessTokenVersion      Int?                        @default(1)
+  status                  BookingStatusType           @default(pending)
+  paymentStatus           BookingPaymentStatusType?   @default(unpaid)
+  ticketingStatus         BookingTicketingStatusType? @default(not_ticketed)
+  source                  BookingSourceType?          @default(direct)
+  contactEmail            String                      @default("")
+  contactPhone            String                      @default("")
+  preferredLanguage       String                      @default("en")
+  baseAmount              Int?                        @default(0)
+  taxAmount               Int?                        @default(0)
+  feeAmount               Int?                        @default(0)
+  discountAmount          Int?                        @default(0)
+  totalAmount             Int?                        @default(0)
+  currencyCode            String                      @default("USD")
+  customer                User?                       @relation("Booking_customer", fields: [customerId], references: [id])
+  customerId              String?                     @map("customer")
+  approvedAgent           ApprovedAgent?              @relation("Booking_approvedAgent", fields: [approvedAgentId], references: [id])
+  approvedAgentId         String?                     @map("approvedAgent")
+  sourceOffer             Offer?                      @relation("Booking_sourceOffer", fields: [sourceOfferId], references: [id])
+  sourceOfferId           String?                     @unique @map("sourceOffer")
+  passengers              BookingPassenger[]          @relation("BookingPassenger_booking")
+  journeys                Journey[]                   @relation("Journey_booking")
+  segments                BookingSegment[]            @relation("BookingSegment_booking")
+  lineItems               BookingLineItem[]           @relation("BookingLineItem_booking")
+  serviceRequests         ServiceRequest[]            @relation("ServiceRequest_booking")
+  tickets                 Ticket[]                    @relation("Ticket_booking")
+  serviceObligations      ServiceObligation[]         @relation("ServiceObligation_booking")
+  electronicMiscDocuments ElectronicMiscDocument[]    @relation("ElectronicMiscDocument_booking")
+  seatAssignments         SeatAssignment[]            @relation("SeatAssignment_booking")
+  paymentSessions         PaymentSession[]            @relation("PaymentSession_booking")
+  payments                Payment[]                   @relation("Payment_booking")
+  refunds                 Refund[]                    @relation("Refund_booking")
+  exchanges               Exchange[]                  @relation("Exchange_booking")
+  checkIns                CheckIn[]                   @relation("CheckIn_booking")
+  bags                    Bag[]                       @relation("Bag_booking")
+  reaccommodations        Reaccommodation[]           @relation("Reaccommodation_booking")
+  manualPaymentEvidence   ManualPaymentEvidence[]     @relation("ManualPaymentEvidence_booking")
+  confirmedAt             DateTime?
+  ticketedAt              DateTime?
+  cancelledAt             DateTime?
+  completedAt             DateTime?
+  externalReferences      Json?                       @default("{}")
+  metadata                Json?                       @default("{}")
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([recordLocator])
+  @@index([accessTokenHash])
+  @@index([customerId])
+  @@index([approvedAgentId])
+}
+
+model BookingPassenger {
+  id                                   String                             @id @default(cuid())
+  carrier                              Carrier?                           @relation("BookingPassenger_carrier", fields: [carrierId], references: [id])
+  carrierId                            String?                            @map("carrier")
+  bookingPassengerKey                  String                             @unique @default("")
+  booking                              Booking?                           @relation("BookingPassenger_booking", fields: [bookingId], references: [id])
+  bookingId                            String?                            @map("booking")
+  passenger                            Passenger?                         @relation("BookingPassenger_passenger", fields: [passengerId], references: [id])
+  passengerId                          String?                            @map("passenger")
+  passengerType                        BookingPassengerPassengerTypeType? @default(adult)
+  status                               BookingPassengerStatusType?        @default(active)
+  isPrimaryContact                     Boolean                            @default(false)
+  passengerSnapshot                    Json?
+  loyaltySnapshot                      Json?                              @default("{}")
+  lineItems                            BookingLineItem[]                  @relation("BookingLineItem_bookingPassenger")
+  tickets                              Ticket[]                           @relation("Ticket_bookingPassenger")
+  serviceObligations                   ServiceObligation[]                @relation("ServiceObligation_bookingPassenger")
+  ticketCouponLineages                 TicketCouponLineage[]              @relation("TicketCouponLineage_bookingPassenger")
+  electronicMiscDocuments              ElectronicMiscDocument[]           @relation("ElectronicMiscDocument_bookingPassenger")
+  seatAssignments                      SeatAssignment[]                   @relation("SeatAssignment_bookingPassenger")
+  checkIns                             CheckIn[]                          @relation("CheckIn_bookingPassenger")
+  bags                                 Bag[]                              @relation("Bag_bookingPassenger")
+  reaccommodations                     Reaccommodation[]                  @relation("Reaccommodation_bookingPassenger")
+  createdAt                            DateTime                           @default(now())
+  updatedAt                            DateTime                           @default(now()) @updatedAt
+  from_ServiceRequest_bookingPassenger ServiceRequest[]                   @relation("ServiceRequest_bookingPassenger")
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([passengerId])
+}
+
+model Journey {
+  id            String             @id @default(cuid())
+  carrier       Carrier?           @relation("Journey_carrier", fields: [carrierId], references: [id])
+  carrierId     String?            @map("carrier")
+  journeyKey    String             @unique @default("")
+  booking       Booking?           @relation("Journey_booking", fields: [bookingId], references: [id])
+  bookingId     String?            @map("booking")
+  sequence      Int
+  origin        Airport?           @relation("Journey_origin", fields: [originId], references: [id])
+  originId      String?            @map("origin")
+  destination   Airport?           @relation("Journey_destination", fields: [destinationId], references: [id])
+  destinationId String?            @map("destination")
+  status        JourneyStatusType? @default(planned)
+  segments      BookingSegment[]   @relation("BookingSegment_journey")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([originId])
+  @@index([destinationId])
+}
+
+model BookingSegment {
+  id                                  String                    @id @default(cuid())
+  carrier                             Carrier?                  @relation("BookingSegment_carrier", fields: [carrierId], references: [id])
+  carrierId                           String?                   @map("carrier")
+  segmentKey                          String                    @unique @default("")
+  booking                             Booking?                  @relation("BookingSegment_booking", fields: [bookingId], references: [id])
+  bookingId                           String?                   @map("booking")
+  journey                             Journey?                  @relation("BookingSegment_journey", fields: [journeyId], references: [id])
+  journeyId                           String?                   @map("journey")
+  sourceOfferItem                     OfferItem?                @relation("BookingSegment_sourceOfferItem", fields: [sourceOfferItemId], references: [id])
+  sourceOfferItemId                   String?                   @map("sourceOfferItem")
+  flightInstance                      FlightInstance?           @relation("BookingSegment_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId                    String?                   @map("flightInstance")
+  inventoryBucket                     InventoryBucket?          @relation("BookingSegment_inventoryBucket", fields: [inventoryBucketId], references: [id])
+  inventoryBucketId                   String?                   @map("inventoryBucket")
+  sequence                            Int
+  status                              BookingSegmentStatusType? @default(confirmed)
+  origin                              Airport?                  @relation("BookingSegment_origin", fields: [originId], references: [id])
+  originId                            String?                   @map("origin")
+  destination                         Airport?                  @relation("BookingSegment_destination", fields: [destinationId], references: [id])
+  destinationId                       String?                   @map("destination")
+  originCode                          String                    @default("")
+  destinationCode                     String                    @default("")
+  marketingCarrierCode                String                    @default("")
+  operatingCarrierCode                String                    @default("")
+  marketingFlightNumber               String                    @default("")
+  scheduledDepartureAt                DateTime
+  scheduledArrivalAt                  DateTime
+  cabinCode                           String                    @default("")
+  bookingClassCode                    String                    @default("")
+  fareBrandCode                       String                    @default("")
+  fareBasisCode                       String                    @default("")
+  itinerarySnapshot                   Json?                     @default("{}")
+  includedBaggageSnapshot             Json?                     @default("{}")
+  ticketCoupons                       TicketCoupon[]            @relation("TicketCoupon_bookingSegment")
+  electronicMiscCoupons               ElectronicMiscCoupon[]    @relation("ElectronicMiscCoupon_bookingSegment")
+  seatAssignments                     SeatAssignment[]          @relation("SeatAssignment_bookingSegment")
+  serviceRequests                     ServiceRequest[]          @relation("ServiceRequest_bookingSegment")
+  checkIns                            CheckIn[]                 @relation("CheckIn_bookingSegment")
+  documentVerifications               DocumentVerification[]    @relation("DocumentVerification_bookingSegment")
+  bags                                Bag[]                     @relation("Bag_segments")
+  primaryBags                         Bag[]                     @relation("Bag_bookingSegment")
+  disruptions                         Disruption[]              @relation("BookingSegment_disruptions")
+  exchangesAsOriginal                 Exchange[]                @relation("BookingSegment_exchangesAsOriginal")
+  exchangesAsReplacement              Exchange[]                @relation("BookingSegment_exchangesAsReplacement")
+  reaccommodationsAsOriginal          Reaccommodation[]         @relation("BookingSegment_reaccommodationsAsOriginal")
+  reaccommodationsAsReplacement       Reaccommodation[]         @relation("BookingSegment_reaccommodationsAsReplacement")
+  createdAt                           DateTime                  @default(now())
+  updatedAt                           DateTime                  @default(now()) @updatedAt
+  from_BookingLineItem_bookingSegment BookingLineItem[]         @relation("BookingLineItem_bookingSegment")
+  from_BoardingPass_bookingSegment    BoardingPass[]            @relation("BoardingPass_bookingSegment")
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([journeyId])
+  @@index([sourceOfferItemId])
+  @@index([flightInstanceId])
+  @@index([inventoryBucketId])
+  @@index([originId])
+  @@index([destinationId])
+}
+
+model BookingLineItem {
+  id                                        String                      @id @default(cuid())
+  carrier                                   Carrier?                    @relation("BookingLineItem_carrier", fields: [carrierId], references: [id])
+  carrierId                                 String?                     @map("carrier")
+  lineItemKey                               String                      @unique @default("")
+  booking                                   Booking?                    @relation("BookingLineItem_booking", fields: [bookingId], references: [id])
+  bookingId                                 String?                     @map("booking")
+  sourceOfferItem                           OfferItem?                  @relation("BookingLineItem_sourceOfferItem", fields: [sourceOfferItemId], references: [id])
+  sourceOfferItemId                         String?                     @map("sourceOfferItem")
+  bookingSegment                            BookingSegment?             @relation("BookingLineItem_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId                          String?                     @map("bookingSegment")
+  bookingPassenger                          BookingPassenger?           @relation("BookingLineItem_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId                        String?                     @map("bookingPassenger")
+  ancillaryProduct                          AncillaryProduct?           @relation("BookingLineItem_ancillaryProduct", fields: [ancillaryProductId], references: [id])
+  ancillaryProductId                        String?                     @map("ancillaryProduct")
+  itemType                                  BookingLineItemItemTypeType
+  description                               String                      @default("")
+  quantity                                  Int                         @default(1)
+  unitAmount                                Int                         @default(0)
+  baseAmount                                Int                         @default(0)
+  taxAmount                                 Int                         @default(0)
+  feeAmount                                 Int                         @default(0)
+  totalAmount                               Int                         @default(0)
+  currencyCode                              String                      @default("")
+  sourceReference                           String                      @default("")
+  productSnapshot                           Json?                       @default("{}")
+  pricingSnapshot                           Json?                       @default("{}")
+  createdAt                                 DateTime                    @default(now())
+  updatedAt                                 DateTime                    @default(now()) @updatedAt
+  from_ElectronicMiscCoupon_bookingLineItem ElectronicMiscCoupon[]      @relation("ElectronicMiscCoupon_bookingLineItem")
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([sourceOfferItemId])
+  @@index([bookingSegmentId])
+  @@index([bookingPassengerId])
+  @@index([ancillaryProductId])
+}
+
+model ServiceRequest {
+  id                 String                      @id @default(cuid())
+  carrier            Carrier?                    @relation("ServiceRequest_carrier", fields: [carrierId], references: [id])
+  carrierId          String?                     @map("carrier")
+  requestKey         String                      @unique @default("")
+  booking            Booking?                    @relation("ServiceRequest_booking", fields: [bookingId], references: [id])
+  bookingId          String?                     @map("booking")
+  passenger          Passenger?                  @relation("ServiceRequest_passenger", fields: [passengerId], references: [id])
+  passengerId        String?                     @map("passenger")
+  bookingPassenger   BookingPassenger?           @relation("ServiceRequest_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId String?                     @map("bookingPassenger")
+  bookingSegment     BookingSegment?             @relation("ServiceRequest_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId   String?                     @map("bookingSegment")
+  code               String                      @default("")
+  category           ServiceRequestCategoryType? @default(ssr)
+  status             ServiceRequestStatusType?   @default(requested)
+  travelerText       String                      @default("")
+  internalNotes      String                      @default("")
+  serviceData        Json?                       @default("{}")
+  confirmedAt        DateTime?
+  fulfilledAt        DateTime?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([passengerId])
+  @@index([bookingPassengerId])
+  @@index([bookingSegmentId])
+}
+
+model Ticket {
+  id                    String            @id @default(cuid())
+  carrier               Carrier?          @relation("Ticket_carrier", fields: [carrierId], references: [id])
+  carrierId             String?           @map("carrier")
+  ticketNumber          String            @unique @default("")
+  booking               Booking?          @relation("Ticket_booking", fields: [bookingId], references: [id])
+  bookingId             String?           @map("booking")
+  bookingPassenger      BookingPassenger? @relation("Ticket_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId    String?           @map("bookingPassenger")
+  passenger             Passenger?        @relation("Ticket_passenger", fields: [passengerId], references: [id])
+  passengerId           String?           @map("passenger")
+  issuingCarrierCode    String            @default("")
+  validatingCarrierCode String            @default("")
+  status                TicketStatusType? @default(pending)
+  totalAmount           Int
+  currencyCode          String            @default("")
+  issuedAt              DateTime?
+  voidedAt              DateTime?
+  refundedAt            DateTime?
+  providerReference     String            @default("")
+  originalTicket        Ticket?           @relation("Ticket_originalTicket", fields: [originalTicketId], references: [id])
+  originalTicketId      String?           @map("originalTicket")
+  reissuedTickets       Ticket[]          @relation("Ticket_originalTicket")
+  coupons               TicketCoupon[]    @relation("TicketCoupon_ticket")
+  metadata              Json?             @default("{}")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+  @@index([passengerId])
+  @@index([originalTicketId])
+}
+
+model TicketCoupon {
+  id                       String                  @id @default(cuid())
+  carrier                  Carrier?                @relation("TicketCoupon_carrier", fields: [carrierId], references: [id])
+  carrierId                String?                 @map("carrier")
+  couponKey                String                  @unique @default("")
+  ticket                   Ticket?                 @relation("TicketCoupon_ticket", fields: [ticketId], references: [id])
+  ticketId                 String?                 @map("ticket")
+  serviceObligation        ServiceObligation?      @relation("TicketCoupon_serviceObligation", fields: [serviceObligationId], references: [id])
+  serviceObligationId      String?                 @map("serviceObligation")
+  serviceObligationVersion Int?
+  bookingSegment           BookingSegment?         @relation("TicketCoupon_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId         String?                 @map("bookingSegment")
+  couponNumber             Int
+  status                   TicketCouponStatusType? @default(open)
+  fareBasisCode            String                  @default("")
+  bookingClassCode         String                  @default("")
+  amount                   Int?                    @default(0)
+  currencyCode             String                  @default("")
+  usedAt                   DateTime?
+  entitlementSnapshot      Json?                   @default("{}")
+  checkedInAt              DateTime?
+  checkIns                 CheckIn[]               @relation("CheckIn_ticketCoupon")
+  bags                     Bag[]                   @relation("Bag_ticketCoupon")
+  lineageAsParent          TicketCouponLineage[]   @relation("TicketCouponLineage_parentCoupon")
+  lineageAsChild           TicketCouponLineage[]   @relation("TicketCouponLineage_childCoupon")
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([ticketId])
+  @@index([serviceObligationId])
+  @@index([bookingSegmentId])
+}
+
+model ServiceObligation {
+  id                 String                      @id @default(cuid())
+  carrier            Carrier?                    @relation("ServiceObligation_carrier", fields: [carrierId], references: [id])
+  carrierId          String?                     @map("carrier")
+  booking            Booking?                    @relation("ServiceObligation_booking", fields: [bookingId], references: [id])
+  bookingId          String?                     @map("booking")
+  bookingPassenger   BookingPassenger?           @relation("ServiceObligation_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId String?                     @map("bookingPassenger")
+  obligationKey      String                      @unique @default("")
+  currentVersion     Int                         @default(1)
+  status             ServiceObligationStatusType @default(active)
+  ticketCoupons      TicketCoupon[]              @relation("TicketCoupon_serviceObligation")
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+}
+
+model TicketCouponLineage {
+  id                 String                                @id @default(cuid())
+  carrier            Carrier?                              @relation("TicketCouponLineage_carrier", fields: [carrierId], references: [id])
+  carrierId          String?                               @map("carrier")
+  bookingPassenger   BookingPassenger?                     @relation("TicketCouponLineage_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId String?                               @map("bookingPassenger")
+  lineageKey         String                                @unique @default("")
+  changeSetKey       String                                @default("")
+  transformation     TicketCouponLineageTransformationType
+  operationType      TicketCouponLineageOperationTypeType
+  operationId        String                                @default("")
+  parentCoupon       TicketCoupon?                         @relation("TicketCouponLineage_parentCoupon", fields: [parentCouponId], references: [id])
+  parentCouponId     String?                               @map("parentCoupon")
+  childCoupon        TicketCoupon?                         @relation("TicketCouponLineage_childCoupon", fields: [childCouponId], references: [id])
+  childCouponId      String?                               @map("childCoupon")
+  metadata           Json?                                 @default("{}")
+  createdAt          DateTime                              @default(now())
+  updatedAt          DateTime                              @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingPassengerId])
+  @@index([changeSetKey])
+  @@index([parentCouponId])
+  @@index([childCouponId])
+}
+
+model ElectronicMiscDocument {
+  id                           String                                  @id @default(cuid())
+  carrier                      Carrier?                                @relation("ElectronicMiscDocument_carrier", fields: [carrierId], references: [id])
+  carrierId                    String?                                 @map("carrier")
+  documentNumber               String                                  @unique @default("")
+  booking                      Booking?                                @relation("ElectronicMiscDocument_booking", fields: [bookingId], references: [id])
+  bookingId                    String?                                 @map("booking")
+  bookingPassenger             BookingPassenger?                       @relation("ElectronicMiscDocument_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId           String?                                 @map("bookingPassenger")
+  passenger                    Passenger?                              @relation("ElectronicMiscDocument_passenger", fields: [passengerId], references: [id])
+  passengerId                  String?                                 @map("passenger")
+  documentType                 ElectronicMiscDocumentDocumentTypeType? @default(associated)
+  reasonForIssuanceCode        String                                  @default("")
+  serviceCode                  String                                  @default("")
+  ancillaryProduct             AncillaryProduct?                       @relation("ElectronicMiscDocument_ancillaryProduct", fields: [ancillaryProductId], references: [id])
+  ancillaryProductId           String?                                 @map("ancillaryProduct")
+  status                       ElectronicMiscDocumentStatusType?       @default(pending)
+  totalAmount                  Int
+  currencyCode                 String                                  @default("")
+  issuedAt                     DateTime?
+  providerReference            String                                  @default("")
+  coupons                      ElectronicMiscCoupon[]                  @relation("ElectronicMiscCoupon_document")
+  metadata                     Json?                                   @default("{}")
+  createdAt                    DateTime                                @default(now())
+  updatedAt                    DateTime                                @default(now()) @updatedAt
+  from_Bag_entitlementDocument Bag[]                                   @relation("Bag_entitlementDocument")
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+  @@index([passengerId])
+  @@index([ancillaryProductId])
+}
+
+model ElectronicMiscCoupon {
+  id                  String                          @id @default(cuid())
+  carrier             Carrier?                        @relation("ElectronicMiscCoupon_carrier", fields: [carrierId], references: [id])
+  carrierId           String?                         @map("carrier")
+  couponKey           String                          @unique @default("")
+  document            ElectronicMiscDocument?         @relation("ElectronicMiscCoupon_document", fields: [documentId], references: [id])
+  documentId          String?                         @map("document")
+  couponNumber        Int
+  bookingSegment      BookingSegment?                 @relation("ElectronicMiscCoupon_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId    String?                         @map("bookingSegment")
+  ancillaryProduct    AncillaryProduct?               @relation("ElectronicMiscCoupon_ancillaryProduct", fields: [ancillaryProductId], references: [id])
+  ancillaryProductId  String?                         @map("ancillaryProduct")
+  bookingLineItem     BookingLineItem?                @relation("ElectronicMiscCoupon_bookingLineItem", fields: [bookingLineItemId], references: [id])
+  bookingLineItemId   String?                         @map("bookingLineItem")
+  status              ElectronicMiscCouponStatusType? @default(open)
+  amount              Int?                            @default(0)
+  currencyCode        String                          @default("")
+  usedAt              DateTime?
+  entitlementSnapshot Json?                           @default("{}")
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([documentId])
+  @@index([bookingSegmentId])
+  @@index([ancillaryProductId])
+  @@index([bookingLineItemId])
+}
+
+model SeatMap {
+  id               String             @id @default(cuid())
+  carrier          Carrier?           @relation("SeatMap_carrier", fields: [carrierId], references: [id])
+  carrierId        String?            @map("carrier")
+  mapKey           String             @unique @default("")
+  flightInstance   FlightInstance?    @relation("SeatMap_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId String?            @map("flightInstance")
+  version          Int                @default(1)
+  status           SeatMapStatusType? @default(draft)
+  layoutSnapshot   Json?              @default("{}")
+  seats            Seat[]             @relation("Seat_seatMap")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([flightInstanceId])
+}
+
+model Seat {
+  id              String            @id @default(cuid())
+  carrier         Carrier?          @relation("Seat_carrier", fields: [carrierId], references: [id])
+  carrierId       String?           @map("carrier")
+  seatKey         String            @unique @default("")
+  seatMap         SeatMap?          @relation("Seat_seatMap", fields: [seatMapId], references: [id])
+  seatMapId       String?           @map("seatMap")
+  cabin           Cabin?            @relation("Seat_cabin", fields: [cabinId], references: [id])
+  cabinId         String?           @map("cabin")
+  designator      String            @default("")
+  rowNumber       Int
+  columnCode      String            @default("")
+  status          SeatStatusType?   @default(available)
+  seatType        SeatSeatTypeType? @default(standard)
+  characteristics Json?             @default("[]")
+  surchargeAmount Int?              @default(0)
+  currencyCode    String            @default("USD")
+  assignments     SeatAssignment[]  @relation("SeatAssignment_seat")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([seatMapId])
+  @@index([cabinId])
+}
+
+model SeatAssignment {
+  id                               String                    @id @default(cuid())
+  carrier                          Carrier?                  @relation("SeatAssignment_carrier", fields: [carrierId], references: [id])
+  carrierId                        String?                   @map("carrier")
+  assignmentKey                    String                    @unique @default("")
+  occupancyKey                     String?                   @unique
+  booking                          Booking?                  @relation("SeatAssignment_booking", fields: [bookingId], references: [id])
+  bookingId                        String?                   @map("booking")
+  bookingPassenger                 BookingPassenger?         @relation("SeatAssignment_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId               String?                   @map("bookingPassenger")
+  passenger                        Passenger?                @relation("SeatAssignment_passenger", fields: [passengerId], references: [id])
+  passengerId                      String?                   @map("passenger")
+  bookingSegment                   BookingSegment?           @relation("SeatAssignment_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId                 String?                   @map("bookingSegment")
+  seat                             Seat?                     @relation("SeatAssignment_seat", fields: [seatId], references: [id])
+  seatId                           String?                   @map("seat")
+  status                           SeatAssignmentStatusType? @default(held)
+  seatDesignatorSnapshot           String                    @default("")
+  cabinCodeSnapshot                String                    @default("")
+  characteristicsSnapshot          Json?                     @default("[]")
+  amount                           Int?                      @default(0)
+  currencyCode                     String                    @default("USD")
+  assignedAt                       DateTime?
+  confirmedAt                      DateTime?
+  releasedAt                       DateTime?
+  createdAt                        DateTime                  @default(now())
+  updatedAt                        DateTime                  @default(now()) @updatedAt
+  from_CheckIn_seatAssignment      CheckIn[]                 @relation("CheckIn_seatAssignment")
+  from_BoardingPass_seatAssignment BoardingPass[]            @relation("BoardingPass_seatAssignment")
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+  @@index([passengerId])
+  @@index([bookingSegmentId])
+  @@index([seatId])
+}
+
+model PaymentProvider {
+  id                       String                          @id @default(cuid())
+  carrier                  Carrier?                        @relation("PaymentProvider_carrier", fields: [carrierId], references: [id])
+  carrierId                String?                         @map("carrier")
+  providerKey              String                          @unique @default("")
+  name                     String                          @default("")
+  code                     String                          @default("")
+  adapterType              PaymentProviderAdapterTypeType? @default(manual)
+  status                   PaymentProviderStatusType?      @default(inactive)
+  credentials              Json?                           @default("{}")
+  configuration            Json?                           @default("{}")
+  createPaymentFunction    String                          @default("")
+  capturePaymentFunction   String                          @default("")
+  refundPaymentFunction    String                          @default("")
+  getPaymentStatusFunction String                          @default("")
+  handleWebhookFunction    String                          @default("")
+  sessions                 PaymentSession[]                @relation("PaymentSession_provider")
+  payments                 Payment[]                       @relation("Payment_provider")
+  createdAt                DateTime                        @default(now())
+  updatedAt                DateTime                        @default(now()) @updatedAt
+
+  @@index([carrierId])
+}
+
+model PaymentSession {
+  id                String                    @id @default(cuid())
+  carrier           Carrier?                  @relation("PaymentSession_carrier", fields: [carrierId], references: [id])
+  carrierId         String?                   @map("carrier")
+  sessionKey        String                    @unique @default("")
+  idempotencyKey    String                    @unique @default("")
+  booking           Booking?                  @relation("PaymentSession_booking", fields: [bookingId], references: [id])
+  bookingId         String?                   @map("booking")
+  provider          PaymentProvider?          @relation("PaymentSession_provider", fields: [providerId], references: [id])
+  providerId        String?                   @map("provider")
+  payment           Payment?                  @relation("Payment_session")
+  status            PaymentSessionStatusType? @default(created)
+  amount            Int
+  currencyCode      String                    @default("")
+  providerSessionId String                    @default("")
+  providerData      Json?                     @default("{}")
+  expiresAt         DateTime?
+  authorizedAt      DateTime?
+  completedAt       DateTime?
+  failureCode       String                    @default("")
+  failureMessage    String                    @default("")
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([providerId])
+  @@index([providerSessionId])
+}
+
+model SettlementLedgerEntry {
+  id                     String                  @id @default(cuid())
+  carrier                Carrier?                @relation("SettlementLedgerEntry_carrier", fields: [carrierId], references: [id])
+  carrierId              String?                 @map("carrier")
+  connection             ProviderConnection?     @relation("SettlementLedgerEntry_connection", fields: [connectionId], references: [id])
+  connectionId           String?                 @map("connection")
+  ledgerKey              String                  @unique @default("")
+  externalReference      String                  @default("")
+  ledgerSource           String                  @default("")
+  evidenceDigest         String                  @default("")
+  amount                 Int
+  currencyCode           String                  @default("")
+  occurredAt             DateTime
+  importedAt             DateTime?               @default(now())
+  importedByCredentialId String                  @default("")
+  sourceMetadata         Json?                   @default("{}")
+  evidence               ManualPaymentEvidence[] @relation("ManualPaymentEvidence_ledgerEntry")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([connectionId])
+  @@index([evidenceDigest])
+}
+
+model ManualPaymentEvidence {
+  id                String                           @id @default(cuid())
+  carrier           Carrier?                         @relation("ManualPaymentEvidence_carrier", fields: [carrierId], references: [id])
+  carrierId         String?                          @map("carrier")
+  evidenceKey       String                           @unique @default("")
+  purpose           ManualPaymentEvidencePurposeType
+  booking           Booking?                         @relation("ManualPaymentEvidence_booking", fields: [bookingId], references: [id])
+  bookingId         String?                          @map("booking")
+  payment           Payment?                         @relation("ManualPaymentEvidence_payment", fields: [paymentId], references: [id])
+  paymentId         String?                          @map("payment")
+  ledgerEntry       SettlementLedgerEntry?           @relation("ManualPaymentEvidence_ledgerEntry", fields: [ledgerEntryId], references: [id])
+  ledgerEntryId     String?                          @map("ledgerEntry")
+  externalReference String                           @unique @default("")
+  ledgerSource      String                           @default("")
+  evidenceDigest    String                           @default("")
+  amount            Int
+  currencyCode      String                           @default("")
+  status            ManualPaymentEvidenceStatusType? @default(submitted)
+  submittedBy       User?                            @relation("ManualPaymentEvidence_submittedBy", fields: [submittedById], references: [id])
+  submittedById     String?                          @map("submittedBy")
+  approvedBy        User?                            @relation("ManualPaymentEvidence_approvedBy", fields: [approvedById], references: [id])
+  approvedById      String?                          @map("approvedBy")
+  submittedAt       DateTime?                        @default(now())
+  approvedAt        DateTime?
+  consumedAt        DateTime?
+  rejectionReason   String                           @default("")
+  createdAt         DateTime                         @default(now())
+  updatedAt         DateTime                         @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([paymentId])
+  @@index([ledgerEntryId])
+  @@index([evidenceDigest])
+  @@index([submittedById])
+  @@index([approvedById])
+}
+
+model Payment {
+  id                    String                  @id @default(cuid())
+  carrier               Carrier?                @relation("Payment_carrier", fields: [carrierId], references: [id])
+  carrierId             String?                 @map("carrier")
+  paymentKey            String                  @unique @default("")
+  idempotencyKey        String                  @unique @default("")
+  booking               Booking?                @relation("Payment_booking", fields: [bookingId], references: [id])
+  bookingId             String?                 @map("booking")
+  provider              PaymentProvider?        @relation("Payment_provider", fields: [providerId], references: [id])
+  providerId            String?                 @map("provider")
+  session               PaymentSession?         @relation("Payment_session", fields: [sessionId], references: [id])
+  sessionId             String?                 @unique @map("session")
+  status                PaymentStatusType?      @default(pending)
+  amount                Int
+  authorizedAmount      Int?                    @default(0)
+  capturedAmount        Int?                    @default(0)
+  refundedAmount        Int?                    @default(0)
+  currencyCode          String                  @default("")
+  providerPaymentId     String                  @default("")
+  providerCaptureId     String                  @default("")
+  instrumentBrand       String                  @default("")
+  instrumentLast4       String?
+  rawProviderData       Json?
+  failureCode           String                  @default("")
+  failureMessage        String                  @default("")
+  authorizedAt          DateTime?
+  capturedAt            DateTime?
+  cancelledAt           DateTime?
+  refunds               Refund[]                @relation("Refund_payment")
+  manualPaymentEvidence ManualPaymentEvidence[] @relation("ManualPaymentEvidence_payment")
+  metadata              Json?                   @default("{}")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([providerId])
+  @@index([providerPaymentId])
+}
+
+model Refund {
+  id               String            @id @default(cuid())
+  carrier          Carrier?          @relation("Refund_carrier", fields: [carrierId], references: [id])
+  carrierId        String?           @map("carrier")
+  refundKey        String            @unique @default("")
+  idempotencyKey   String            @unique @default("")
+  booking          Booking?          @relation("Refund_booking", fields: [bookingId], references: [id])
+  bookingId        String?           @map("booking")
+  payment          Payment?          @relation("Refund_payment", fields: [paymentId], references: [id])
+  paymentId        String?           @map("payment")
+  status           RefundStatusType? @default(requested)
+  reason           RefundReasonType? @default(customer_request)
+  amount           Int
+  currencyCode     String            @default("")
+  providerRefundId String            @default("")
+  note             String            @default("")
+  requestedAt      DateTime?         @default(now())
+  approvedAt       DateTime?
+  processedAt      DateTime?
+  errorMessage     String            @default("")
+  metadata         Json?             @default("{}")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([paymentId])
+  @@index([providerRefundId])
+}
+
+model Exchange {
+  id                         String              @id @default(cuid())
+  carrier                    Carrier?            @relation("Exchange_carrier", fields: [carrierId], references: [id])
+  carrierId                  String?             @map("carrier")
+  exchangeKey                String              @unique @default("")
+  idempotencyKey             String              @unique @default("")
+  booking                    Booking?            @relation("Exchange_booking", fields: [bookingId], references: [id])
+  bookingId                  String?             @map("booking")
+  status                     ExchangeStatusType? @default(quoted)
+  originalSegments           BookingSegment[]    @relation("BookingSegment_exchangesAsOriginal")
+  replacementSegments        BookingSegment[]    @relation("BookingSegment_exchangesAsReplacement")
+  priceDifferenceAmount      Int?                @default(0)
+  changeFeeAmount            Int?                @default(0)
+  additionalCollectionAmount Int?                @default(0)
+  refundAmount               Int?                @default(0)
+  currencyCode               String              @default("")
+  quoteExpiresAt             DateTime?
+  acceptedAt                 DateTime?
+  completedAt                DateTime?
+  reason                     String              @default("")
+  pricingSnapshot            Json?               @default("{}")
+  metadata                   Json?               @default("{}")
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+}
+
+model CheckIn {
+  id                      String              @id @default(cuid())
+  carrier                 Carrier?            @relation("CheckIn_carrier", fields: [carrierId], references: [id])
+  carrierId               String?             @map("carrier")
+  checkInKey              String              @unique @default("")
+  booking                 Booking?            @relation("CheckIn_booking", fields: [bookingId], references: [id])
+  bookingId               String?             @map("booking")
+  bookingPassenger        BookingPassenger?   @relation("CheckIn_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId      String?             @map("bookingPassenger")
+  passenger               Passenger?          @relation("CheckIn_passenger", fields: [passengerId], references: [id])
+  passengerId             String?             @map("passenger")
+  bookingSegment          BookingSegment?     @relation("CheckIn_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId        String?             @map("bookingSegment")
+  flightInstance          FlightInstance?     @relation("CheckIn_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId        String?             @map("flightInstance")
+  ticketCoupon            TicketCoupon?       @relation("CheckIn_ticketCoupon", fields: [ticketCouponId], references: [id])
+  ticketCouponId          String?             @map("ticketCoupon")
+  seatAssignment          SeatAssignment?     @relation("CheckIn_seatAssignment", fields: [seatAssignmentId], references: [id])
+  seatAssignmentId        String?             @map("seatAssignment")
+  status                  CheckInStatusType?  @default(not_started)
+  channel                 CheckInChannelType? @default(web)
+  travelDocumentsVerified Boolean             @default(false)
+  checkedBagCount         Int?                @default(0)
+  eligibilityData         Json?               @default("{}")
+  blockedReason           String              @default("")
+  checkedInAt             DateTime?
+  boardedAt               DateTime?
+  offloadedAt             DateTime?
+  boardingPasses          BoardingPass[]      @relation("BoardingPass_checkIn")
+  bags                    Bag[]               @relation("Bag_checkIn")
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+  @@index([passengerId])
+  @@index([bookingSegmentId])
+  @@index([flightInstanceId])
+  @@index([ticketCouponId])
+  @@index([seatAssignmentId])
+}
+
+model BoardingPass {
+  id                     String                  @id @default(cuid())
+  carrier                Carrier?                @relation("BoardingPass_carrier", fields: [carrierId], references: [id])
+  carrierId              String?                 @map("carrier")
+  passNumber             String                  @unique @default("")
+  checkIn                CheckIn?                @relation("BoardingPass_checkIn", fields: [checkInId], references: [id])
+  checkInId              String?                 @map("checkIn")
+  passenger              Passenger?              @relation("BoardingPass_passenger", fields: [passengerId], references: [id])
+  passengerId            String?                 @map("passenger")
+  bookingSegment         BookingSegment?         @relation("BoardingPass_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId       String?                 @map("bookingSegment")
+  seatAssignment         SeatAssignment?         @relation("BoardingPass_seatAssignment", fields: [seatAssignmentId], references: [id])
+  seatAssignmentId       String?                 @map("seatAssignment")
+  status                 BoardingPassStatusType? @default(issued)
+  barcodeToken           String                  @default("")
+  seatDesignatorSnapshot String                  @default("")
+  boardingGroup          String                  @default("")
+  boardingZone           String                  @default("")
+  sequenceNumber         String                  @default("")
+  gateSnapshot           String                  @default("")
+  terminalSnapshot       String                  @default("")
+  issuedAt               DateTime?               @default(now())
+  boardedAt              DateTime?
+  revokedAt              DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([passengerId])
+  @@index([bookingSegmentId])
+  @@index([seatAssignmentId])
+}
+
+model Bag {
+  id                    String                  @id @default(cuid())
+  carrier               Carrier?                @relation("Bag_carrier", fields: [carrierId], references: [id])
+  carrierId             String?                 @map("carrier")
+  bagKey                String                  @unique @default("")
+  tagNumber             String                  @unique @default("")
+  booking               Booking?                @relation("Bag_booking", fields: [bookingId], references: [id])
+  bookingId             String?                 @map("booking")
+  bookingPassenger      BookingPassenger?       @relation("Bag_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId    String?                 @map("bookingPassenger")
+  passenger             Passenger?              @relation("Bag_passenger", fields: [passengerId], references: [id])
+  passengerId           String?                 @map("passenger")
+  flightInstance        FlightInstance?         @relation("Bag_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId      String?                 @map("flightInstance")
+  bookingSegment        BookingSegment?         @relation("Bag_bookingSegment", fields: [bookingSegmentId], references: [id])
+  bookingSegmentId      String?                 @map("bookingSegment")
+  checkIn               CheckIn?                @relation("Bag_checkIn", fields: [checkInId], references: [id])
+  checkInId             String?                 @map("checkIn")
+  ticketCoupon          TicketCoupon?           @relation("Bag_ticketCoupon", fields: [ticketCouponId], references: [id])
+  ticketCouponId        String?                 @map("ticketCoupon")
+  entitlementDocument   ElectronicMiscDocument? @relation("Bag_entitlementDocument", fields: [entitlementDocumentId], references: [id])
+  entitlementDocumentId String?                 @map("entitlementDocument")
+  segments              BookingSegment[]        @relation("Bag_segments")
+  origin                Airport?                @relation("Bag_origin", fields: [originId], references: [id])
+  originId              String?                 @map("origin")
+  destination           Airport?                @relation("Bag_destination", fields: [destinationId], references: [id])
+  destinationId         String?                 @map("destination")
+  status                BagStatusType?          @default(accepted)
+  bagType               BagBagTypeType?         @default(checked)
+  weightGrams           Int?
+  routeSnapshot         Json?                   @default("[]")
+  acceptedAt            DateTime?
+  deliveredAt           DateTime?
+  events                BagEvent[]              @relation("BagEvent_bag")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+  @@index([passengerId])
+  @@index([flightInstanceId])
+  @@index([bookingSegmentId])
+  @@index([checkInId])
+  @@index([ticketCouponId])
+  @@index([entitlementDocumentId])
+  @@index([originId])
+  @@index([destinationId])
+}
+
+model BagEvent {
+  id                   String                @id @default(cuid())
+  carrier              Carrier?              @relation("BagEvent_carrier", fields: [carrierId], references: [id])
+  carrierId            String?               @map("carrier")
+  eventKey             String                @unique @default("")
+  bag                  Bag?                  @relation("BagEvent_bag", fields: [bagId], references: [id])
+  bagId                String?               @map("bag")
+  airport              Airport?              @relation("BagEvent_airport", fields: [airportId], references: [id])
+  airportId            String?               @map("airport")
+  eventType            BagEventEventTypeType
+  statusSnapshot       String                @default("")
+  occurredAt           DateTime
+  source               BagEventSourceType?   @default(system)
+  providerConnection   ProviderConnection?   @relation("BagEvent_providerConnection", fields: [providerConnectionId], references: [id])
+  providerConnectionId String?               @map("providerConnection")
+  providerReference    String                @default("")
+  payloadSummary       Json?                 @default("{}")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bagId])
+  @@index([airportId])
+  @@index([occurredAt])
+  @@index([providerConnectionId])
+}
+
+model Disruption {
+  id                   String                  @id @default(cuid())
+  carrier              Carrier?                @relation("Disruption_carrier", fields: [carrierId], references: [id])
+  carrierId            String?                 @map("carrier")
+  disruptionKey        String                  @unique @default("")
+  flightInstance       FlightInstance?         @relation("Disruption_flightInstance", fields: [flightInstanceId], references: [id])
+  flightInstanceId     String?                 @map("flightInstance")
+  type                 DisruptionTypeType
+  severity             DisruptionSeverityType? @default(medium)
+  status               DisruptionStatusType?   @default(detected)
+  affectedSegments     BookingSegment[]        @relation("BookingSegment_disruptions")
+  publicSummary        String                  @default("")
+  internalDetails      String                  @default("")
+  providerConnection   ProviderConnection?     @relation("Disruption_providerConnection", fields: [providerConnectionId], references: [id])
+  providerConnectionId String?                 @map("providerConnection")
+  providerReference    String                  @default("")
+  detectedAt           DateTime?               @default(now())
+  publishedAt          DateTime?
+  resolvedAt           DateTime?
+  impactSnapshot       Json?                   @default("{}")
+  reaccommodations     Reaccommodation[]       @relation("Reaccommodation_disruption")
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([flightInstanceId])
+  @@index([providerConnectionId])
+}
+
+model Reaccommodation {
+  id                         String                     @id @default(cuid())
+  carrier                    Carrier?                   @relation("Reaccommodation_carrier", fields: [carrierId], references: [id])
+  carrierId                  String?                    @map("carrier")
+  reaccommodationKey         String                     @unique @default("")
+  idempotencyKey             String                     @unique @default("")
+  booking                    Booking?                   @relation("Reaccommodation_booking", fields: [bookingId], references: [id])
+  bookingId                  String?                    @map("booking")
+  bookingPassenger           BookingPassenger?          @relation("Reaccommodation_bookingPassenger", fields: [bookingPassengerId], references: [id])
+  bookingPassengerId         String?                    @map("bookingPassenger")
+  passenger                  Passenger?                 @relation("Reaccommodation_passenger", fields: [passengerId], references: [id])
+  passengerId                String?                    @map("passenger")
+  disruption                 Disruption?                @relation("Reaccommodation_disruption", fields: [disruptionId], references: [id])
+  disruptionId               String?                    @map("disruption")
+  status                     ReaccommodationStatusType? @default(proposed)
+  originalSegments           BookingSegment[]           @relation("BookingSegment_reaccommodationsAsOriginal")
+  replacementSegments        BookingSegment[]           @relation("BookingSegment_reaccommodationsAsReplacement")
+  replacementOffer           Offer?                     @relation("Reaccommodation_replacementOffer", fields: [replacementOfferId], references: [id])
+  replacementOfferId         String?                    @map("replacementOffer")
+  optionExpiresAt            DateTime?
+  priceDifferenceAmount      Int?                       @default(0)
+  additionalCollectionAmount Int?                       @default(0)
+  refundAmount               Int?                       @default(0)
+  currencyCode               String                     @default("USD")
+  acceptedAt                 DateTime?
+  confirmedAt                DateTime?
+  reason                     String                     @default("")
+  optionSnapshot             Json?                      @default("{}")
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([bookingId])
+  @@index([bookingPassengerId])
+  @@index([passengerId])
+  @@index([disruptionId])
+  @@index([replacementOfferId])
+}
+
+model StationAssignment {
+  id            String                       @id @default(cuid())
+  carrier       Carrier?                     @relation("StationAssignment_carrier", fields: [carrierId], references: [id])
+  carrierId     String?                      @map("carrier")
+  assignmentKey String                       @unique @default("")
+  user          User?                        @relation("StationAssignment_user", fields: [userId], references: [id])
+  userId        String?                      @map("user")
+  airport       Airport?                     @relation("StationAssignment_airport", fields: [airportId], references: [id])
+  airportId     String?                      @map("airport")
+  status        StationAssignmentStatusType? @default(active)
+  canCheckIn    Boolean                      @default(false)
+  canAcceptBags Boolean                      @default(false)
+  canBoard      Boolean                      @default(false)
+  validFrom     DateTime?                    @default(now())
+  validUntil    DateTime?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([userId])
+  @@index([airportId])
+}
+
+model IntegrationProvider {
+  id            String                         @id @default(cuid())
+  carrier       Carrier?                       @relation("IntegrationProvider_carrier", fields: [carrierId], references: [id])
+  carrierId     String?                        @map("carrier")
+  providerKey   String                         @unique @default("")
+  name          String                         @default("")
+  code          String                         @default("")
+  type          IntegrationProviderTypeType
+  status        IntegrationProviderStatusType? @default(active)
+  adapterModule String                         @default("")
+  capabilities  Json?                          @default("[]")
+  connections   ProviderConnection[]           @relation("ProviderConnection_provider")
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @default(now()) @updatedAt
+
+  @@index([carrierId])
+}
+
+model ProviderConnection {
+  id                                    String                        @id @default(cuid())
+  carrier                               Carrier?                      @relation("ProviderConnection_carrier", fields: [carrierId], references: [id])
+  carrierId                             String?                       @map("carrier")
+  connectionKey                         String                        @unique @default("")
+  provider                              IntegrationProvider?          @relation("ProviderConnection_provider", fields: [providerId], references: [id])
+  providerId                            String?                       @map("provider")
+  name                                  String                        @default("")
+  status                                ProviderConnectionStatusType? @default(pending)
+  credentials                           Json?                         @default("{}")
+  configuration                         Json?                         @default("{}")
+  capabilities                          Json?                         @default("[]")
+  externalAccountId                     String                        @default("")
+  lastAttemptedAt                       DateTime?
+  lastSucceededAt                       DateTime?
+  lastErrorCode                         String                        @default("")
+  lastErrorMessage                      String                        @default("")
+  webhookEndpoints                      WebhookEndpoint[]             @relation("WebhookEndpoint_connection")
+  webhookEvents                         WebhookEvent[]                @relation("WebhookEvent_connection")
+  createdAt                             DateTime                      @default(now())
+  updatedAt                             DateTime                      @default(now()) @updatedAt
+  from_SettlementLedgerEntry_connection SettlementLedgerEntry[]       @relation("SettlementLedgerEntry_connection")
+  from_BagEvent_providerConnection      BagEvent[]                    @relation("BagEvent_providerConnection")
+  from_Disruption_providerConnection    Disruption[]                  @relation("Disruption_providerConnection")
+
+  @@index([carrierId])
+  @@index([providerId])
+}
+
+model WebhookEndpoint {
+  id              String                     @id @default(cuid())
+  carrier         Carrier?                   @relation("WebhookEndpoint_carrier", fields: [carrierId], references: [id])
+  carrierId       String?                    @map("carrier")
+  endpointKey     String                     @unique @default("")
+  connection      ProviderConnection?        @relation("WebhookEndpoint_connection", fields: [connectionId], references: [id])
+  connectionId    String?                    @map("connection")
+  name            String                     @default("")
+  url             String                     @default("")
+  eventTypes      Json?                      @default("[]")
+  status          WebhookEndpointStatusType? @default(active)
+  secret          String                     @default("")
+  failureCount    Int?                       @default(0)
+  lastAttemptedAt DateTime?
+  lastDeliveredAt DateTime?
+  nextAttemptAt   DateTime?
+  events          WebhookEvent[]             @relation("WebhookEvent_endpoint")
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([connectionId])
+}
+
+model WebhookEvent {
+  id                String                    @id @default(cuid())
+  carrier           Carrier?                  @relation("WebhookEvent_carrier", fields: [carrierId], references: [id])
+  carrierId         String?                   @map("carrier")
+  eventKey          String                    @unique @default("")
+  dedupeKey         String                    @unique @default("")
+  providerEventId   String                    @default("")
+  connection        ProviderConnection?       @relation("WebhookEvent_connection", fields: [connectionId], references: [id])
+  connectionId      String?                   @map("connection")
+  endpoint          WebhookEndpoint?          @relation("WebhookEvent_endpoint", fields: [endpointId], references: [id])
+  endpointId        String?                   @map("endpoint")
+  direction         WebhookEventDirectionType
+  eventType         String                    @default("")
+  resourceType      String                    @default("")
+  resourceId        String                    @default("")
+  status            WebhookEventStatusType?   @default(pending)
+  signatureVerified Boolean                   @default(false)
+  payload           Json?
+  payloadSummary    Json?                     @default("{}")
+  attemptCount      Int?                      @default(0)
+  occurredAt        DateTime?                 @default(now())
+  lastAttemptedAt   DateTime?
+  nextAttemptAt     DateTime?
+  completedAt       DateTime?
+  responseStatus    Int?
+  errorCode         String                    @default("")
+  errorMessage      String                    @default("")
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([providerEventId])
+  @@index([connectionId])
+  @@index([endpointId])
+}
+
+model MachineCredential {
+  id           String                       @id @default(cuid())
+  carrier      Carrier?                     @relation("MachineCredential_carrier", fields: [carrierId], references: [id])
+  carrierId    String?                      @map("carrier")
+  name         String                       @default("")
+  keyId        String                       @unique @default("")
+  tokenHash    String                       @unique @default("")
+  tokenPreview String                       @default("")
+  audience     String                       @default("")
+  scopes       Json?                        @default("[]")
+  status       MachineCredentialStatusType? @default(active)
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @default(now()) @updatedAt
+
+  @@index([carrierId])
+}
+
+model OutboxEvent {
+  id            String                 @id @default(cuid())
+  carrier       Carrier?               @relation("OutboxEvent_carrier", fields: [carrierId], references: [id])
+  carrierId     String?                @map("carrier")
+  eventKey      String                 @unique @default("")
+  topic         String                 @default("")
+  aggregateType String                 @default("")
+  aggregateId   String                 @default("")
+  payload       Json?                  @default("{}")
+  status        OutboxEventStatusType? @default(pending)
+  attemptCount  Int?                   @default(0)
+  availableAt   DateTime?              @default(now())
+  leasedAt      DateTime?
+  leaseOwner    String                 @default("")
+  lastError     String                 @default("")
+  deliveredAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @default(now()) @updatedAt
+
+  @@index([carrierId])
+}
+
+model OnboardingStep {
+  id              String                    @id @default(cuid())
+  carrier         Carrier?                  @relation("OnboardingStep_carrier", fields: [carrierId], references: [id])
+  carrierId       String?                   @map("carrier")
+  user            User?                     @relation("OnboardingStep_user", fields: [userId], references: [id])
+  userId          String?                   @map("user")
+  progressKey     String                    @unique @default("")
+  step            String                    @default("")
+  status          OnboardingStepStatusType? @default(pending)
+  attemptCount    Int?                      @default(0)
+  inputDigest     String                    @default("")
+  requirements    Json?                     @default("[]")
+  completedAt     DateTime?
+  lastAttemptedAt DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([userId])
+}
+
+model RateLimitBucket {
+  id              String   @id @default(cuid())
+  key             String   @unique @default("")
+  scope           String   @default("")
+  count           Int?     @default(0)
+  windowStartedAt DateTime
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@index([expiresAt])
+}
+
+model IdempotencyKey {
+  id              String                    @id @default(cuid())
+  carrier         Carrier?                  @relation("IdempotencyKey_carrier", fields: [carrierId], references: [id])
+  carrierId       String?                   @map("carrier")
+  key             String                    @unique @default("")
+  scope           String                    @default("")
+  requestHash     String                    @default("")
+  status          IdempotencyKeyStatusType? @default(started)
+  actor           User?                     @relation("IdempotencyKey_actor", fields: [actorId], references: [id])
+  actorId         String?                   @map("actor")
+  approvedAgent   ApprovedAgent?            @relation("IdempotencyKey_approvedAgent", fields: [approvedAgentId], references: [id])
+  approvedAgentId String?                   @map("approvedAgent")
+  resourceType    String                    @default("")
+  resourceId      String                    @default("")
+  result          Json?
+  lockedAt        DateTime?                 @default(now())
+  completedAt     DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([actorId])
+  @@index([approvedAgentId])
+}
+
+model AuditEvent {
+  id              String                @id @default(cuid())
+  carrier         Carrier?              @relation("AuditEvent_carrier", fields: [carrierId], references: [id])
+  carrierId       String?               @map("carrier")
+  eventKey        String                @unique @default("")
+  action          String                @default("")
+  aggregateType   String                @default("")
+  aggregateId     String                @default("")
+  actor           User?                 @relation("AuditEvent_actor", fields: [actorId], references: [id])
+  actorId         String?               @map("actor")
+  approvedAgent   ApprovedAgent?        @relation("AuditEvent_approvedAgent", fields: [approvedAgentId], references: [id])
+  approvedAgentId String?               @map("approvedAgent")
+  source          AuditEventSourceType? @default(platform)
+  correlationId   String                @default("")
+  idempotencyKey  String                @default("")
+  beforeSummary   Json?                 @default("{}")
+  afterSummary    Json?                 @default("{}")
+  metadata        Json?                 @default("{}")
+  ipAddress       String                @default("")
+  userAgent       String                @default("")
+  occurredAt      DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @default(now()) @updatedAt
+
+  @@index([carrierId])
+  @@index([actorId])
+  @@index([approvedAgentId])
+  @@index([correlationId])
+  @@index([idempotencyKey])
+  @@index([occurredAt])
+}
+
+model WorkerHeartbeat {
+  id         String                     @id @default(cuid())
+  workerKey  String                     @unique @default("")
+  component  String                     @default("")
+  status     WorkerHeartbeatStatusType? @default(running)
+  lastSeenAt DateTime
+  metadata   Json?                      @default("{}")
+  createdAt  DateTime                   @default(now())
+  updatedAt  DateTime                   @default(now()) @updatedAt
+
+  @@index([lastSeenAt])
+}
+
+enum UserOnboardingStatusType {
+  not_started
+  in_progress
+  completed
+  dismissed
+}
+
+enum CarrierStatusType {
+  active
+  suspended
+  archived
+}
+
+enum ApprovedAgentAccreditationTypeType {
+  iata
+  tids
+  arc
+  carrier_appointed
+  other
+}
+
+enum ApprovedAgentStatusType {
+  pending
+  approved
+  suspended
+  revoked
+  expired
+}
+
+enum RouteStatusType {
+  draft
+  active
+  suspended
+  archived
+}
+
+enum FlightScheduleStatusType {
+  draft
+  published
+  suspended
+  retired
+}
+
+enum FlightInstanceStatusType {
+  scheduled
+  open_for_sale
+  closed_for_sale
+  delayed
+  departed
+  arrived
+  cancelled
+}
+
+enum CabinCabinClassType {
+  economy
+  premium_economy
+  business
+  first
+}
+
+enum InventoryBucketStatusType {
+  open
+  closed
+  frozen
+}
+
+enum InventoryHoldStatusType {
+  active
+  converted
+  released
+  expired
+}
+
+enum FareBrandStatusType {
+  draft
+  active
+  inactive
+  archived
+}
+
+enum FareRuleStatusType {
+  draft
+  active
+  inactive
+  archived
+}
+
+enum AncillaryProductTypeType {
+  seat
+  checked_bag
+  cabin_bag
+  priority
+  lounge
+  meal
+  wifi
+  assistance
+  other
+}
+
+enum AncillaryProductStatusType {
+  draft
+  active
+  inactive
+  archived
+}
+
+enum AncillaryProductFulfillmentTypeType {
+  associated
+  standalone
+}
+
+enum OfferStatusType {
+  draft
+  available
+  held
+  accepted
+  expired
+  withdrawn
+}
+
+enum OfferSourceType {
+  direct
+  website
+  call_center
+  agent
+  ndc
+  gds
+}
+
+enum OfferItemItemTypeType {
+  flight
+  ancillary
+  fee
+  tax
+  discount
+}
+
+enum PassengerGenderMarkerType {
+  female
+  male
+  unspecified
+  undisclosed
+}
+
+enum PassengerStatusType {
+  active
+  merged
+  restricted
+  archived
+}
+
+enum TravelDocumentDocumentTypeType {
+  passport
+  national_id
+  residence_permit
+  visa
+  known_traveler
+  redress
+  other
+}
+
+enum TravelDocumentStatusType {
+  unverified
+  verified
+  rejected
+  expired
+  revoked
+}
+
+enum DocumentVerificationStatusType {
+  verified
+  rejected
+  revoked
+  expired
+}
+
+enum BookingStatusType {
+  pending
+  confirmed
+  ticketed
+  in_progress
+  completed
+  cancelled
+}
+
+enum BookingPaymentStatusType {
+  unpaid
+  partially_paid
+  paid
+  partially_refunded
+  refunded
+  failed
+}
+
+enum BookingTicketingStatusType {
+  not_ticketed
+  partially_ticketed
+  ticketed
+  voided
+  exchanged
+}
+
+enum BookingSourceType {
+  direct
+  website
+  call_center
+  agent
+  ndc
+  gds
+  airport
+}
+
+enum BookingPassengerPassengerTypeType {
+  adult
+  child
+  infant_with_seat
+  infant_without_seat
+}
+
+enum BookingPassengerStatusType {
+  active
+  cancelled
+  completed
+}
+
+enum JourneyStatusType {
+  planned
+  in_progress
+  completed
+  disrupted
+  cancelled
+}
+
+enum BookingSegmentStatusType {
+  confirmed
+  checked_in
+  boarded
+  flown
+  offloaded
+  disrupted
+  reaccommodated
+  cancelled
+  refunded
+}
+
+enum BookingLineItemItemTypeType {
+  flight
+  ancillary
+  fee
+  tax
+  discount
+  exchange
+}
+
+enum ServiceRequestCategoryType {
+  ssr
+  osi
+  accessibility
+  meal
+  assistance
+  other
+}
+
+enum ServiceRequestStatusType {
+  requested
+  pending
+  confirmed
+  fulfilled
+  unable
+  cancelled
+}
+
+enum TicketStatusType {
+  pending
+  issued
+  partially_used
+  used
+  suspended
+  voided
+  refunded
+  exchanged
+}
+
+enum TicketCouponStatusType {
+  open
+  checked_in
+  boarded
+  flown
+  suspended
+  voided
+  refunded
+  exchanged
+}
+
+enum ServiceObligationStatusType {
+  active
+  fulfilled
+  retired
+}
+
+enum TicketCouponLineageTransformationType {
+  alternative
+  split
+  consolidation
+}
+
+enum TicketCouponLineageOperationTypeType {
+  exchange
+  reaccommodation
+  servicing
+}
+
+enum ElectronicMiscDocumentDocumentTypeType {
+  associated
+  standalone
+}
+
+enum ElectronicMiscDocumentStatusType {
+  pending
+  issued
+  partially_used
+  used
+  voided
+  refunded
+  exchanged
+}
+
+enum ElectronicMiscCouponStatusType {
+  open
+  used
+  voided
+  refunded
+  exchanged
+}
+
+enum SeatMapStatusType {
+  draft
+  published
+  retired
+}
+
+enum SeatStatusType {
+  available
+  blocked
+  unavailable
+}
+
+enum SeatSeatTypeType {
+  standard
+  preferred
+  extra_legroom
+  bassinet
+  restricted
+}
+
+enum SeatAssignmentStatusType {
+  held
+  assigned
+  confirmed
+  boarded
+  released
+  cancelled
+}
+
+enum PaymentProviderAdapterTypeType {
+  stripe
+  paypal
+  manual
+  custom
+}
+
+enum PaymentProviderStatusType {
+  inactive
+  active
+  degraded
+  disabled
+}
+
+enum PaymentSessionStatusType {
+  created
+  pending
+  authorized
+  captured
+  failed
+  cancelled
+  expired
+}
+
+enum ManualPaymentEvidencePurposeType {
+  capture
+  refund
+}
+
+enum ManualPaymentEvidenceStatusType {
+  submitted
+  approved
+  rejected
+  consumed
+}
+
+enum PaymentStatusType {
+  pending
+  authorized
+  captured
+  partially_refunded
+  refunded
+  failed
+  cancelled
+}
+
+enum RefundStatusType {
+  requested
+  approved
+  processing
+  succeeded
+  failed
+  cancelled
+}
+
+enum RefundReasonType {
+  customer_request
+  disruption
+  schedule_change
+  duplicate
+  fraud
+  other
+}
+
+enum ExchangeStatusType {
+  quoted
+  accepted
+  processing
+  completed
+  failed
+  cancelled
+  expired
+}
+
+enum CheckInStatusType {
+  not_started
+  eligible
+  checked_in
+  boarded
+  blocked
+  offloaded
+  cancelled
+}
+
+enum CheckInChannelType {
+  web
+  mobile
+  kiosk
+  counter
+  agent
+  system
+}
+
+enum BoardingPassStatusType {
+  issued
+  reissued
+  boarded
+  revoked
+}
+
+enum BagStatusType {
+  accepted
+  loaded
+  in_transit
+  arrived
+  delivered
+  delayed
+  mishandled
+  closed
+}
+
+enum BagBagTypeType {
+  checked
+  gate_checked
+  special_item
+  mobility_aid
+}
+
+enum BagEventEventTypeType {
+  accepted
+  screened
+  loaded
+  unloaded
+  transferred
+  arrived
+  delivered
+  exception
+}
+
+enum BagEventSourceType {
+  system
+  scanner
+  provider
+  agent
+}
+
+enum DisruptionTypeType {
+  delay
+  cancellation
+  schedule_change
+  misconnection
+  diversion
+  equipment_change
+  other
+}
+
+enum DisruptionSeverityType {
+  low
+  medium
+  high
+  critical
+}
+
+enum DisruptionStatusType {
+  detected
+  published
+  recovering
+  resolved
+  cancelled
+}
+
+enum ReaccommodationStatusType {
+  proposed
+  accepted
+  confirmed
+  declined
+  failed
+  expired
+  cancelled
+}
+
+enum StationAssignmentStatusType {
+  active
+  suspended
+  revoked
+}
+
+enum IntegrationProviderTypeType {
+  ndc
+  gds
+  dcs
+  identity
+  baggage
+  notification
+  loyalty
+  other
+}
+
+enum IntegrationProviderStatusType {
+  active
+  inactive
+  deprecated
+}
+
+enum ProviderConnectionStatusType {
+  pending
+  active
+  paused
+  failed
+  revoked
+}
+
+enum WebhookEndpointStatusType {
+  active
+  paused
+  failed
+  disabled
+}
+
+enum WebhookEventDirectionType {
+  inbound
+  outbound
+}
+
+enum WebhookEventStatusType {
+  pending
+  processing
+  succeeded
+  failed
+  dead_lettered
+}
+
+enum MachineCredentialStatusType {
+  active
+  revoked
+  expired
+}
+
+enum OutboxEventStatusType {
+  pending
+  processing
+  delivered
+  failed
+  dead_lettered
+}
+
+enum OnboardingStepStatusType {
+  pending
+  completed
+  needs_attention
+}
+
+enum IdempotencyKeyStatusType {
+  started
+  completed
+  failed
+}
+
+enum AuditEventSourceType {
+  platform
+  storefront
+  agent
+  provider
+  system
+}
+
+enum WorkerHeartbeatStatusType {
+  running
+  draining
+  stopped
 }
