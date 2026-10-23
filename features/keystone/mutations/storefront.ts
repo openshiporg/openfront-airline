@@ -12,6 +12,8 @@ import { checkInBookingPassenger, createOfferInTransaction, normalizeSearchDate,
 import { assertDatedFlightEligibleForAction } from '../lib/service-eligibility'
 import { hasConfiguredStorefrontBrand, normalizeStorefrontBrandColor } from '../../airline/lib/branding'
 import { DomainError } from '../lib/domain-error'
+import { hasAccompanyingAdult, travelerDateOfBirth } from '../lib/passenger-age'
+import { accessRecoveryEnabled, emailBookingAccess } from './storefrontAccess'
 
 // Creation budgets are charged only for admitted new work (and failed proofs), after the exact accepted command has
 // been looked up: replays and read-only recovery of an ambiguous outcome never consume them.
@@ -105,21 +107,12 @@ export async function getPublicCarrierIdentity(
 ) {
   await assertConfiguredPublicCarrier((context as any).prisma, args.carrierCode)
   try {
-    const identity = await lookupCarrierIdentity((context as any).prisma, args.carrierCode)
+    const identity = { ...await lookupCarrierIdentity((context as any).prisma, args.carrierCode), accessRecoveryEnabled: accessRecoveryEnabled() }
     return operatorOnlyLaunchSetup() ? { ...identity, salesEnabled: false } : identity
   } catch (error) {
     if (error instanceof Error && error.message === 'Carrier identity is not configured.') return null
     throw error
   }
-}
-
-export function adultDateOfBirth(value: string, serviceDate: Date) {
-  const dateOfBirth = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00.000Z`) : new Date('invalid')
-  const departureDate = new Date(`${serviceDate.toISOString().slice(0, 10)}T23:59:59.999Z`)
-  const adultAtDeparture = new Date(dateOfBirth); adultAtDeparture.setUTCFullYear(adultAtDeparture.getUTCFullYear() + 18)
-  const oldestAccepted = new Date(departureDate); oldestAccepted.setUTCFullYear(oldestAccepted.getUTCFullYear() - 120)
-  if (Number.isNaN(dateOfBirth.getTime()) || dateOfBirth.toISOString().slice(0, 10) !== value || adultAtDeparture > departureDate || dateOfBirth < oldestAccepted) throw new DomainError('Online booking is for adults 18 and over; enter a valid adult date of birth.')
-  return dateOfBirth
 }
 
 export async function publicAirlineFlightOptions(
@@ -213,10 +206,10 @@ export async function createCustomerOffer(
     })
     if (!flight) throw new DomainError('The selected flight is not available for direct sale.')
     validatePassengerCount(args.passengers.length)
+    const departureDate = new Date(`${flight.serviceDate.toISOString().slice(0, 10)}T00:00:00.000Z`)
     const normalizedPassengers = args.passengers.map((input, index) => {
-      let dateOfBirth: Date
-      try { dateOfBirth = adultDateOfBirth(input.dateOfBirth, flight.serviceDate) }
-      catch { throw new DomainError(`Passenger ${index + 1} must be 18 or older with a valid date of birth; online booking is for adults only.`) }
+      const dateOfBirth = travelerDateOfBirth(input.dateOfBirth, departureDate)
+      if (!dateOfBirth) throw new DomainError(`Enter a valid date of birth for traveler ${index + 1}.`)
       return {
         passengerKey: `${carrier.code}:WEB:${crypto.createHash('sha256').update(`${shoppingSessionHash}\u0000${args.idempotencyKey}\u0000${index}`).digest('hex').slice(0, 32)}`,
         carrierId: carrier.id,
@@ -227,6 +220,7 @@ export async function createCustomerOffer(
         phone: input.phone?.trim().slice(0, 40) || '',
       }
     })
+    if (!hasAccompanyingAdult(normalizedPassengers.map(passenger => passenger.dateOfBirth), departureDate)) throw new DomainError('Each booking needs at least one traveler aged 18 or over.')
     const key = normalizeIdempotencyKey(args.idempotencyKey)
     const request = { carrierId: carrier.id, flightInstanceId: args.flightInstanceId, inventoryBucketId: args.inventoryBucketId, shoppingSessionHash, passengers: normalizedPassengers.map(passenger => ({ ...passenger, dateOfBirth: passenger.dateOfBirth.toISOString() })) }
     return { key, request, normalizedPassengers }
@@ -290,7 +284,10 @@ export async function createCustomerBooking(
     const admitted = await directCarrier(tx, expected.code)
     if (admitted.id !== expected.id) throw new DomainError('Carrier is unavailable on this storefront.')
   })
-  return { ...result, bookingAccessToken: result.bookingReceipt?.accessState === 'current' ? accessToken : null }
+  const current = result.bookingReceipt?.accessState === 'current'
+  // A new reservation emails its reference and access code to the contact address (when mail is configured).
+  if (current && !result.replayed && result.resourceId) await emailBookingAccess(context, String(result.resourceId), accessToken)
+  return { ...result, bookingAccessToken: current ? accessToken : null }
 }
 
 async function ownedBooking(context: Context, recordLocator: string, accessToken: string) {
@@ -536,7 +533,7 @@ export async function getCustomerBooking(
         const assignment = seat.assignments?.[0]
         const selectedForPassengerId = assignment?.bookingId === booking.id && assignment?.bookingSegmentId === segment.id ? assignment.bookingPassengerId : null
         // A seat priced in another currency cannot be assigned to this booking (check-in refuses it).
-        return { id: seat.id, designator: seat.designator, seatType: seat.seatType, surchargeAmount: seat.surchargeAmount, currencyCode: seat.currencyCode, cabinCode: seat.cabin?.code, isAvailable: !assignment && seat.currencyCode === booking.currencyCode && seat.cabin?.code === segment.cabinCode, selectedForPassengerId }
+        return { id: seat.id, designator: seat.designator, rowNumber: seat.rowNumber, columnCode: seat.columnCode, seatType: seat.seatType, surchargeAmount: seat.surchargeAmount, currencyCode: seat.currencyCode, cabinCode: seat.cabin?.code, isAvailable: !assignment && seat.currencyCode === booking.currencyCode && seat.cabin?.code === segment.cabinCode, selectedForPassengerId }
       }),
     })),
     payments: booking.payments, tickets: booking.tickets, checkIns: booking.checkIns, reaccommodations: booking.reaccommodations,

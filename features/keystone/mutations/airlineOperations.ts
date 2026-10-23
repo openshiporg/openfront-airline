@@ -22,6 +22,7 @@ import {
   throwIfKeystonePrismaError,
 } from '../lib/transactions'
 import { DomainError } from '../lib/domain-error'
+import { passengerTypeOn } from '../lib/passenger-age'
 
 const sensitiveAuditKey = /authorization|cookie|credential|document|password|payload|secret|token/i
 
@@ -823,12 +824,15 @@ async function createBookingFromOfferInTransaction(
       query: 'id recordLocator orderNumber status',
     })
 
+    // Fare type (adult, child, infant with seat) is fixed by age on the first departure of the itinerary.
+    const departures = offer.items.map((item: any) => Date.parse(item.flightInstance?.scheduledDepartureAt ?? '')).filter(Number.isFinite)
+    const firstDeparture = new Date(departures.length ? Math.min(...departures) : Date.now())
     for (const passenger of passengers) {
       await sudo.query.BookingPassenger.createOne({
         data: {
           carrier: { connect: { id: offer.carrier.id } }, booking: { connect: { id: booking.id } },
           passenger: { connect: { id: passenger.id } }, bookingPassengerKey: `${booking.id}:${passenger.id}`,
-          passengerType: 'adult', isPrimaryContact: passenger.id === passengers[0].id,
+          passengerType: passengerTypeOn(passenger.dateOfBirth, firstDeparture), isPrimaryContact: passenger.id === passengers[0].id,
           passengerSnapshot: {
             passengerKey: passenger.passengerKey, title: passenger.title, givenName: passenger.givenName,
             middleNames: passenger.middleNames, familyName: passenger.familyName, suffix: passenger.suffix,

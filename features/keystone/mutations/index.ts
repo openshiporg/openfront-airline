@@ -16,6 +16,7 @@ import {
   submitManualPaymentEvidence,
   verifyPassengerTravelDocument,
 } from './airlineWorkflows';
+import { recoverCustomerBookingAccess } from './storefrontAccess'
 import { assignCustomerSeat, cancelCustomerBooking, checkInCustomerBooking, createCustomerBooking, createCustomerOffer, getCustomerBooking, getPublicCarrierIdentity, publicAirlineFlightOptions, publicFlightStatuses, rotateCustomerBookingAccessToken } from './storefront'
 import { publishFlightDisruption, reaccommodateBooking } from './airlineRecovery'
 import { boardBookingPassenger, departureManifest, offloadBookingPassenger } from './airlineDepartures'
@@ -80,6 +81,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         storefrontHomepageTitle: String
         storefrontHomepageDescription: String
         storefrontConfigured: Boolean!
+        accessRecoveryEnabled: Boolean!
       }
 
       type AirlineFlightOption {
@@ -250,6 +252,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         revokeMachineCredential(credentialId: ID!): Boolean!
         requeueDeadLetteredOutboxEvent(outboxEventId: ID!, expectedAttemptCount: Int!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
         rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
+        recoverCustomerBookingAccess(carrierCode: String!, recordLocator: String!, email: String!): Boolean!
         cancelCustomerBooking(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
         assignCustomerSeat(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID!, idempotencyKey: String!): AirlineOperationResult!
         checkInCustomerBooking(
@@ -424,6 +427,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         createCustomerOffer,
         createCustomerBooking,
         rotateCustomerBookingAccessToken,
+        recoverCustomerBookingAccess,
         cancelCustomerBooking,
         assignCustomerSeat,
         checkInCustomerBooking,

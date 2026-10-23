@@ -7146,6 +7146,7 @@ type Mutation {
   issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
   revokeMachineCredential(credentialId: ID!): Boolean!
   rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
+  recoverCustomerBookingAccess(carrierCode: String!, recordLocator: String!, email: String!): Boolean!
   cancelCustomerBooking(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
   assignCustomerSeat(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID!, idempotencyKey: String!): AirlineOperationResult!
   checkInCustomerBooking(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID, idempotencyKey: String!): AirlineOperationResult!
@@ -7575,6 +7576,7 @@ type PublicCarrierIdentity {
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
   storefrontConfigured: Boolean!
+  accessRecoveryEnabled: Boolean!
 }
 
 type AirlineFlightOption {

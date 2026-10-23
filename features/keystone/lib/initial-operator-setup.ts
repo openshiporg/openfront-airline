@@ -1,5 +1,7 @@
-export function initialOperatorSetupEnabled(env: NodeJS.ProcessEnv = process.env) {
-  return env.NODE_ENV !== 'production' || env.ALLOW_INITIAL_OPERATOR_SETUP === 'true'
+// As in E-commerce: first-run setup is open while the database has no user. Keystone's initFirstItem mutation and
+// redirectToInit both refuse once any user exists, so this only governs the empty-database window.
+export function initialOperatorSetupEnabled(_env: NodeJS.ProcessEnv = process.env) {
+  return true
 }
 
 export function validateInitialOperatorInput(input: { name: string; email: string; password: string }) {

@@ -19,6 +19,7 @@ export type PublicCarrierIdentity = {
   storefrontHomepageTitle: string | null
   storefrontHomepageDescription: string | null
   storefrontConfigured: boolean
+  accessRecoveryEnabled: boolean
 }
 
 export const getStorefrontCarrierIdentity = cache(async (): Promise<PublicCarrierIdentity | null> => {
@@ -29,7 +30,7 @@ export const getStorefrontCarrierIdentity = cache(async (): Promise<PublicCarrie
     `query StorefrontCarrierIdentity($carrierCode: String!) {
       publicCarrierIdentity(carrierCode: $carrierCode) {
         id code name legalName defaultCurrencyCode defaultTimezone salesEnabled
-        storefrontBrandColor storefrontHomepageTitle storefrontHomepageDescription storefrontConfigured
+        storefrontBrandColor storefrontHomepageTitle storefrontHomepageDescription storefrontConfigured accessRecoveryEnabled
       }
     }`,
     { carrierCode },

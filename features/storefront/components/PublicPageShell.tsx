@@ -1,5 +1,5 @@
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
-import { StorefrontFrame, UnconfiguredStorefront, type StorefrontRoute } from './StorefrontChrome'
+import { StorefrontFrame, type StorefrontRoute } from './StorefrontChrome'
 
 export function PublicPageShell({
   carrier,
@@ -14,7 +14,6 @@ export function PublicPageShell({
   current?: StorefrontRoute
   children: React.ReactNode
 }) {
-  if (!carrier) return <UnconfiguredStorefront />
   return <StorefrontFrame carrier={carrier} current={current}>
     <section className="af-board">
       <div className="af-container pb-28 pt-12 sm:pb-32 sm:pt-16">

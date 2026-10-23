@@ -24,6 +24,7 @@ import { createServiceObligationKey } from '../lib/coupon-lineage'
 import { checkedMinorTotal } from '../lib/money'
 import { assertDatedFlightEligibleForAction, selectCurrentTicketableSegments, ticketIssuanceArtifactBlockers, type DatedFlightEligibilityState, type TicketableSegmentState } from '../lib/service-eligibility'
 import { DomainError } from '../lib/domain-error'
+import { travelDocumentTokenizationKey } from '../lib/travel-document-key'
 
 export function calculateAvailability(input: {
   authorized: number
@@ -824,7 +825,7 @@ export async function registerPassengerTravelDocument(
     if (Number.isNaN(expiresAt.getTime()) || (issuedAt && Number.isNaN(issuedAt.getTime())) || Number.isNaN(verificationExpiresAt.getTime())) throw new DomainError('Document validity dates are invalid.')
 
     if (!providerReference || providerReference.length > 200 || !evidenceVersion || evidenceVersion.length > 100) throw new DomainError('A bounded manual/provider reference and evidence version are required.')
-    const tokenizationKey = process.env.TRAVEL_DOCUMENT_TOKENIZATION_KEY?.trim() ?? ''
+    const tokenizationKey = travelDocumentTokenizationKey()
     if (tokenizationKey.length < 32) throw new DomainError('Travel-document tokenization is not configured.')
     const documentToken = `tdoc_${crypto.createHmac('sha256', tokenizationKey).update(`${segment.carrierId}\u0000${documentNumber}`).digest('hex')}`
     const documentNumberHash = crypto.createHash('sha256').update(documentToken).digest('hex')

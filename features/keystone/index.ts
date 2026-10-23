@@ -37,10 +37,7 @@ const { withAuth } = createAuth({
   listKey: "User",
   identityField: "email",
   secretField: "password",
-  // Ecommerce/Restaurant expose Keystone's normal empty-database init flow.
-  // Airline keeps parity in development and requires an explicit, temporary
-  // owner-approved flag in production. Keystone itself permits this mutation
-  // only while no User exists; retained-account recovery still uses reset.
+  // Keystone's normal empty-database init flow, as in E-commerce: it is permitted only while no User exists.
   initFirstItem: initialOperatorSetupEnabled() ? {
     fields: ["name", "email", "password"],
     itemData: {

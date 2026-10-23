@@ -15,6 +15,6 @@ export default async function FlightStatusPage() {
   const carrier = await getStorefrontCarrierIdentity()
   const initialDate = carrierCalendarDate(new Date(), carrier?.defaultTimezone ?? 'UTC')
   return <PublicPageShell carrier={carrier} current="/status" eyebrow="Travel information" title="Flight status">
-    {carrier ? <FlightStatusSearch carrier={carrier} initialDate={initialDate} /> : <p role="status" className="af-notice" data-tone="warn">Flight status isn&apos;t available right now.</p>}
+    {carrier ? <FlightStatusSearch carrier={carrier} initialDate={initialDate} /> : <p role="status" className="af-notice relative z-10 shadow-lg" data-tone="warn"><span className="af-dot" data-tone="warn" />Flight status isn&apos;t available right now.</p>}
   </PublicPageShell>
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
+import type { StorefrontNetwork } from '@/features/storefront/lib/network'
 import { parseBookingAccessForm, parseStorefrontPassengers, parseStorefrontSearchForm } from '@/features/storefront/lib/forms'
 import { bookingIntentVariables, CUSTOMER_BOOKING_COMMAND, CUSTOMER_BOOKING_READ, parsePendingBookingIntent, type BookingReceipt, type PendingBookingIntent } from '@/features/storefront/lib/booking-intent'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
@@ -41,7 +42,7 @@ type CustomerBooking = {
   bookingReceipt: BookingReceipt
   carrier: { id: string; code: string; name: string }
   passengers: Array<{ id: string; passenger: { givenName: string; familyName: string }; acceptedName?: { givenName: string; familyName: string } | null }>
-  segments: Array<{ id: string; status: string; flightNumber: string; flightStatus?: string; serviceDate?: string | null; scheduledDepartureAt?: string; scheduledArrivalAt?: string; estimatedDepartureAt?: string | null; estimatedArrivalAt?: string | null; actualDepartureAt?: string | null; actualArrivalAt?: string | null; originCode: string; destinationCode: string; originTimezone?: string | null; destinationTimezone?: string | null; seats: Array<{ id: string; designator: string; seatType: string; surchargeAmount: number; currencyCode: string; isAvailable: boolean; selectedForPassengerId?: string | null }> }>
+  segments: Array<{ id: string; status: string; flightNumber: string; flightStatus?: string; serviceDate?: string | null; scheduledDepartureAt?: string; scheduledArrivalAt?: string; estimatedDepartureAt?: string | null; estimatedArrivalAt?: string | null; actualDepartureAt?: string | null; actualArrivalAt?: string | null; originCode: string; destinationCode: string; originTimezone?: string | null; destinationTimezone?: string | null; seats: Array<{ id: string; designator: string; rowNumber?: number | null; columnCode?: string | null; seatType: string; surchargeAmount: number; currencyCode: string; isAvailable: boolean; selectedForPassengerId?: string | null }> }>
   checkIns: Array<{ id: string; bookingPassengerId: string; bookingSegmentId: string; status: string; offloadedAt?: string | null; boardingPass?: BoardingPass | null }>
 }
 
@@ -69,7 +70,33 @@ function localTime(value: string | null | undefined, timeZone: string | null | u
   catch { return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }).format(new Date(value)) }
 }
 
-export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDate: string; carrier: PublicCarrierIdentity; mode?: FlightShopMode }) {
+type TripType = 'one-way' | 'round-trip'
+type Party = { adults: number; children: number; infants: number }
+type SearchInput = { originCode: string; destinationCode: string; serviceDate: string; passengerCount: number }
+type TravelerValues = Record<'givenName' | 'familyName' | 'dateOfBirth' | 'email' | 'phone', string>
+const travelerFields = ['givenName', 'familyName', 'dateOfBirth', 'email', 'phone'] as const
+
+function travelerBand(index: number, party: Party) {
+  return index < party.adults ? 'Adult' : index < party.adults + party.children ? 'Child 2–11' : 'Infant under 2'
+}
+
+// Groups a flight's seats into cabin rows with an aisle down the middle of the column letters.
+function seatRows<T extends { designator: string; rowNumber?: number | null; columnCode?: string | null }>(seats: T[]) {
+  const parsed = seats.map(seat => {
+    const match = /^(\d+)([A-Z]+)$/i.exec(seat.designator.trim())
+    return { seat, row: seat.rowNumber ?? (match ? Number(match[1]) : 0), column: (seat.columnCode || match?.[2] || seat.designator).toUpperCase() }
+  })
+  const columns = [...new Set(parsed.map(entry => entry.column))].sort()
+  const aisleAfter = Math.ceil(columns.length / 2) - 1
+  const rows = new Map<number, Map<string, T>>()
+  for (const entry of parsed) {
+    if (!rows.has(entry.row)) rows.set(entry.row, new Map())
+    rows.get(entry.row)!.set(entry.column, entry.seat)
+  }
+  return { columns, aisleAfter, rows: [...rows.entries()].sort(([left], [right]) => left - right) }
+}
+
+export function FlightShop({ initialDate, carrier, mode = 'book', network }: { initialDate: string; carrier: PublicCarrierIdentity; mode?: FlightShopMode; network?: StorefrontNetwork }) {
   const storagePrefix = `airline:${carrier.code.toLowerCase()}`
   const shoppingEnabled = mode === 'book'
   const [flights, setFlights] = useState<Flight[]>([])
@@ -87,12 +114,35 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
   const bookingAttempt = useRef<{ offerKey: string; bookingKey: string } | null>(null)
   const [pendingBooking, setPendingBooking] = useState<PendingBookingIntent | null>(null)
   const [intentUnavailable, setIntentUnavailable] = useState(false)
+  // Search console: route pickers fed by the carrier's network, trip type and the party by fare type.
+  const routes = network?.routes ?? []
+  const [tripType, setTripType] = useState<TripType>('one-way')
+  const [origin, setOrigin] = useState(routes[0]?.origin ?? '')
+  const [destination, setDestination] = useState(routes[0]?.destination ?? '')
+  const [departDate, setDepartDate] = useState(initialDate)
+  const [returnDate, setReturnDate] = useState(() => { const value = new Date(`${initialDate}T00:00:00.000Z`); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10) })
+  const [party, setParty] = useState<Party>({ adults: 1, children: 0, infants: 0 })
+  const [searchParty, setSearchParty] = useState<Party>({ adults: 1, children: 0, infants: 0 })
+  // Round trips are two reservations: the outbound, then the return for the same travelers.
+  const [leg, setLeg] = useState<'outbound' | 'return'>('outbound')
+  const [returnSearch, setReturnSearch] = useState<SearchInput | null>(null)
+  const [earlierConfirmations, setEarlierConfirmations] = useState<Array<{ recordLocator: string; carrierCode: string; token: string }>>([])
+  const [travelerValues, setTravelerValues] = useState<TravelerValues[]>([])
+  const [recovering, setRecovering] = useState(false)
+  const partySize = party.adults + party.children + party.infants
+  const destinations = useMemo(() => routes.filter(route => route.origin === origin).map(route => route.destination), [routes, origin])
+  const airportLabel = (code: string) => { const airport = network?.airports.find(entry => entry.code === code); return airport?.city ? `${airport.city} (${code})` : code }
   const intentStorageKey = `${storagePrefix}:original-booking-intent`
   useEffect(() => {
     try { setPendingBooking(parsePendingBookingIntent(sessionStorage.getItem(intentStorageKey))) }
     catch (error) { setIntentUnavailable(true); setStatus(error instanceof Error ? error.message : 'Original booking intent is unavailable; do not create a replacement.') }
   }, [intentStorageKey])
   const recordLocatorInput = useRef<HTMLInputElement>(null)
+  // Links from the confirmation email open Manage booking with the reference filled in.
+  useEffect(() => {
+    const reference = new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase()
+    if (reference && /^[A-Z0-9]{5,8}$/.test(reference) && recordLocatorInput.current && !recordLocatorInput.current.value) recordLocatorInput.current.value = reference
+  }, [])
   const accessTokenInput = useRef<HTMLInputElement>(null)
   const money = useMemo(() => (amount: number) => formatMinorUnits(amount, selected?.currencyCode ?? carrier.defaultCurrencyCode), [selected?.currencyCode, carrier.defaultCurrencyCode])
   const departureDateTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium', timeStyle: 'short' }), [carrier.defaultTimezone])
@@ -101,7 +151,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
     const minutes = Math.round((Date.parse(arrival) - Date.parse(departure)) / 60_000)
     return Number.isFinite(minutes) && minutes > 0 ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m` : null
   }
-  const adultBirthDateMax = useMemo(() => { const serviceDate = selected?.serviceDate; if (!serviceDate || !/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) return undefined; const value = new Date(`${serviceDate}T00:00:00.000Z`); value.setUTCFullYear(value.getUTCFullYear() - 18); return value.toISOString().slice(0, 10) }, [selected?.serviceDate])
+  // Any age from birth up to the departure date; the server checks the party has a traveler aged 18 or over.
+  const birthDateMax = selected?.serviceDate && /^\d{4}-\d{2}-\d{2}$/.test(selected.serviceDate) ? selected.serviceDate : undefined
 
   function shoppingToken() {
     const key = `${storagePrefix}:shopping-session`
@@ -121,15 +172,35 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (party.adults < 1) { setStatus('Each booking needs at least one adult.'); return }
+    if (party.infants > party.adults) { setStatus('Each infant travels with an adult.'); return }
+    if (partySize > 9) { setStatus('Book up to 9 travelers at a time.'); return }
+    let input: SearchInput
+    try { input = parseStorefrontSearchForm(new FormData(event.currentTarget)) }
+    catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.'); return }
+    if (tripType === 'round-trip' && (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate) || returnDate < input.serviceDate)) { setStatus('Choose a return date on or after the departure date.'); return }
+    setSearchParty(party); setLeg('outbound'); setEarlierConfirmations([])
+    setReturnSearch(tripType === 'round-trip' ? { originCode: input.destinationCode, destinationCode: input.originCode, serviceDate: returnDate, passengerCount: input.passengerCount } : null)
+    await runSearch(input)
+  }
+
+  async function runSearch(input: SearchInput) {
     if (pendingBooking || intentUnavailable) { setStatus('Check your previous reservation request first. It may have gone through even if the page didn’t confirm it.'); return }
     setBusy(true); setStatus(''); setFlights([]); setSelected(null); setHeldOffer(null); bookingAttempt.current = null
     try {
-      const input = parseStorefrontSearchForm(new FormData(event.currentTarget))
       const data = await graphql<{ publicAirlineFlightOptions: Flight[] }>(`query($carrier:String!,$origin:String!,$destination:String!,$date:String!,$passengers:Int!){publicAirlineFlightOptions(carrierCode:$carrier,originCode:$origin,destinationCode:$destination,serviceDate:$date,passengerCount:$passengers){id inventoryBucketId flightNumber serviceDate scheduledDepartureAt scheduledArrivalAt originCode destinationCode fareBrand{name} totalAmount perTravelerBaseAmount perTravelerTaxAmount perTravelerTotalAmount partyTotalAmount passengerCount currencyCode availability{available}}}`, { carrier: carrier.code, origin: input.originCode, destination: input.destinationCode, date: input.serviceDate, passengers: input.passengerCount })
       setFlights(data.publicAirlineFlightOptions)
       if (!data.publicAirlineFlightOptions.length) setStatus(`No ${carrier.name} flights are available for this route, date, and party size.`)
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.') }
     setBusy(false)
+  }
+
+  // Books the return leg of a round trip for the same travelers.
+  async function searchReturn() {
+    if (!returnSearch || !confirmation) return
+    setEarlierConfirmations(current => [...current, confirmation])
+    setConfirmation(null); setManagedBooking(null); setLeg('return')
+    await runSearch(returnSearch)
   }
 
   async function holdOffer(event: FormEvent<HTMLFormElement>) {
@@ -138,6 +209,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
     try {
       const token = shoppingToken()
       const passengers = parseStorefrontPassengers(new FormData(event.currentTarget), selected.passengerCount)
+      setTravelerValues(passengers.map(passenger => ({ givenName: passenger.givenName, familyName: passenger.familyName, dateOfBirth: passenger.dateOfBirth, email: passenger.email, phone: passenger.phone ?? '' })))
       const attempt = bookingAttempt.current ?? { offerKey: `web-offer-${crypto.randomUUID()}`, bookingKey: `web-booking-${crypto.randomUUID()}` }
       bookingAttempt.current = attempt
       const data = await graphql<{ createCustomerOffer: HeldOffer }>(`mutation($carrier:String!,$flight:ID!,$bucket:ID!,$token:String!,$key:String!,$passengers:[CustomerPassengerInput!]!){createCustomerOffer(carrierCode:$carrier,flightInstanceId:$flight,inventoryBucketId:$bucket,shoppingSessionToken:$token,idempotencyKey:$key,passengers:$passengers){offerId offerNumber passengerIds totalAmount currencyCode expiresAt}}`, { carrier: carrier.code, flight: selected.id, bucket: selected.inventoryBucketId, token, key: attempt.offerKey, passengers })
@@ -217,6 +289,16 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
     setBusy(false)
   }
 
+  async function recoverAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true)
+    const form = new FormData(event.currentTarget)
+    try {
+      await graphql(`mutation($carrier:String!,$record:String!,$email:String!){recoverCustomerBookingAccess(carrierCode:$carrier,recordLocator:$record,email:$email)}`, { carrier: carrier.code, record: String(form.get('recordLocator') ?? ''), email: String(form.get('email') ?? '') })
+      setStatus('If those details match a booking, a new access code is on its way to that email.'); setRecovering(false)
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t send an access code.') }
+    setBusy(false)
+  }
+
   async function chooseSeat(passengerId: string, segmentId: string, seat: { id: string; surchargeAmount: number }) {
     if (seat.surchargeAmount > 0) { setStatus('Paid seats can’t be selected online.'); return }
     const current = seatIntent.current
@@ -249,14 +331,19 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
 
   return <div className="space-y-6">
     {shoppingEnabled && <form onSubmit={search} className="af-card relative z-10 p-4 shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)] sm:p-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.1fr_0.9fr_auto] lg:items-end">
-        <label className="af-field"><span className="af-field-label">From</span><input aria-label="Origin airport" name="originCode" defaultValue="JFK" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required className="af-input af-input-code text-lg" /></label>
-        <label className="af-field"><span className="af-field-label">To</span><input aria-label="Destination airport" name="destinationCode" defaultValue="BOS" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required className="af-input af-input-code text-lg" /></label>
-        <label className="af-field"><span className="af-field-label">Departure</span><input aria-label="Departure date" name="serviceDate" type="date" defaultValue={initialDate} required className="af-input" /></label>
-        <label className="af-field"><span className="af-field-label">Adults 18+</span><select aria-label="Adult travelers, 18 or older on the departure date" name="passengerCount" defaultValue="1" className="af-input">{Array.from({ length: 9 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
-        <div className="af-track sm:col-span-2 lg:col-span-1" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Searching…' : 'Search flights'}</button></div>
+      <div role="group" aria-label="Trip type" className="af-track mb-5"><button type="button" aria-pressed={tripType === 'one-way'} onClick={() => setTripType('one-way')} className="af-pill af-pill-sm">One way</button><button type="button" aria-pressed={tripType === 'round-trip'} onClick={() => setTripType('round-trip')} className="af-pill af-pill-sm">Round trip</button></div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="af-field"><span className="af-field-label">From</span>{routes.length ? <select aria-label="Origin airport" name="originCode" value={origin} onChange={event => { const next = event.target.value; setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination(reachable[0] ?? '') }} required className="af-input">{[...new Set(routes.map(route => route.origin))].map(code => <option key={code} value={code}>{airportLabel(code)}</option>)}</select> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code text-lg" />}</label>
+        <label className="af-field"><span className="af-field-label">To</span>{routes.length ? <select aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value)} required className="af-input">{destinations.map(code => <option key={code} value={code}>{airportLabel(code)}</option>)}</select> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code text-lg" />}</label>
+        <label className="af-field"><span className="af-field-label">Departure</span><input aria-label="Departure date" name="serviceDate" type="date" value={departDate} onChange={event => setDepartDate(event.target.value)} required className="af-input" /></label>
+        {tripType === 'round-trip' ? <label className="af-field"><span className="af-field-label">Return</span><input aria-label="Return date" type="date" value={returnDate} min={departDate} onChange={event => setReturnDate(event.target.value)} required className="af-input" /></label> : <div className="hidden lg:block" />}
       </div>
-      <p className="af-mono mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]"><span>Reservation only</span><span>Pay the airline directly</span><span>Unpaid holds expire in 24 h</span><span>Adults 18+ on departure</span></p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto] sm:items-end">
+        <input type="hidden" name="passengerCount" value={partySize} />
+        {([['adults', 'Adults 12+', 1, 9], ['children', 'Children 2–11', 0, 8], ['infants', 'Infants under 2', 0, party.adults]] as const).map(([key, text, min, max]) => <label key={key} className="af-field"><span className="af-field-label">{text}</span><select aria-label={text} value={party[key]} onChange={event => setParty(current => { const next = { ...current, [key]: Number(event.target.value) }; return { ...next, infants: Math.min(next.infants, next.adults) } })} className="af-input">{Array.from({ length: max - min + 1 }, (_, index) => <option key={index + min} value={index + min}>{index + min}</option>)}</select></label>)}
+        <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Searching…' : 'Search flights'}</button></div>
+      </div>
+      <p className="af-mono mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]"><span>Reservation only</span><span>Pay the airline directly</span><span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
     </form>}
     {status && <p role="status" className="af-notice" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'}><span className="af-dot" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'} />{status}</p>}
     {pendingBooking && <section aria-label="Original reservation command recovery" className="af-notice flex-col items-stretch gap-3 p-5" data-tone="warn">
@@ -265,9 +352,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
       <div className="af-track w-fit"><button disabled={busy} onClick={() => void confirmBooking(true)} className="af-pill af-pill-raised">Check status</button><button disabled={busy} onClick={() => void confirmBooking(false)} className="af-pill">Retry original request</button></div>
       <p>Don’t book again. If your access code changed, contact the airline.</p>
     </section>}
+    {earlierConfirmations.map(earlier => <section key={earlier.recordLocator} aria-label={`Outbound reservation ${earlier.recordLocator}`} className="af-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div><p className="af-field-label">Outbound · reservation</p><p className="af-mono mt-1 text-2xl font-semibold tracking-[0.16em]">{earlier.recordLocator}</p></div>
+      <div className="flex min-w-0 items-center gap-2"><code className="af-mono af-well block max-w-[16rem] truncate px-3 py-2 text-xs">{earlier.token}</code><div className="af-track"><button onClick={() => navigator.clipboard.writeText(earlier.token).then(() => setStatus('Access code copied.'), () => setStatus('Copy failed. Select the access code and copy it manually.'))} className="af-pill af-pill-raised af-pill-sm">Copy</button></div></div>
+    </section>)}
     {confirmation && <section className="af-pass" aria-label={`${carrier.name} reservation confirmation`}>
       <div className="min-w-0">
-        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">{carrier.name} · Reservation</span><span className="af-mono text-xs font-semibold">{confirmation.carrierCode}</span></div>
+        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">{carrier.name} · {leg === 'return' ? 'Return reservation' : returnSearch ? 'Outbound reservation' : 'Reservation'}</span><span className="af-mono text-xs font-semibold">{confirmation.carrierCode}</span></div>
         <div className="p-5 sm:p-6">
           <p className="af-field-label">Booking reference</p>
           <h2 className="af-mono mt-1 text-4xl font-semibold tracking-[0.18em] sm:text-5xl">{confirmation.recordLocator}</h2>
@@ -277,11 +368,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
       <div className="af-pass-stub p-5 sm:p-6">
         <p className="af-field-label">Access code</p>
         <code className="af-mono af-well mt-2 block overflow-x-auto px-3 py-2.5 text-xs">{confirmation.token}</code>
-        <p className="mt-2 text-xs text-[var(--af-ink-3)]">Save it now. It can’t be emailed or texted.</p>
+        <p className="mt-2 text-xs text-[var(--af-ink-3)]">{carrier.accessRecoveryEnabled ? 'Also emailed to the lead traveler.' : 'Save it now. It can’t be emailed.'}</p>
         <div className="af-track mt-3" data-block="true"><button onClick={() => navigator.clipboard.writeText(confirmation.token).then(() => setStatus('Access code copied.'), () => setStatus('Copy failed. Select the access code and copy it manually.'))} className="af-pill af-pill-raised">Copy access code</button></div>
+        {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className="af-pill af-pill-primary">Book return flight</button></div>}
       </div>
     </section>}
     {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-board overflow-hidden rounded-2xl">
+      {returnSearch && <p className="af-eyebrow px-5 pt-4"><span className="af-signal">{leg === 'return' ? 'Return' : 'Outbound'}</span> · {flights[0].originCode}–{flights[0].destinationCode}</p>}
       <div className="hidden grid-cols-[1.1fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3 md:grid"><span className="af-eyebrow">Flight</span><span className="af-eyebrow">Departs</span><span className="af-eyebrow">Arrives</span><span className="af-eyebrow">Fare</span><span className="af-eyebrow w-36 text-right">Per traveler</span></div>
       {flights.map(flight => {
         const duration = flightDuration(flight.scheduledDepartureAt, flight.scheduledArrivalAt)
@@ -301,12 +394,12 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
         </article>
       })}
     </section>}
-    {shoppingEnabled && selected && !pendingBooking && !intentUnavailable && <form onSubmit={holdOffer} className="af-pass">
+    {shoppingEnabled && selected && !pendingBooking && !intentUnavailable && <form key={`${selected.id}:${selected.inventoryBucketId}`} onSubmit={holdOffer} className="af-pass">
       <div className="min-w-0">
         <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">Travelers · {passLabel}</span><div className="af-track !bg-black/20"><button type="button" onClick={() => { setSelected(null); setHeldOffer(null); bookingAttempt.current = null }} className="af-pill af-pill-sm !text-white/85 hover:!text-white">Close</button></div></div>
         <div className="space-y-6 p-5 sm:p-6">{Array.from({ length: selected.passengerCount }, (_, passengerIndex) => <fieldset disabled={Boolean(heldOffer)} key={passengerIndex} className="grid gap-4 disabled:opacity-70 sm:grid-cols-2">
-          <legend className="af-title-line mb-3 text-sm font-semibold"><span className="af-mono grid size-6 place-items-center rounded-md bg-[var(--af-paper-2)] text-xs">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}</legend>
-          {(['givenName', 'familyName', 'dateOfBirth', 'email', 'phone'] as const).map(field => <label key={field} className={`af-field ${field === 'email' ? 'sm:col-span-1' : ''}`}><span className="af-field-label">{passengerFieldLabels[field]}</span><input required={field !== 'phone'} type={field === 'email' ? 'email' : field === 'dateOfBirth' ? 'date' : 'text'} max={field === 'dateOfBirth' ? adultBirthDateMax : undefined} name={`passenger.${passengerIndex}.${field}`} autoComplete={field === 'email' ? 'email' : field === 'phone' ? 'tel' : passengerIndex === 0 && field === 'givenName' ? 'given-name' : passengerIndex === 0 && field === 'familyName' ? 'family-name' : passengerIndex === 0 && field === 'dateOfBirth' ? 'bday' : 'off'} defaultValue="" className="af-input" /></label>)}
+          <legend className="af-title-line mb-3 text-sm font-semibold"><span className="af-mono grid size-6 place-items-center rounded-md bg-[var(--af-paper-2)] text-xs">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}<span className="af-mono text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-[var(--af-ink-3)]">{travelerBand(passengerIndex, searchParty)}</span></legend>
+          {travelerFields.map(field => <label key={field} className={`af-field ${field === 'email' ? 'sm:col-span-1' : ''}`}><span className="af-field-label">{passengerFieldLabels[field]}</span><input required={field !== 'phone'} type={field === 'email' ? 'email' : field === 'dateOfBirth' ? 'date' : 'text'} max={field === 'dateOfBirth' ? birthDateMax : undefined} name={`passenger.${passengerIndex}.${field}`} autoComplete={field === 'email' ? 'email' : field === 'phone' ? 'tel' : passengerIndex === 0 && field === 'givenName' ? 'given-name' : passengerIndex === 0 && field === 'familyName' ? 'family-name' : passengerIndex === 0 && field === 'dateOfBirth' ? 'bday' : 'off'} defaultValue={travelerValues[passengerIndex]?.[field] ?? ''} className="af-input" /></label>)}
         </fieldset>)}</div>
       </div>
       <div className="af-pass-stub flex flex-col gap-4 p-5 sm:p-6">
@@ -327,6 +420,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
         <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
       </div>
     </form>
+    {carrier.accessRecoveryEnabled ? <div className="af-card relative z-10 px-4 py-3 sm:px-6">
+      {recovering ? <form onSubmit={recoverAccess} className="grid gap-4 py-2 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
+        <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
+        <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
+        <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
+      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Lost your access code?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a new one</button></div></div>}
+    </div> : <p className="af-mono relative z-10 px-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">Lost your access code? Contact the airline.</p>}
     {managedBooking && <section aria-label={`Booking ${managedBooking.recordLocator}`} className="space-y-5">
       <div className="af-card overflow-hidden">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
@@ -369,7 +469,12 @@ export function FlightShop({ initialDate, carrier, mode = 'book' }: { initialDat
               </div>
               {seatSelectionOpen(managedBooking) ? <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="af-field-label">Choose a seat</p><p className="af-mono flex gap-3 text-[0.6875rem] text-[var(--af-ink-3)]"><span className="inline-flex items-center gap-1"><span className="af-seat !min-h-0 size-3 !rounded-sm" data-state="selected" />Yours</span><span className="inline-flex items-center gap-1"><span className="af-seat !min-h-0 size-3 !rounded-sm" data-state="taken" />Taken</span><span className="inline-flex items-center gap-1"><span className="af-seat !min-h-0 size-3 !rounded-sm" data-state="paid" />Paid</span></p></div>
-                <div aria-label={`Seats for ${segment.originCode} to ${segment.destinationCode}`} className="af-well grid max-h-80 grid-cols-4 gap-2 overflow-y-auto p-3 sm:grid-cols-6">{segment.seats.map(seat => { const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || Boolean(checkIn && checkIn.status !== 'offloaded')} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className="af-seat">{seat.designator}</button> })}</div>
+                {(() => { const map = seatRows(segment.seats); const lockedByCheckIn = Boolean(checkIn && checkIn.status !== 'offloaded'); return <div aria-label={`Seats for ${segment.originCode} to ${segment.destinationCode}`} className="af-well max-h-96 overflow-auto p-3">
+                  <div className="mx-auto w-fit space-y-1.5">
+                    <div aria-hidden="true" className="flex items-center gap-1.5"><span className="w-7" />{map.columns.map((column, index) => <span key={column} className={`af-mono w-10 text-center text-[0.6875rem] font-semibold text-[var(--af-ink-3)] sm:w-11 ${index === map.aisleAfter ? 'mr-5' : ''}`}>{column}</span>)}</div>
+                    {map.rows.map(([row, seatsByColumn]) => <div key={row} className="flex items-center gap-1.5"><span className="af-mono w-7 text-right text-[0.6875rem] font-semibold text-[var(--af-ink-3)]">{row || ''}</span>{map.columns.map((column, index) => { const seat = seatsByColumn.get(column); const spacing = index === map.aisleAfter ? 'mr-5' : ''; if (!seat) return <span key={column} aria-hidden="true" className={`w-10 sm:w-11 ${spacing}`} />; const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || lockedByCheckIn} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className={`af-seat w-10 text-xs sm:w-11 ${spacing}`}>{column}</button> })}</div>)}
+                  </div>
+                </div> })()}
               </div> : <p className="af-mono text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]">Seats open once your ticket is issued</p>}
               {pass && <div className="af-pass" aria-label={`Boarding pass ${pass.passNumber}`}>
                 <div className="min-w-0">
