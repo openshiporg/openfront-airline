@@ -75,22 +75,25 @@ export function operatorOnlyLaunchSetup(env: NodeJS.ProcessEnv = process.env) {
   return env.NODE_ENV === 'production' && env.ALLOW_INCOMPLETE_LAUNCH_SETUP === 'true'
 }
 
-export function configuredPublicCarrierCode(env: NodeJS.ProcessEnv = process.env) {
-  const configured = env.STOREFRONT_CARRIER_CODE?.trim().toUpperCase() || (env.NODE_ENV === 'production' ? '' : 'AV')
+// The storefront sells for STOREFRONT_CARRIER_CODE when it is set, otherwise for the first carrier created.
+export async function configuredPublicCarrierCode(prisma: any, env: NodeJS.ProcessEnv = process.env) {
+  const configured = env.STOREFRONT_CARRIER_CODE?.trim().toUpperCase()
+    || (await prisma.carrier.findFirst({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { code: true } }))?.code
+    || ''
   if (!/^[A-Z0-9]{2,3}$/.test(configured)) throw new DomainError('Public carrier configuration is unavailable.')
   return configured
 }
 
-export function isConfiguredPublicCarrier(carrierCode: string, env: NodeJS.ProcessEnv = process.env) {
-  return carrierCode.trim().toUpperCase() === configuredPublicCarrierCode(env)
+export async function isConfiguredPublicCarrier(prisma: any, carrierCode: string, env: NodeJS.ProcessEnv = process.env) {
+  return carrierCode.trim().toUpperCase() === await configuredPublicCarrierCode(prisma, env)
 }
 
-function assertConfiguredPublicCarrier(carrierCode: string) {
-  if (!isConfiguredPublicCarrier(carrierCode)) throw new DomainError('Carrier is unavailable on this storefront.')
+async function assertConfiguredPublicCarrier(prisma: any, carrierCode: string) {
+  if (!await isConfiguredPublicCarrier(prisma, carrierCode)) throw new DomainError('Carrier is unavailable on this storefront.')
 }
 
-export function directCarrier(context: Context, carrierCode: string) {
-  assertConfiguredPublicCarrier(carrierCode)
+export async function directCarrier(context: Context, carrierCode: string) {
+  await assertConfiguredPublicCarrier((context as any).prisma, carrierCode)
   if (operatorOnlyLaunchSetup()) throw new DomainError('Online booking isn’t available yet. Please check back soon.')
   return lookupDirectCarrier((context as any).prisma, carrierCode)
 }
@@ -100,7 +103,7 @@ export async function getPublicCarrierIdentity(
   args: { carrierCode: string },
   context: Context,
 ) {
-  assertConfiguredPublicCarrier(args.carrierCode)
+  await assertConfiguredPublicCarrier((context as any).prisma, args.carrierCode)
   try {
     const identity = await lookupCarrierIdentity((context as any).prisma, args.carrierCode)
     return operatorOnlyLaunchSetup() ? { ...identity, salesEnabled: false } : identity
@@ -141,7 +144,7 @@ export async function publicFlightStatuses(
   args: { carrierCode: string; flightNumber: string; serviceDate: string },
   context: Context,
 ) {
-  assertConfiguredPublicCarrier(args.carrierCode)
+  await assertConfiguredPublicCarrier((context as any).prisma, args.carrierCode)
   const carrier = await lookupCarrierIdentity((context as any).prisma, args.carrierCode)
   const input = normalizePublicFlightStatusInput(args)
   const start = new Date(`${input.serviceDate}T00:00:00.000Z`)

@@ -14,7 +14,7 @@ export async function generateMetadata() {
 export default async function CheckInPage() {
   const carrier = await getStorefrontCarrierIdentity()
   const initialDate = carrierCalendarDate(new Date(Date.now() + 14 * 86_400_000), carrier?.defaultTimezone ?? 'UTC')
-  return <PublicPageShell carrier={carrier} eyebrow="Passenger service" title="Check in for your flight" description="Enter your booking reference and access code, choose a seat, and get your boarding pass once your ticket is issued.">
-    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="check-in" /> : <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Online check-in isn&apos;t available right now. Please check in at the airport.</p>}
+  return <PublicPageShell carrier={carrier} current="/check-in" eyebrow="Passenger service" title="Check in">
+    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="check-in" /> : <p role="status" className="af-notice" data-tone="warn">Online check-in isn&apos;t available right now.</p>}
   </PublicPageShell>
 }

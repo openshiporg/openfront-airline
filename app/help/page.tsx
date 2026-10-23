@@ -1,13 +1,15 @@
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 
 import { PublicPageShell } from '@/features/storefront/components/PublicPageShell'
 import { getStorefrontCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { storefrontPageMetadata } from '@/features/storefront/lib/metadata'
 
 const services = [
-  { href: '/status', title: 'Check flight status', detail: 'Enter your flight number and date to see the latest schedule and any delay or disruption.' },
-  { href: '/manage-booking', title: 'Manage a booking', detail: 'Use the booking reference and access code from your confirmation to view or change your trip.' },
-  { href: '/check-in', title: 'Check in', detail: 'Check in once your ticket is issued, choose a seat, and get your boarding pass.' },
+  { href: '/status', code: 'STS', title: 'Flight status', needs: 'Flight number · date' },
+  { href: '/manage-booking', code: 'MNG', title: 'Manage booking', needs: 'Booking reference · access code' },
+  { href: '/check-in', code: 'CHK', title: 'Check in', needs: 'Booking reference · access code' },
+  { href: '/contact', code: 'CNT', title: 'Contact', needs: 'Airport service desk' },
 ] as const
 
 // The root layout is static, so each storefront page renders per request and sets its own carrier title.
@@ -19,8 +21,13 @@ export async function generateMetadata() {
 
 export default async function HelpPage() {
   const carrier = await getStorefrontCarrierIdentity()
-  return <PublicPageShell carrier={carrier} eyebrow="Help" title="How can we help?" description="Manage your trip online with the options below. If something isn&apos;t available for your booking, we&apos;ll tell you why.">
-    <div className="grid gap-4 md:grid-cols-3">{services.map(service => <Link key={service.href} href={service.href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-[var(--storefront-brand)]"><h2 className="font-semibold">{service.title}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{service.detail}</p></Link>)}</div>
-    <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><p className="font-semibold">Need more help?</p><p className="mt-1">See how to contact the airline.</p><Link href="/contact" className="mt-3 inline-flex font-medium underline">View contact availability</Link></div>
+  return <PublicPageShell carrier={carrier} current="/help" eyebrow="Help" title="How can we help?">
+    <nav aria-label="Help topics" className="af-card relative z-10 divide-y divide-[var(--af-line)] overflow-hidden shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)]">
+      {services.map(service => <Link key={service.href} href={service.href} className="group flex items-center gap-4 p-5 transition-colors hover:bg-[var(--af-paper)] sm:p-6">
+        <span className="af-mono w-12 shrink-0 text-xs font-semibold tracking-[0.2em] text-[var(--af-accent)]">{service.code}</span>
+        <span className="min-w-0 flex-1"><span className="af-display block text-2xl uppercase sm:text-3xl">{service.title}</span><span className="af-mono mt-1 block text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]">{service.needs}</span></span>
+        <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-[var(--af-ink-3)] transition-transform group-hover:translate-x-0.5" />
+      </Link>)}
+    </nav>
   </PublicPageShell>
 }

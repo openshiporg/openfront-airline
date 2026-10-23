@@ -29,6 +29,12 @@ type FlightStatus = {
   disruption?: { type: string; status: string; publicSummary?: string | null; publishedAt?: string | null } | null
 }
 
+function statusTone(value: string) {
+  if (['scheduled', 'open_for_sale', 'closed_for_sale', 'departed', 'arrived'].includes(value)) return 'ok'
+  if (['cancelled'].includes(value)) return 'bad'
+  return 'warn'
+}
+
 function displayStatus(value: string) {
   return value.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase())
 }
@@ -69,13 +75,25 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
     setBusy(false)
   }
 
-  return <div className="space-y-5">
-    <form onSubmit={submit} className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
-      <label className="text-sm font-medium">{carrier.code} flight number<input aria-label="Flight number" name="flightNumber" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{1,6}" maxLength={6} required className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-3 uppercase" /></label>
-      <label className="text-sm font-medium">Departure date (local)<input aria-label="Departure date" name="serviceDate" type="date" defaultValue={initialDate} required className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-3" /></label>
-      <button disabled={busy} className="self-end rounded-xl bg-[var(--storefront-brand)] px-4 py-3 font-medium text-white disabled:opacity-50">{busy ? 'Checking…' : 'Check status'}</button>
+  return <div className="space-y-6">
+    <form onSubmit={submit} className="af-card relative z-10 grid gap-4 p-4 shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)] sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-6">
+      <label className="af-field"><span className="af-field-label">{carrier.code} flight number</span><input aria-label="Flight number" name="flightNumber" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{1,6}" maxLength={6} required placeholder="101" className="af-input af-input-code text-lg" /></label>
+      <label className="af-field"><span className="af-field-label">Departure date (local)</span><input aria-label="Departure date" name="serviceDate" type="date" defaultValue={initialDate} required className="af-input" /></label>
+      <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Checking…' : 'Check status'}</button></div>
     </form>
-    {message && <p role="status" className="rounded-2xl bg-[var(--storefront-brand-soft)] px-4 py-3 text-sm text-slate-950">{message}</p>}
-    {results.map(flight => <article key={flight.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-medium text-[var(--storefront-brand)]">{carrier.code} {flight.flightNumber} · {flight.serviceDate}</p><h2 className="mt-1 text-xl font-semibold">{flight.originCode} {flight.originCity} → {flight.destinationCode} {flight.destinationCity}</h2></div><span className="w-fit rounded-full bg-[var(--storefront-brand)] px-3 py-1 text-sm font-medium text-white">{displayStatus(flight.status)}</span></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Departure</dt><dd className="mt-1 font-medium">{airportTime(flight, 'Departure', carrier.defaultTimezone)} · Terminal {flight.departureTerminal ?? 'TBD'} · Gate {flight.departureGate ?? 'TBD'}</dd></div><div><dt className="text-slate-500">Arrival</dt><dd className="mt-1 font-medium">{airportTime(flight, 'Arrival', carrier.defaultTimezone)} · Terminal {flight.arrivalTerminal ?? 'TBD'} · Gate {flight.arrivalGate ?? 'TBD'}</dd></div></dl>{flight.disruption?.publicSummary && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Published {displayStatus(flight.disruption.type)}</p><p className="mt-1">{flight.disruption.publicSummary}</p></div>}</article>)}
+    {message && <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />{message}</p>}
+    {results.map(flight => <article key={flight.id} className="af-board overflow-hidden rounded-2xl">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pt-5 sm:px-6"><p className="af-board-cell af-signal text-sm font-semibold">{carrier.code} {flight.flightNumber} · {flight.serviceDate}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={statusTone(flight.status)} />{displayStatus(flight.status)}</p></div>
+      <h2 className="af-display flex items-center gap-3 px-5 pt-3 text-5xl uppercase sm:px-6 sm:text-6xl">{flight.originCode}<span className="af-path" />{flight.destinationCode}</h2>
+      <p className="px-5 pt-1 text-sm text-[var(--af-board-ink-2)] sm:px-6">{flight.originCity} to {flight.destinationCity}</p>
+      <dl className="af-board-row mt-5 grid sm:grid-cols-2">
+        {(['Departure', 'Arrival'] as const).map(leg => <div key={leg} className="px-5 py-4 sm:px-6 sm:[&:last-child]:border-l sm:[&:last-child]:border-[var(--af-board-line)]">
+          <dt className="af-eyebrow">{leg}</dt>
+          <dd className="af-board-cell mt-1 text-sm">{airportTime(flight, leg, carrier.defaultTimezone)}</dd>
+          <dd className="mt-3 grid grid-cols-2 gap-3"><span><span className="af-eyebrow block">Terminal</span><span className="af-board-cell text-2xl font-semibold">{(leg === 'Departure' ? flight.departureTerminal : flight.arrivalTerminal) ?? 'TBD'}</span></span><span><span className="af-eyebrow block">Gate</span><span className="af-board-cell af-signal text-2xl font-semibold">{(leg === 'Departure' ? flight.departureGate : flight.arrivalGate) ?? 'TBD'}</span></span></dd>
+        </div>)}
+      </dl>
+      {flight.disruption?.publicSummary && <div className="af-board-row px-5 py-4 sm:px-6"><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone="warn" />{displayStatus(flight.disruption.type)}</p><p className="mt-1 pl-4 text-sm text-[var(--af-board-ink-2)]">{flight.disruption.publicSummary}</p></div>}
+    </article>)}
   </div>
 }

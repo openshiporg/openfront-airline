@@ -14,7 +14,7 @@ export async function generateMetadata() {
 export default async function ManageBookingPage() {
   const carrier = await getStorefrontCarrierIdentity()
   const initialDate = carrierCalendarDate(new Date(Date.now() + 14 * 86_400_000), carrier?.defaultTimezone ?? 'UTC')
-  return <PublicPageShell carrier={carrier} eyebrow="Passenger service" title="Manage your booking" description="Enter the booking reference and access code from your confirmation to view or change your trip.">
-    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="manage" /> : <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Online booking management isn&apos;t available right now. Please try again later.</p>}
+  return <PublicPageShell carrier={carrier} current="/manage-booking" eyebrow="Passenger service" title="Manage booking">
+    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="manage" /> : <p role="status" className="af-notice" data-tone="warn">Online booking management isn&apos;t available right now.</p>}
   </PublicPageShell>
 }

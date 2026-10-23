@@ -5,6 +5,7 @@ import Link from 'next/link'
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getOnboardingCarrier, type OnboardingCarrierResult } from '../actions/onboarding'
+import { Notice, Pill, Track, Well } from '@/features/platform/components/desk'
 import { CarrierOnboardingForm } from './CarrierOnboardingForm'
 
 // The shared DashboardLayout's onboarding dialog: the same carrier launch form as the Operations launch card and
@@ -26,13 +27,13 @@ export default function OnboardingDialog({ isOpen, onClose }: { isOpen: boolean;
   if (!isOpen) return null
   const serviceDate = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10)
   return <Dialog open={isOpen} onOpenChange={open => { if (open) return; if (risk.busy || risk.unknown) { setCloseMessage('Keep this window open until the credential operation is reconciled.'); return } if ((risk.dirty || risk.hasSecret) && !window.confirm('Close setup? Unsaved edits and the displayed one-time credential will no longer be available here. Copy the credential first.')) return; onClose() }}>
-    <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
-      <DialogHeader><DialogTitle>Carrier launch setup</DialogTitle><DialogDescription>Set up your carrier identity and first sellable flight. Running setup again never overwrites a live service.</DialogDescription></DialogHeader>
-      {closeMessage && <p role="alert" className="text-sm text-destructive">{closeMessage}</p>}
-      {!result ? <p role="status" className="text-sm text-muted-foreground">Loading carrier identity…</p>
+    <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto overflow-x-hidden">
+      <DialogHeader><DialogTitle>Carrier launch setup</DialogTitle><DialogDescription className="sr-only">Carrier identity and first sellable flight</DialogDescription></DialogHeader>
+      {closeMessage && <Notice tone="bad">{closeMessage}</Notice>}
+      {!result ? <Well role="status">Loading carrier identity…</Well>
         : result.success && result.carrier ? <CarrierOnboardingForm key={result.carrier.id} initialCarrier={result.carrier} initialServiceDate={serviceDate} onExitRiskChange={setRisk} />
-        : result.success ? <p role="alert" className="text-sm">Your account is not assigned to a carrier, so launch setup is unavailable. Ask a carrier administrator to assign your operator account.</p>
-        : <p role="alert" className="text-sm">{result.error} <Link href="/dashboard/onboarding" onClick={onClose} className="font-medium underline">Open carrier launch setup</Link></p>}
+        : result.success ? <Well role="alert">Your account is not assigned to a carrier, so launch setup is unavailable. Ask a carrier administrator to assign your operator account.</Well>
+        : <div className="space-y-3"><Notice tone="bad">{result.error}</Notice><Track><Pill asChild variant="primary"><Link href="/dashboard/onboarding" onClick={onClose}>Open carrier launch setup</Link></Pill></Track></div>}
     </DialogContent>
   </Dialog>
 }

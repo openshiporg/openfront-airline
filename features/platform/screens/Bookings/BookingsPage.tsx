@@ -1,6 +1,9 @@
+import Link from 'next/link'
+
+import { cn } from '@/lib/utils'
+import { DeskHeader, Field, FilterBar, Notice, Pill, Track, deskInput } from '@/features/platform/components/desk'
 import { readBookingWorkspace } from '@/features/platform/lib/booking-workspace'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
-import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { BookingDesk } from '@/features/platform/components/BookingDesk'
 import {
   BOOKING_WORKLIST_QUERY,
@@ -26,10 +29,13 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
   const bookingNextHref = bookingPage?.nextCursor
     ? bookingWorklistNextHref('/dashboard/bookings', locator, bookingPage.nextCursor)
     : null
-  return <PageContainer title="Booking desk" header={<div><p className="text-sm font-medium text-primary">Servicing workspace</p><h1 className="text-2xl font-semibold tracking-tight">Offers and bookings</h1><p className="mt-1 text-sm text-muted-foreground">Accept held offers, reconcile externally evidenced payments, issue ticket documents, refund, and cancel through aggregate commands.</p></div>} breadcrumbs={[{ type: 'link' as const, label: 'Operations', href: '/dashboard/operations' }, { type: 'page' as const, label: 'Booking desk' }]}>
-    <div className="space-y-5 p-4 md:p-6">
-      <form action="/dashboard/bookings" className="flex flex-col gap-2 rounded-xl border bg-card p-4 sm:flex-row sm:items-end"><label className="flex-1 text-sm font-medium">Record locator search<input name="locator" defaultValue={locator} placeholder="Exact or partial locator" className="mt-2 w-full rounded-lg border bg-background px-3 py-2 uppercase" /></label><button className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground">Find booking</button></form>
-      {response.success ? <BookingDesk offers={response.data.offers} bookings={bookingPage?.items ?? []} bookingCount={bookingPage?.totalCount ?? 0} bookingHasNextPage={bookingPage?.hasNextPage ?? false} bookingNextHref={bookingNextHref} refundCleanupBookings={response.data.refundCleanupBookings.slice(0, 100)} refundCleanupTruncated={response.data.refundCleanupBookingsCount > 100} evidences={response.data.manualPaymentEvidences} sectionErrors={response.sectionErrors} /> : <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm">{'Bookings could not be loaded'}</p>}
+  return <PageContainer title="Booking desk" header={<DeskHeader eyebrow="Servicing" title="Offers and bookings" />} breadcrumbs={[{ type: 'link' as const, label: 'Operations', href: '/dashboard/operations' }, { type: 'page' as const, label: 'Booking desk' }]}>
+    <div className="min-w-0 space-y-5 px-4 pb-6 md:px-6">
+      <FilterBar action="/dashboard/bookings">
+        <Field label="Record locator" className="sm:flex-1"><input name="locator" defaultValue={locator} placeholder="Exact or partial" className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></Field>
+        <Track><Pill type="submit" variant="primary">Find booking</Pill>{locator && <Pill asChild><Link href="/dashboard/bookings">Clear</Link></Pill>}</Track>
+      </FilterBar>
+      {response.success ? <BookingDesk offers={response.data.offers} bookings={bookingPage?.items ?? []} bookingCount={bookingPage?.totalCount ?? 0} bookingHasNextPage={bookingPage?.hasNextPage ?? false} bookingNextHref={bookingNextHref} refundCleanupBookings={response.data.refundCleanupBookings.slice(0, 100)} refundCleanupTruncated={response.data.refundCleanupBookingsCount > 100} evidences={response.data.manualPaymentEvidences} sectionErrors={response.sectionErrors} /> : <Notice tone="bad">Bookings could not be loaded</Notice>}
     </div>
   </PageContainer>
 }

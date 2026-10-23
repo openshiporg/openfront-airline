@@ -23,7 +23,7 @@ function normalizedHttpOrigin(value: string, variableName: string) {
 /**
  * Origin for authenticated server-to-self calls (the AI completion and MCP
  * routes forward the caller's cookie to /api/graphql). Production uses the
- * configured APP_BASE_URL or Vercel origin; development uses the local Next
+ * configured APP_BASE_URL or Vercel origin; otherwise the local Next
  * listener. Request Host/X-Forwarded-* headers are deliberately ignored so a
  * caller cannot redirect forwarded credentials (docs/schema-architecture.md).
  */
@@ -34,10 +34,6 @@ export function resolveServerBaseUrl(env: NodeJS.ProcessEnv = process.env) {
   if (env.VERCEL_URL) {
     return normalizedHttpOrigin(`https://${env.VERCEL_URL}`, "VERCEL_URL");
   }
-  if (env.NODE_ENV === "production") {
-    throw new Error("APP_BASE_URL is required for non-Vercel production runtimes.");
-  }
-
   const rawPort = env.PORT ?? String(DEFAULT_LOCAL_PORT);
   if (!/^\d{1,5}$/.test(rawPort)) throw new Error("PORT must be a valid TCP port.");
   const port = Number(rawPort);

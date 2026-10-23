@@ -3,7 +3,9 @@ import 'server-only'
 import { cache } from 'react'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+import { keystoneContext } from '@/features/keystone/context'
 import { initialOperatorSetupEnabled } from '@/features/keystone/lib/initial-operator-setup'
+import { configuredPublicCarrierCode } from '@/features/keystone/mutations/storefront'
 
 export type PublicCarrierIdentity = {
   id: string
@@ -19,15 +21,10 @@ export type PublicCarrierIdentity = {
   storefrontConfigured: boolean
 }
 
-export function configuredStorefrontCarrierCode(env: NodeJS.ProcessEnv = process.env) {
-  const code = env.STOREFRONT_CARRIER_CODE?.trim().toUpperCase() || (env.NODE_ENV === 'production' ? '' : 'AV')
-  if (!/^[A-Z0-9]{2,3}$/.test(code)) {
-    throw new Error('STOREFRONT_CARRIER_CODE must be a two or three character carrier designator.')
-  }
-  return code
-}
-
 export const getStorefrontCarrierIdentity = cache(async (): Promise<PublicCarrierIdentity | null> => {
+  // An empty database has no carrier yet: the storefront shows its unconfigured state until onboarding creates one.
+  const carrierCode = await configuredPublicCarrierCode(keystoneContext.prisma).catch(() => null)
+  if (!carrierCode) return null
   const response = await keystoneClient<{ publicCarrierIdentity: PublicCarrierIdentity | null }>(
     `query StorefrontCarrierIdentity($carrierCode: String!) {
       publicCarrierIdentity(carrierCode: $carrierCode) {
@@ -35,7 +32,7 @@ export const getStorefrontCarrierIdentity = cache(async (): Promise<PublicCarrie
         storefrontBrandColor storefrontHomepageTitle storefrontHomepageDescription storefrontConfigured
       }
     }`,
-    { carrierCode: configuredStorefrontCarrierCode() },
+    { carrierCode },
     { cache: 'no-store' },
   )
   if (response.success) return response.data.publicCarrierIdentity ?? null

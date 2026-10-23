@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "keystone build --no-ui && npm run migrate && next dev",
     "build": "keystone build --no-ui && next build",
-    "start": "tsx scripts/start-server.ts",
+    "start": "next start",
     "worker": "tsx scripts/runtime-worker.ts",
     "test": "find app features -name '*.test.ts' -print0 | xargs -0 tsx --test",
     "test:integration": "tsx --test --test-concurrency=1 tests/integration/*.test.ts",

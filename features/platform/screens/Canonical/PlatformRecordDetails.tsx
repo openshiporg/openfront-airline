@@ -6,22 +6,23 @@ import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { Shell } from './PlatformDeskPages'
 import type { BookingReceipt } from '@/features/airline/lib/booking-receipt'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
+import { Code, DeskSection, Facts, Notice, Panel, Pill, Route, RowLink, StatusLabel, TitleLine, Track, Well, statusTone } from '@/features/platform/components/desk'
 
 type Desk = 'schedules' | 'inventory' | 'offers' | 'bookings' | 'passengers' | 'departures' | 'disruptions' | 'payments' | 'manifests' | 'settings'
 
-type DetailDefinition = { title: string; eyebrow: string; description: string; boundary: string; backLabel: string; query: string; actionHref?: (data: RecordData) => string | null; actionLabel?: string }
+type DetailDefinition = { title: string; backLabel: string; query: string; actionHref?: (data: RecordData) => string | null; actionLabel?: string }
 
 const detail: Record<Desk, DetailDefinition> = {
-  schedules: { title: 'Dated flight record', eyebrow: 'Schedule execution context', description: 'Review the persisted dated-flight identity and bounded commercial state.', boundary: 'This is not dispatch, safety, crew-legality, equipment, or operational movement authority.', backLabel: 'Schedules & flights', query: `query PlatformScheduleDetail($id:ID!){flightInstance(where:{id:$id}){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt departureGate departureTerminal origin{iataCode city} destination{iataCode city} inventoryBuckets(take:51,orderBy:[{id:asc}]){id bookingClassCode status capacity authorized sold held blocked} inventoryBucketsCount}}` },
-  inventory: { title: 'Inventory bucket record', eyebrow: 'Commercial authorization context', description: 'Review retained counts and authorization before using the inventory desk command.', boundary: 'Available inventory is a commercial calculation, not a seat-map, load-control, or operational availability assertion.', backLabel: 'Inventory & fares', query: `query PlatformInventoryDetail($id:ID!){inventoryBucket(where:{id:$id}){id bucketKey status bookingClassCode capacity authorized sold held blocked baseAmount taxAmount currencyCode cabin{code name} fareBrand{code name} flightInstance{id flightNumber serviceDate origin{iataCode} destination{iataCode}}}}` },
-  offers: { title: 'Offer record', eyebrow: 'Retailing context', description: 'Review the persisted offer before accepting it from the booking desk.', boundary: 'An offer is not a booking, settlement, ticket, or travel entitlement.', backLabel: 'Offers', query: `query PlatformOfferDetail($id:ID!){offer(where:{id:$id}){id offerNumber status source expiresAt baseAmount taxAmount feeAmount discountAmount totalAmount currencyCode passengersCount itemsCount booking{id recordLocator}}}` },
-  bookings: { title: 'Booking record', eyebrow: 'Servicing context', description: 'Review the locator-level state, then return to the platform booking desk for controlled commands.', boundary: 'Booking, payment, ticketing, and segment lifecycle state remain distinct; no state is inferred across them.', backLabel: 'Bookings', query: `query PlatformBookingDetail($id:ID!){booking(where:{id:$id}){id recordLocator orderNumber status paymentStatus ticketingStatus source totalAmount currencyCode passengersCount segmentsCount ticketsCount refundsCount checkInsCount bagsCount createdAt}}`, actionHref: data => data.recordLocator ? `/dashboard/platform/bookings?locator=${encodeURIComponent(data.recordLocator)}` : null, actionLabel: 'Open controlled booking commands' },
-  passengers: { title: 'Passenger service record', eyebrow: 'Carrier-scoped service context', description: 'Review the bounded passenger workload before moving into a booking or station task.', boundary: 'Sensitive document material is intentionally not requested. This record does not determine government admissibility.', backLabel: 'Passengers & service', query: `query PlatformPassengerDetail($id:ID!){passenger(where:{id:$id}){id passengerKey givenName middleNames familyName status preferredLanguage bookingPassengersCount serviceRequestsCount checkInsCount bagsCount ticketsCount reaccommodationsCount updatedAt bookingPassengers(take:21,orderBy:[{id:asc}]){id booking{id recordLocator segments(take:21,orderBy:[{sequence:asc},{id:asc}]){id originCode destinationCode flightInstance{id serviceDate}}}}}}` },
-  departures: { title: 'Departure flight record', eyebrow: 'Station service context', description: 'Review the selected flight’s station-facing context before returning to passenger-service commands.', boundary: 'This is not a dispatch, load/trim, security, government, safety, or crew-legality record.', backLabel: 'Departures', query: `query PlatformDepartureDetail($id:ID!){flightInstance(where:{id:$id}){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt departureGate departureTerminal origin{iataCode city} destination{iataCode city} checkInsCount}}`, actionHref: data => `/dashboard/platform/departures?date=${encodeURIComponent(data.serviceDate?.slice(0,10) ?? '')}&origin=${encodeURIComponent(data.origin?.iataCode ?? '')}`, actionLabel: 'Return to station manifest' },
-  disruptions: { title: 'Recovery record', eyebrow: 'Irregular operations context', description: 'Review persisted passenger impact and recovery counts before selecting a replacement in the recovery desk.', boundary: 'This record does not establish operational cause, compensation eligibility, safety status, or government clearance.', backLabel: 'Disruptions', query: `query PlatformDisruptionDetail($id:ID!){disruption(where:{id:$id}){id disruptionKey type severity status publicSummary providerReference detectedAt publishedAt resolvedAt affectedSegmentsCount reaccommodationsCount flightInstance{id flightNumber serviceDate origin{iataCode} destination{iataCode}}}}`, actionHref: () => '/dashboard/platform/disruptions', actionLabel: 'Return to recovery commands' },
-  payments: { title: 'Payment record', eyebrow: 'Settlement evidence context', description: 'Review the persisted payment values and provider identifiers without claiming external settlement success.', boundary: 'Only external evidence and the existing maker-checker workflow can support payment or refund settlement assertions.', backLabel: 'Payments & refunds', query: `query PlatformPaymentDetail($id:ID!){payment(where:{id:$id}){id paymentKey status amount authorizedAmount capturedAmount refundedAmount currencyCode providerPaymentId providerCaptureId instrumentBrand instrumentLast4 failureCode failureMessage createdAt booking{id recordLocator} provider{name adapterType status} refundsCount manualPaymentEvidenceCount}}`, actionHref: data => data.booking?.recordLocator ? `/dashboard/platform/bookings?locator=${encodeURIComponent(data.booking.recordLocator)}` : null, actionLabel: 'Open settlement workflow' },
-  manifests: { title: 'Audit evidence record', eyebrow: 'Command trace', description: 'Review bounded command evidence for a platform aggregate.', boundary: 'This is an operational audit entry, not a certified manifest, government submission, safety document, or regulatory export.', backLabel: 'Manifest entry & audit', query: `query PlatformAuditDetail($id:ID!){auditEvent(where:{id:$id}){id eventKey action aggregateType aggregateId source correlationId idempotencyKey occurredAt actor{name} approvedAgent{legalName}}}` },
-  settings: { title: 'Provider connection record', eyebrow: 'Persisted local evidence', description: 'Review configured connection state and recorded attempts without asserting a live provider health result.', boundary: 'PSS, DCS, payments, baggage, government, safety, regulatory, and certification readiness need external validation.', backLabel: 'Settings & readiness', query: `query PlatformConnectionDetail($id:ID!){providerConnection(where:{id:$id}){id connectionKey name status capabilities externalAccountId lastAttemptedAt lastSucceededAt lastErrorCode lastErrorMessage provider{name code type status} webhookEndpointsCount webhookEventsCount}}` },
+  schedules: { title: 'Flight', backLabel: 'Schedules & flights', query: `query PlatformScheduleDetail($id:ID!){flightInstance(where:{id:$id}){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt departureGate departureTerminal origin{iataCode city} destination{iataCode city} inventoryBuckets(take:51,orderBy:[{id:asc}]){id bookingClassCode status capacity authorized sold held blocked} inventoryBucketsCount}}` },
+  inventory: { title: 'Inventory bucket', backLabel: 'Inventory & fares', query: `query PlatformInventoryDetail($id:ID!){inventoryBucket(where:{id:$id}){id bucketKey status bookingClassCode capacity authorized sold held blocked baseAmount taxAmount currencyCode cabin{code name} fareBrand{code name} flightInstance{id flightNumber serviceDate origin{iataCode} destination{iataCode}}}}` },
+  offers: { title: 'Offer', backLabel: 'Offers', query: `query PlatformOfferDetail($id:ID!){offer(where:{id:$id}){id offerNumber status source expiresAt baseAmount taxAmount feeAmount discountAmount totalAmount currencyCode passengersCount itemsCount booking{id recordLocator}}}` },
+  bookings: { title: 'Booking', backLabel: 'Bookings', query: `query PlatformBookingDetail($id:ID!){booking(where:{id:$id}){id recordLocator orderNumber status paymentStatus ticketingStatus source totalAmount currencyCode passengersCount segmentsCount ticketsCount refundsCount checkInsCount bagsCount createdAt}}`, actionHref: data => data.recordLocator ? `/dashboard/platform/bookings?locator=${encodeURIComponent(data.recordLocator)}` : null, actionLabel: 'Booking commands' },
+  passengers: { title: 'Passenger', backLabel: 'Passengers & service', query: `query PlatformPassengerDetail($id:ID!){passenger(where:{id:$id}){id passengerKey givenName middleNames familyName status preferredLanguage bookingPassengersCount serviceRequestsCount checkInsCount bagsCount ticketsCount reaccommodationsCount updatedAt bookingPassengers(take:21,orderBy:[{id:asc}]){id booking{id recordLocator segments(take:21,orderBy:[{sequence:asc},{id:asc}]){id originCode destinationCode flightInstance{id serviceDate}}}}}}` },
+  departures: { title: 'Departure', backLabel: 'Departures', query: `query PlatformDepartureDetail($id:ID!){flightInstance(where:{id:$id}){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt departureGate departureTerminal origin{iataCode city} destination{iataCode city} checkInsCount}}`, actionHref: data => `/dashboard/platform/departures?date=${encodeURIComponent(data.serviceDate?.slice(0,10) ?? '')}&origin=${encodeURIComponent(data.origin?.iataCode ?? '')}`, actionLabel: 'Station manifest' },
+  disruptions: { title: 'Disruption', backLabel: 'Disruptions', query: `query PlatformDisruptionDetail($id:ID!){disruption(where:{id:$id}){id disruptionKey type severity status publicSummary providerReference detectedAt publishedAt resolvedAt affectedSegmentsCount reaccommodationsCount flightInstance{id flightNumber serviceDate origin{iataCode} destination{iataCode}}}}`, actionHref: () => '/dashboard/platform/disruptions', actionLabel: 'Recovery commands' },
+  payments: { title: 'Payment', backLabel: 'Payments & refunds', query: `query PlatformPaymentDetail($id:ID!){payment(where:{id:$id}){id paymentKey status amount authorizedAmount capturedAmount refundedAmount currencyCode providerPaymentId providerCaptureId instrumentBrand instrumentLast4 failureCode failureMessage createdAt booking{id recordLocator} provider{name adapterType status} refundsCount manualPaymentEvidenceCount}}`, actionHref: data => data.booking?.recordLocator ? `/dashboard/platform/bookings?locator=${encodeURIComponent(data.booking.recordLocator)}` : null, actionLabel: 'Settlement workflow' },
+  manifests: { title: 'Audit event', backLabel: 'Manifest entry & audit', query: `query PlatformAuditDetail($id:ID!){auditEvent(where:{id:$id}){id eventKey action aggregateType aggregateId source correlationId idempotencyKey occurredAt actor{name} approvedAgent{legalName}}}` },
+  settings: { title: 'Provider connection', backLabel: 'Settings & readiness', query: `query PlatformConnectionDetail($id:ID!){providerConnection(where:{id:$id}){id connectionKey name status capabilities externalAccountId lastAttemptedAt lastSucceededAt lastErrorCode lastErrorMessage provider{name code type status} webhookEndpointsCount webhookEventsCount}}` },
 }
 
 type Related = { id?: string; recordLocator?: string; code?: string; name?: string; legalName?: string; iataCode?: string; city?: string; flightNumber?: string; serviceDate?: string; adapterType?: string; status?: string; type?: string }
@@ -43,16 +44,19 @@ type RecordData = Related & {
   bookingPassengers?: Array<{ id: string; booking?: (Related & { segments?: Array<{ id: string; originCode: string; destinationCode: string; flightInstance?: Related | null }> }) | null }>;
 }
 
+
+type Fact = { label: string; value: React.ReactNode; mono?: boolean }
+type FactGroup = { title: string; items: Fact[] }
+
 function readable(value?: string | number | null) { return value === undefined || value === null || value === '' ? 'Unavailable' : String(value).replaceAll('_', ' ') }
 function date(value?: string) { return value && Number.isFinite(Date.parse(value)) ? `${new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))} UTC` : 'Unavailable' }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="min-w-0 border-b pb-3"><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-medium [overflow-wrap:anywhere]">{children}</dd></div> }
-function BookingLink({ booking }: { booking?: Related | null }) { return booking?.recordLocator ? <Link className="underline" href={`/dashboard/platform/bookings?locator=${encodeURIComponent(booking.recordLocator)}`}>{booking.recordLocator}</Link> : <>Booking unavailable</> }
+function bookingHref(locator: string) { return `/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}` }
 
 function recordIdentity(desk: Desk, record: RecordData) {
   switch (desk) {
     case 'bookings': return record.recordLocator
     case 'offers': return record.offerNumber
-    case 'schedules': case 'departures': return record.flightNumber ? `Flight ${record.flightNumber} · ${record.serviceDate?.slice(0,10) ?? 'Date unavailable'}` : undefined
+    case 'schedules': case 'departures': return record.flightNumber ? `${record.flightNumber} · ${record.serviceDate?.slice(0,10) ?? 'Date unavailable'}` : undefined
     case 'inventory': return record.bucketKey
     case 'passengers': return [record.givenName, record.middleNames, record.familyName].filter(Boolean).join(' ') || record.passengerKey
     case 'disruptions': return record.disruptionKey
@@ -62,60 +66,145 @@ function recordIdentity(desk: Desk, record: RecordData) {
   }
 }
 
-function RecordFields({ desk, data }: { desk: Desk; data: RecordData }) {
-  const text = (label: string, value?: string | number | null) => <Field key={label} label={label}>{readable(value)}</Field>
-  const money = (label: string, amount?: number) => <Field key={label} label={label}>{formatMinorUnits(amount, data.currencyCode)}</Field>
-  const at = (label: string, value?: string) => <Field key={label} label={label}>{date(value)}</Field>
-  const fields: React.ReactNode[] = [text('Status', data.status)]
+function recordFacts(desk: Desk, data: RecordData): FactGroup[] {
+  const text = (label: string, value?: string | number | null): Fact => ({ label, value: readable(value) })
+  const code = (label: string, value?: string | number | null): Fact => ({ label, value: readable(value), mono: true })
+  const count = (label: string, value?: number | null): Fact => ({ label, value: readable(value), mono: true })
+  const money = (label: string, amount?: number): Fact => ({ label, value: formatMinorUnits(amount, data.currencyCode), mono: true })
+  const at = (label: string, value?: string): Fact => ({ label, value: date(value), mono: true })
+  const state = (label: string, value?: string | null): Fact => ({ label, value: <StatusLabel status={value} /> })
+  const place = (value?: Related | null) => [value?.iataCode, value?.city].filter(Boolean).join(' · ')
   switch (desk) {
     case 'schedules': case 'departures':
-      fields.push(text('Origin', [data.origin?.iataCode, data.origin?.city].filter(Boolean).join(' · ')), text('Destination', [data.destination?.iataCode, data.destination?.city].filter(Boolean).join(' · ')), at('Scheduled departure', data.scheduledDepartureAt), at('Scheduled arrival', data.scheduledArrivalAt), text('Departure terminal', data.departureTerminal), text('Departure gate', data.departureGate), text('Check-ins', data.checkInsCount))
-      break
+      return [
+        { title: 'Route', items: [code('Origin', place(data.origin)), code('Destination', place(data.destination)), code('Terminal', data.departureTerminal), code('Gate', data.departureGate)] },
+        { title: 'Times', items: [at('Scheduled departure', data.scheduledDepartureAt), at('Scheduled arrival', data.scheduledArrivalAt), count('Check-ins', data.checkInsCount)] },
+      ]
     case 'inventory':
-      fields.push(text('Booking class', data.bookingClassCode), text('Cabin', data.cabin?.name), text('Fare', data.fareBrand?.name), text('Capacity', data.capacity), text('Authorized', data.authorized), text('Sold', data.sold), text('Held', data.held), text('Blocked', data.blocked), money('Base fare', data.baseAmount), money('Tax', data.taxAmount))
-      break
+      return [
+        { title: 'Bucket', items: [code('Booking class', data.bookingClassCode), text('Cabin', data.cabin?.name), text('Fare', data.fareBrand?.name), money('Base fare', data.baseAmount), money('Tax', data.taxAmount)] },
+        { title: 'Counts', items: [count('Capacity', data.capacity), count('Authorized', data.authorized), count('Sold', data.sold), count('Held', data.held), count('Blocked', data.blocked)] },
+      ]
     case 'bookings':
-      fields.push(text('Order number', data.orderNumber), text('Payment', data.paymentStatus), text('Ticketing', data.ticketingStatus), money('Booking total', data.totalAmount), text('Travelers', data.passengersCount), text('Segments', data.segmentsCount), text('Tickets', data.ticketsCount), text('Refunds', data.refundsCount), at('Created', data.createdAt))
-      break
+      return [
+        { title: 'Booking', items: [code('Order number', data.orderNumber), state('Payment', data.paymentStatus), state('Ticketing', data.ticketingStatus), money('Total', data.totalAmount), at('Created', data.createdAt)] },
+        { title: 'Counts', items: [count('Travelers', data.passengersCount), count('Segments', data.segmentsCount), count('Tickets', data.ticketsCount), count('Refunds', data.refundsCount)] },
+      ]
     case 'offers':
-      fields.push(text('Source', data.source), money('Base fare', data.baseAmount), money('Tax', data.taxAmount), money('Fees', data.feeAmount), money('Discount', data.discountAmount), money('Total', data.totalAmount), text('Travelers', data.passengersCount), at('Hold expires', data.expiresAt), <Field key="booking" label="Booking"><BookingLink booking={data.booking} /></Field>)
-      break
+      return [
+        { title: 'Offer', items: [text('Source', data.source), count('Travelers', data.passengersCount), at('Hold expires', data.expiresAt)] },
+        { title: 'Price', items: [money('Base fare', data.baseAmount), money('Tax', data.taxAmount), money('Fees', data.feeAmount), money('Discount', data.discountAmount), money('Total', data.totalAmount)] },
+      ]
     case 'passengers':
-      fields.push(text('Passenger reference', data.passengerKey), text('Language', data.preferredLanguage), text('Bookings', data.bookingPassengersCount), text('Service requests', data.serviceRequestsCount), text('Check-ins', data.checkInsCount), text('Bags', data.bagsCount), at('Updated', data.updatedAt))
-      break
+      return [
+        { title: 'Passenger', items: [code('Passenger reference', data.passengerKey), text('Language', data.preferredLanguage), at('Updated', data.updatedAt)] },
+        { title: 'Workload', items: [count('Bookings', data.bookingPassengersCount), count('Service requests', data.serviceRequestsCount), count('Check-ins', data.checkInsCount), count('Bags', data.bagsCount)] },
+      ]
     case 'disruptions':
-      fields.push(text('Impact', data.type), text('Severity', data.severity), text('Passenger summary', data.publicSummary), text('Provider reference', data.providerReference), text('Affected segments', data.affectedSegmentsCount), text('Replacements', data.reaccommodationsCount), at('Detected', data.detectedAt), at('Published', data.publishedAt), at('Resolved', data.resolvedAt))
-      break
+      return [
+        { title: 'Disruption', items: [text('Impact', data.type), state('Severity', data.severity), text('Passenger summary', data.publicSummary), code('Provider reference', data.providerReference), count('Affected segments', data.affectedSegmentsCount), count('Replacements', data.reaccommodationsCount)] },
+        { title: 'Timeline', items: [at('Detected', data.detectedAt), at('Published', data.publishedAt), at('Resolved', data.resolvedAt)] },
+      ]
     case 'payments':
-      fields.push(<Field key="booking" label="Booking"><BookingLink booking={data.booking} /></Field>, money('Amount', data.amount), money('Authorized', data.authorizedAmount), money('Captured', data.capturedAmount), money('Refunded', data.refundedAmount), text('Provider', data.provider?.name), text('Provider type', data.provider?.adapterType), text('Provider payment reference', data.providerPaymentId), text('Provider capture reference', data.providerCaptureId), text('Instrument', [data.instrumentBrand, data.instrumentLast4].filter(Boolean).join(' · ')), text('Failure code', data.failureCode), at('Created', data.createdAt))
-      break
+      return [
+        { title: 'Amounts', items: [money('Amount', data.amount), money('Authorized', data.authorizedAmount), money('Captured', data.capturedAmount), money('Refunded', data.refundedAmount), at('Created', data.createdAt)] },
+        { title: 'Provider', items: [text('Provider', data.provider?.name), text('Provider type', data.provider?.adapterType), code('Payment reference', data.providerPaymentId), code('Capture reference', data.providerCaptureId), code('Instrument', [data.instrumentBrand, data.instrumentLast4].filter(Boolean).join(' · ')), code('Failure code', data.failureCode)] },
+      ]
     case 'manifests':
-      fields.push(text('Action', data.action), text('Resource type', data.aggregateType), text('Resource reference', data.aggregateId), text('Actor', data.actor?.name || data.approvedAgent?.legalName), text('Source', data.source), text('Correlation reference', data.correlationId), at('Occurred', data.occurredAt))
-      break
+      return [
+        { title: 'Event', items: [text('Action', data.action), text('Resource type', data.aggregateType), code('Resource reference', data.aggregateId), text('Actor', data.actor?.name || data.approvedAgent?.legalName), text('Source', data.source), code('Correlation reference', data.correlationId), at('Occurred', data.occurredAt)] },
+      ]
     case 'settings':
-      fields.push(text('Connection reference', data.connectionKey), text('Provider', data.provider?.name), text('Provider status', data.provider?.status), text('External account', data.externalAccountId), text('Capabilities', data.capabilities?.join(', ')), at('Last attempt', data.lastAttemptedAt), at('Last recorded success', data.lastSucceededAt), text('Last error code', data.lastErrorCode))
-      break
+      return [
+        { title: 'Connection', items: [code('Connection reference', data.connectionKey), text('Provider', data.provider?.name), state('Provider status', data.provider?.status), code('External account', data.externalAccountId), text('Capabilities', data.capabilities?.join(', '))] },
+        { title: 'Attempts', items: [at('Last attempt', data.lastAttemptedAt), at('Last recorded success', data.lastSucceededAt), code('Last error code', data.lastErrorCode)] },
+      ]
   }
-  return <dl className="grid gap-x-6 gap-y-4 rounded-xl border bg-card p-5 sm:grid-cols-2">{fields}</dl>
+}
+
+function RelatedLinks({ desk, data }: { desk: Desk; data: RecordData }) {
+  const booking = (desk === 'offers' || desk === 'payments') ? data.booking : null
+  const flight = (desk === 'inventory' || desk === 'disruptions') ? data.flightInstance as (RecordData | null | undefined) : null
+  if (desk !== 'offers' && desk !== 'payments' && desk !== 'inventory' && desk !== 'disruptions') return null
+  return <DeskSection title="Related">
+    <Panel className="divide-y overflow-hidden">
+      {(desk === 'offers' || desk === 'payments') && (booking?.recordLocator
+        ? <RowLink href={bookingHref(booking.recordLocator)}><span className="text-sm font-medium">Booking</span><Code className="text-foreground">{booking.recordLocator}</Code></RowLink>
+        : <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><span className="font-medium">Booking</span><span className="text-muted-foreground">Unavailable</span></div>)}
+      {(desk === 'inventory' || desk === 'disruptions') && (flight?.id
+        ? <RowLink href={`/dashboard/platform/schedules/${encodeURIComponent(flight.id)}`}><span className="flex items-center gap-3 text-sm font-medium">Flight <Code className="text-foreground">{flight.flightNumber ?? 'Unavailable'}</Code></span><span className="flex items-center gap-3"><Route from={flight.origin?.iataCode} to={flight.destination?.iataCode} /><Code>{flight.serviceDate?.slice(0,10) ?? 'Date unavailable'}</Code></span></RowLink>
+        : <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><span className="font-medium">Flight</span><span className="text-muted-foreground">Unavailable</span></div>)}
+    </Panel>
+  </DeskSection>
 }
 
 export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk; id: string; returnTo?: unknown }) {
   const definition = detail[desk]
   const response = await keystoneClient<Record<string, RecordData | null>>(definition.query, { id })
   const backHref = safeDeskReturn(desk,returnTo)
-  if (!response.success) return <Shell title={definition.title} eyebrow={definition.backLabel} description="This record could not be loaded. Check your access and try again."><p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm">Record unavailable.</p><Link href={backHref} className="underline">Return to {definition.backLabel}</Link></Shell>
+  if (!response.success) return <Shell title={definition.title} eyebrow={definition.backLabel} tone="bad" status="Unavailable" parent={{ title: definition.backLabel, href: backHref }} actions={<Track><Pill asChild><Link href={backHref}>{definition.backLabel}</Link></Pill></Track>}>
+    <Notice tone="bad">Record unavailable. Check your access and try again.</Notice>
+  </Shell>
   const data = Object.values(response.data)[0]
   if (!data) notFound()
-  const identity = recordIdentity(desk, data) || 'Record identity unavailable'
+  const identity = recordIdentity(desk, data) || 'Identity unavailable'
   const actionHref = definition.actionHref?.(data)
   // Receipt access is independent of the basic booking record; a denied receipt must not erase a readable booking.
   const receiptResponse = desk === 'bookings' ? await keystoneClient<{ operatorBookingReceipt?: BookingReceipt }>(`query PlatformAcceptedBooking($id:ID!){operatorBookingReceipt(bookingId:$id)}`, { id }) : null
   const receipt = receiptResponse?.success ? receiptResponse.data.operatorBookingReceipt : undefined
-  return <Shell title={identity} eyebrow={definition.backLabel} description={desk === 'bookings' ? 'Current booking details and original accepted terms.' : 'Review this record and continue to its related task.'} parent={{ title: definition.backLabel, href: backHref }}>
-    <RecordFields desk={desk} data={data} />
-    {desk === 'bookings' && <section className="space-y-3 rounded-xl border bg-card p-5"><h2 className="font-semibold">Original accepted terms</h2>{receipt?.accepted ? <><p className="text-sm">{receipt.accepted.offerNumber} · {formatMinorUnits(receipt.accepted.totalAmount, receipt.accepted.currencyCode)}</p><ul className="space-y-2 text-sm">{receipt.accepted.items.map((item,index) => <li key={index} className="[overflow-wrap:anywhere]">{item.description} · {item.quantity} travelers · {item.fareName ?? 'Fare unavailable'} · {formatMinorUnits(item.totalAmount,item.currencyCode)}{item.includedBaggage ? ` · ${item.includedBaggage.pieces} included bag(s), ${item.includedBaggage.maxWeightGrams / 1000} kg each` : ''}</li>)}</ul><p className="text-sm text-muted-foreground">These are the accepted terms. Current payment and travel eligibility are shown separately.</p></> : <p className="text-sm text-muted-foreground">Original terms are unavailable under your current access or were not retained.</p>}</section>}
-    {desk === 'schedules' && <section className="space-y-3 rounded-xl border bg-card p-5"><h2 className="font-semibold">Inventory · {data.inventoryBucketsCount ?? 'Count unavailable'}</h2><ul className="space-y-2 text-sm">{data.inventoryBuckets?.slice(0,50).map(bucket => <li key={bucket.id} className="[overflow-wrap:anywhere]"><Link className="underline" href={`/dashboard/platform/inventory/${encodeURIComponent(bucket.id)}`}>{bucket.bookingClassCode ?? 'Class unavailable'}</Link> · {readable(bucket.status)} · authorized {readable(bucket.authorized)} · sold {readable(bucket.sold)} · held {readable(bucket.held)} · blocked {readable(bucket.blocked)}</li>)}</ul>{(data.inventoryBuckets?.length ?? 0) > 50 && <p className="text-sm">Showing the first 50 buckets. <Link className="underline" href="/dashboard/platform/inventory">Continue in Inventory & fares</Link>.</p>}</section>}
-    {desk === 'passengers' && <section className="space-y-3 rounded-xl border bg-card p-5"><h2 className="font-semibold">Related bookings and stations</h2><ul className="space-y-3 text-sm">{data.bookingPassengers?.slice(0,20).map(link => <li key={link.id}><BookingLink booking={link.booking} /><ul className="mt-1 space-y-1">{link.booking?.segments?.slice(0,20).map(segment => <li key={segment.id}>{segment.originCode} → {segment.destinationCode} · {segment.flightInstance?.serviceDate?.slice(0,10) ?? 'Date unavailable'} {segment.flightInstance?.serviceDate && <Link className="underline" href={`/dashboard/platform/departures?date=${encodeURIComponent(segment.flightInstance.serviceDate.slice(0,10))}&origin=${encodeURIComponent(segment.originCode)}`}>Open station manifest</Link>}</li>)}</ul>{(link.booking?.segments?.length ?? 0) > 20 && <p>More segments are available in the linked booking.</p>}</li>)}</ul>{!data.bookingPassengers?.length && <p className="text-sm">No linked bookings are visible under your current access.</p>}{(data.bookingPassengers?.length ?? 0) > 20 && <p className="text-sm">Showing 20 linked bookings. Use booking search for additional records.</p>}</section>}
-    <div className="flex flex-wrap gap-3"><Link href={backHref} className="rounded-lg border px-4 py-2 text-sm">Return to {definition.backLabel}</Link>{actionHref && <Link href={actionHref} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">{definition.actionLabel}</Link>}</div>
+  const named = desk === 'passengers' || desk === 'settings'
+  const groups = recordFacts(desk, data)
+  return <Shell
+    title={definition.title}
+    eyebrow={definition.backLabel}
+    tone={statusTone(data.status)}
+    status={readable(data.status)}
+    parent={{ title: definition.backLabel, href: backHref }}
+    meta={<span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">{named ? <span className="font-medium text-foreground">{identity}</span> : <Code className="text-sm text-foreground">{identity}</Code>}<StatusLabel status={data.status} /></span>}
+    actions={<Track><Pill asChild><Link href={backHref}>{definition.backLabel}</Link></Pill>{actionHref && <Pill asChild variant="primary"><Link href={actionHref}>{definition.actionLabel}</Link></Pill>}</Track>}
+  >
+    <div className="grid min-w-0 gap-6 md:grid-cols-2">
+      {groups.map(group => <DeskSection key={group.title} title={group.title}><Facts items={group.items} /></DeskSection>)}
+    </div>
+    <RelatedLinks desk={desk} data={data} />
+    {desk === 'bookings' && <DeskSection title="Original accepted terms">
+      {receipt?.accepted ? <div className="space-y-3">
+        <Facts items={[{ label: 'Offer', value: receipt.accepted.offerNumber, mono: true }, { label: 'Total', value: formatMinorUnits(receipt.accepted.totalAmount, receipt.accepted.currencyCode), mono: true }]} />
+        <Panel className="divide-y overflow-hidden">
+          {receipt.accepted.items.map((item,index) => <div key={index} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+            <span className="min-w-0 break-words font-medium">{item.description}</span>
+            <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-muted-foreground">
+              <span>{item.fareName ?? 'Fare unavailable'}</span>
+              <span className="font-mono tabular-nums">{item.quantity} travelers</span>
+              {item.includedBaggage && <span className="font-mono tabular-nums">{item.includedBaggage.pieces} bag(s) · {item.includedBaggage.maxWeightGrams / 1000} kg</span>}
+              <span className="font-mono tabular-nums text-foreground">{formatMinorUnits(item.totalAmount,item.currencyCode)}</span>
+            </span>
+          </div>)}
+        </Panel>
+      </div> : <Well>Original terms unavailable.</Well>}
+    </DeskSection>}
+    {desk === 'schedules' && <DeskSection title="Inventory" count={data.inventoryBucketsCount ?? undefined}>
+      {data.inventoryBuckets?.length ? <Panel className="divide-y overflow-hidden">
+        {data.inventoryBuckets.slice(0,50).map(bucket => <RowLink key={bucket.id} href={`/dashboard/platform/inventory/${encodeURIComponent(bucket.id)}`}>
+          <TitleLine as="span" tone={statusTone(bucket.status)} status={readable(bucket.status)} className="font-mono text-sm font-semibold">{bucket.bookingClassCode ?? 'Class unavailable'}</TitleLine>
+          <span className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs tabular-nums text-muted-foreground"><span>auth {readable(bucket.authorized)}</span><span>sold {readable(bucket.sold)}</span><span>held {readable(bucket.held)}</span><span>blocked {readable(bucket.blocked)}</span></span>
+        </RowLink>)}
+        {data.inventoryBuckets.length > 50 && <RowLink href="/dashboard/platform/inventory"><span className="text-sm text-muted-foreground">Showing the first 50 buckets</span><span className="text-sm font-medium">Inventory & fares</span></RowLink>}
+      </Panel> : <Well>{data.inventoryBucketsCount === undefined || data.inventoryBucketsCount === null ? 'Count unavailable' : 'No inventory buckets'}</Well>}
+    </DeskSection>}
+    {desk === 'passengers' && <DeskSection title="Bookings and stations" count={data.bookingPassengers?.length}>
+      {data.bookingPassengers?.length ? <Panel className="divide-y overflow-hidden">
+        {data.bookingPassengers.slice(0,20).map(link => <div key={link.id} className="min-w-0">
+          {link.booking?.recordLocator
+            ? <RowLink href={bookingHref(link.booking.recordLocator)}><Code className="text-sm font-semibold text-foreground">{link.booking.recordLocator}</Code><span className="font-mono text-xs tabular-nums text-muted-foreground">{link.booking.segments?.length ?? 0} segments</span></RowLink>
+            : <div className="px-4 py-3 text-sm text-muted-foreground">Booking unavailable</div>}
+          {link.booking?.segments?.slice(0,20).map(segment => segment.flightInstance?.serviceDate
+            ? <RowLink key={segment.id} className="py-2 pl-8" href={`/dashboard/platform/departures?date=${encodeURIComponent(segment.flightInstance.serviceDate.slice(0,10))}&origin=${encodeURIComponent(segment.originCode)}`}><span className="flex items-center gap-3"><Route from={segment.originCode} to={segment.destinationCode} /><Code>{segment.flightInstance.serviceDate.slice(0,10)}</Code></span><span className="text-xs font-medium">Station manifest</span></RowLink>
+            : <div key={segment.id} className="flex items-center gap-3 px-4 py-2 pl-8"><Route from={segment.originCode} to={segment.destinationCode} /><Code>Date unavailable</Code></div>)}
+          {(link.booking?.segments?.length ?? 0) > 20 && <p className="px-4 py-2 pl-8 text-xs text-muted-foreground">More segments in the linked booking</p>}
+        </div>)}
+        {data.bookingPassengers.length > 20 && <p className="px-4 py-2 text-xs text-muted-foreground">Showing 20 linked bookings</p>}
+      </Panel> : <Well>No linked bookings visible under your current access.</Well>}
+    </DeskSection>}
   </Shell>
 }

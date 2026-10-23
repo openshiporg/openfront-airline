@@ -1,12 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { Check } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { DeskSection, Field, Notice, Panel, Pill, StatusDot, Track, deskInput } from '@/features/platform/components/desk'
 import { cn } from '@/lib/utils'
 import { STOREFRONT_BRAND_COLORS, normalizeStorefrontBrandColor } from '@/features/airline/lib/branding'
 import { updateStorefrontSettings } from './actions'
@@ -61,39 +57,66 @@ export function StorefrontSettingsForm({ initialSettings }: { initialSettings: S
     })
   }
 
-  return <form onSubmit={event => { event.preventDefault(); save() }} className="space-y-6">
-    <section className="rounded-xl border bg-card p-5">
-      <h2 className="font-semibold">Public carrier identity</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Your airline name appears in public navigation and the footer.</p>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <div><Label htmlFor="storefront-name">Carrier name</Label><Input id="storefront-name" className="mt-2" maxLength={120} required value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} /></div>
-        <div><Label htmlFor="storefront-legal-name">Legal name</Label><Input id="storefront-legal-name" className="mt-2" maxLength={160} required value={form.legalName} onChange={event => setForm(current => ({ ...current, legalName: event.target.value }))} /></div>
-      </div>
-    </section>
+  const brand = STOREFRONT_BRAND_COLORS.find(option => option.value === form.storefrontBrandColor) ?? null
+  const failed = message.includes('could not')
 
-    <section className="rounded-xl border bg-card p-5">
-      <h2 className="font-semibold">Homepage content</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Complete these fields to publish your booking homepage. Existing booking services remain available.</p>
-      <div className="mt-5 space-y-4">
-        <div><Label htmlFor="storefront-title">Homepage title</Label><Input id="storefront-title" className="mt-2" maxLength={120} placeholder="Find your next flight" required value={form.storefrontHomepageTitle} onChange={event => setForm(current => ({ ...current, storefrontHomepageTitle: event.target.value }))} /></div>
-        <div><Label htmlFor="storefront-description">Homepage description</Label><Textarea id="storefront-description" className="mt-2 min-h-24" maxLength={320} placeholder="Describe the public booking experience without making provider or operational claims." required value={form.storefrontHomepageDescription} onChange={event => setForm(current => ({ ...current, storefrontHomepageDescription: event.target.value }))} /></div>
-      </div>
-    </section>
+  return <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+    <form onSubmit={event => { event.preventDefault(); save() }} className="min-w-0 space-y-6">
+      <DeskSection title="Carrier identity">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Carrier name"><input id="storefront-name" className={deskInput} maxLength={120} required value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} /></Field>
+          <Field label="Legal name"><input id="storefront-legal-name" className={deskInput} maxLength={160} required value={form.legalName} onChange={event => setForm(current => ({ ...current, legalName: event.target.value }))} /></Field>
+        </div>
+      </DeskSection>
 
-    <section className="rounded-xl border bg-card p-5">
-      <h2 className="font-semibold">Approved brand color</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Choose the color used on your public booking pages.</p>
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4" role="radiogroup" aria-label="Approved storefront colors">
-        {STOREFRONT_BRAND_COLORS.map(option => {
-          const selected = form.storefrontBrandColor === option.value
-          return <label key={option.value} className={cn('relative flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm font-medium focus-within:ring-2 focus-within:ring-ring', selected && 'ring-2 ring-ring')}>
-            <input type="radio" className="sr-only" name="storefrontBrandColor" value={option.value} checked={selected} required onChange={() => setForm(current => ({ ...current, storefrontBrandColor: option.value }))} />
-            <span className="grid size-6 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: option.hex }}>{selected ? <Check className="size-3.5" /> : null}</span>{option.label}
-          </label>
-        })}
-      </div>
-    </section>
+      <DeskSection title="Homepage">
+        <div className="space-y-4">
+          <Field label="Homepage title"><input id="storefront-title" className={deskInput} maxLength={120} placeholder="Find your next flight" required value={form.storefrontHomepageTitle} onChange={event => setForm(current => ({ ...current, storefrontHomepageTitle: event.target.value }))} /></Field>
+          <Field label="Homepage description"><textarea id="storefront-description" className={cn(deskInput, 'h-auto min-h-24 py-2')} maxLength={320} required value={form.storefrontHomepageDescription} onChange={event => setForm(current => ({ ...current, storefrontHomepageDescription: event.target.value }))} /></Field>
+        </div>
+      </DeskSection>
 
-    <div className="flex flex-wrap items-center gap-3"><Button type="submit" disabled={isPending || !dirty}>{isPending ? 'Saving…' : 'Save storefront settings'}</Button><Button type="button" variant="outline" disabled={isPending || !dirty} onClick={() => { if (window.confirm('Discard unsaved settings changes?')) { setForm(baseline); setMessage('Changes discarded.') } }}>Discard changes</Button>{dirty && <span className="text-sm text-muted-foreground">Unsaved changes</span>}{message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}</div>
-  </form>
+      <DeskSection title="Brand colour">
+        <Track role="radiogroup" aria-label="Brand colour" className="flex-wrap rounded-2xl">
+          {STOREFRONT_BRAND_COLORS.map(option => {
+            const selected = form.storefrontBrandColor === option.value
+            return <Pill key={option.value} asChild active={selected} className="cursor-pointer focus-within:ring-2 focus-within:ring-ring">
+              <label>
+                <input type="radio" className="sr-only" name="storefrontBrandColor" value={option.value} checked={selected} required onChange={() => setForm(current => ({ ...current, storefrontBrandColor: option.value }))} />
+                <span aria-hidden="true" className="size-3 rounded-full ring-1 ring-black/10 dark:ring-white/20" style={{ backgroundColor: option.hex }} />
+                {option.label}
+              </label>
+            </Pill>
+          })}
+        </Track>
+      </DeskSection>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Track>
+          <Pill type="submit" variant="primary" disabled={isPending || !dirty}>{isPending ? 'Saving…' : 'Save'}</Pill>
+          <Pill disabled={isPending || !dirty} onClick={() => { if (window.confirm('Discard unsaved settings changes?')) { setForm(baseline); setMessage('Changes discarded.') } }}>Discard</Pill>
+        </Track>
+        {dirty && <span className="inline-flex items-baseline gap-2 text-sm text-muted-foreground"><StatusDot tone="warn" className="-translate-y-[0.05em] size-1.5 shadow-none" />Unsaved changes</span>}
+      </div>
+      {message ? <Notice tone={failed ? 'bad' : 'ok'} role="status">{message}</Notice> : null}
+    </form>
+
+    <aside aria-label="Storefront preview" className="min-w-0 lg:sticky lg:top-4">
+      <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Preview</p>
+      <Panel className="overflow-hidden">
+        <div className="flex min-w-0 items-center justify-between gap-3 border-b bg-background px-4 py-3">
+          <span className="min-w-0 truncate text-sm font-semibold text-foreground">{form.name || 'Carrier name'}</span>
+          <span className="shrink-0 rounded-full px-3 py-1 text-xs font-medium text-white" style={{ backgroundColor: (brand ?? STOREFRONT_BRAND_COLORS[0]).hex }}>Book</span>
+        </div>
+        <div className="px-4 py-8 text-white" style={{ backgroundColor: (brand ?? STOREFRONT_BRAND_COLORS[0]).hex }}>
+          <p className="break-words text-xl font-semibold tracking-tight">{form.storefrontHomepageTitle || 'Homepage title'}</p>
+          <p className="mt-2 break-words text-sm text-white/80">{form.storefrontHomepageDescription || 'Homepage description'}</p>
+        </div>
+        <div className="flex min-w-0 items-center justify-between gap-3 bg-background px-4 py-2 text-xs text-muted-foreground">
+          <span className="min-w-0 truncate">{form.legalName || 'Legal name'}</span>
+          <span className="shrink-0">{brand?.label ?? 'No colour'}</span>
+        </div>
+      </Panel>
+    </aside>
+  </div>
 }

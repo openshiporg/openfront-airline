@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Rocket } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Pill, StatusDot, TitleLine, Track } from "@/features/platform/components/desk";
 
 export interface OnboardingStep {
   href: string;
@@ -60,7 +60,7 @@ const InfoCardFooter = ({
   return (
     <div
       className={cn(
-        "flex justify-between text-xs text-muted-foreground mt-2 overflow-hidden transition-all duration-300 ease-spring",
+        "flex justify-between text-xs text-muted-foreground overflow-hidden transition-all duration-300 ease-spring",
         isHovered ? "max-h-[60px] opacity-100" : "max-h-0 opacity-0",
         className
       )}
@@ -146,60 +146,34 @@ function OnboardingCard({
     <>
       {/* Full sidebar view */}
       <div
-        className={cn(
-          "group relative rounded-lg border bg-white dark:bg-black transition-all duration-300 ease-spring group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden",
-          "opacity-100 translate-y-0",
-          "hover:shadow-sm"
-        )}
+        className="group relative rounded-xl border bg-card transition-shadow duration-300 hover:shadow-sm group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onFocus={() => setIsHovered(true)}
       >
-        <div className="absolute -top-1 -right-1.5 z-10">
-          <div className="h-3 w-3 rounded-full bg-blue-700 dark:bg-blue-400 border-blue-200 dark:border-blue-800/50 border-3 animate-pulse" />
-        </div>
-        <div className="flex items-start">
-          <InfoCardContent className="pt-2 px-2">
-            <InfoCardTitle>{title}</InfoCardTitle>
-            <InfoCardDescription>{description}</InfoCardDescription>
-          </InfoCardContent>
-        </div>
+        <InfoCardContent className="px-3 pt-2.5">
+          <InfoCardTitle>
+            <TitleLine as="span" tone="warn" className="text-xs font-semibold text-foreground">{title}</TitleLine>
+          </InfoCardTitle>
+          <InfoCardDescription className="pl-4">{description}</InfoCardDescription>
+        </InfoCardContent>
 
         <InfoCardFooter isHovered={isHovered}>
-          <div className="m-2 space-x-2">
-            <Button size="sm" onClick={onOpenDialog} className="text-xs h-6">
-              Get started
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDismiss}
-              className="text-xs h-6"
-            >
-              Skip for now
-            </Button>
-          </div>
+          <Track className="m-2">
+            <Pill size="sm" variant="primary" onClick={onOpenDialog}>Get started</Pill>
+            <Pill size="sm" onClick={handleDismiss}>Skip for now</Pill>
+          </Track>
         </InfoCardFooter>
       </div>
 
       {/* Icon-only sidebar view */}
-      <div
-        className={cn(
-          "hidden group-has-[[data-collapsible=icon]]/sidebar-wrapper:block",
-          "relative"
-        )}
-      >
-        <div className="absolute -top-1 -right-1.5 z-10">
-          <div className="h-3 w-3 rounded-full bg-blue-700 dark:bg-blue-400 border-blue-200 dark:border-blue-800/50 border-3 animate-pulse" />
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          // className="w-full h-9 hover:bg-accent hover:text-accent-foreground"
-          onClick={onOpenDialog}
-        >
-          <Rocket className="size-3" />
-        </Button>
+      <div className="relative hidden group-has-[[data-collapsible=icon]]/sidebar-wrapper:block">
+        <StatusDot tone="warn" className="absolute -right-0.5 -top-0.5 z-10" />
+        <Track className="p-0.5">
+          <Pill size="sm" className="size-7 px-0" aria-label={title} onClick={onOpenDialog}>
+            <Rocket className="size-3" />
+          </Pill>
+        </Track>
       </div>
     </>
   );

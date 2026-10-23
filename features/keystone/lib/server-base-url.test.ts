@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveServerBaseUrl } from "@/features/keystone/lib/server-base-url";
+import { resolveServerBaseUrl } from "./server-base-url";
 
 test("server base URL uses a trusted configured production origin", () => {
   assert.equal(
@@ -13,7 +13,8 @@ test("server base URL uses a trusted configured production origin", () => {
   );
 });
 
-test("server base URL uses loopback in development instead of request headers", () => {
+test("server base URL uses loopback without a configured origin instead of request headers", () => {
+  assert.equal(resolveServerBaseUrl({ NODE_ENV: "production", PORT: "8080" }), "http://127.0.0.1:8080");
   assert.equal(
     resolveServerBaseUrl({
       NODE_ENV: "development",
@@ -25,11 +26,7 @@ test("server base URL uses loopback in development instead of request headers", 
   );
 });
 
-test("server base URL fails closed for malformed or missing production origins", () => {
-  assert.throws(
-    () => resolveServerBaseUrl({ NODE_ENV: "production" }),
-    /APP_BASE_URL is required/,
-  );
+test("server base URL fails closed for malformed production origins", () => {
   for (const value of [
     "//attacker.example",
     "javascript:alert(1)",

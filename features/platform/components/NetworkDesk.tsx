@@ -3,6 +3,24 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, RotateCcw, Search, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  DeskSection,
+  Meter,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Route,
+  TitleLine,
+  Track,
+  Well,
+  deskInput,
+  statusTone,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import { flightWorklistHref } from '@/features/platform/lib/flight-worklist'
 import { scheduleWorklistHref } from '@/features/platform/lib/schedule-worklist'
 import {
@@ -69,6 +87,42 @@ type ScheduleWorklistView = {
   cursor: string | null
 }
 type FlightWorklistView = ScheduleWorklistView & { from: string }
+
+const fieldLabel = 'flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground'
+const linkFocus = 'rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+function flightTone(status: string): DeskTone {
+  return status === 'closed_for_sale' ? 'idle' : statusTone(status)
+}
+
+/** Pagination links rendered as pills in a track. */
+function PageLinks({ firstHref, nextHref, firstLabel = 'First page', nextLabel }: { firstHref: string | null; nextHref: string | null; firstLabel?: string; nextLabel: string }) {
+  if (!firstHref && !nextHref) return null
+  return <Track>
+    {firstHref && <Pill asChild><Link href={firstHref}>{firstLabel}</Link></Pill>}
+    {nextHref && <Pill asChild><Link href={nextHref}>{nextLabel}<ChevronRight /></Link></Pill>}
+  </Track>
+}
+
+/** A state notice with an optional recovery action beneath it. */
+function StateNotice({ tone = 'warn', role, children, action }: { tone?: DeskTone; role?: 'alert' | 'status'; children: React.ReactNode; action?: React.ReactNode }) {
+  return <div className="space-y-2">
+    <Notice tone={tone} role={role}>{children}</Notice>
+    {action && <Track>{action}</Track>}
+  </div>
+}
+
+/** Sold / held / blocked / capacity figures for one bucket. */
+function BucketFigures({ sold, held, blocked, capacity }: { sold: number; held: number; blocked: number; capacity: number }) {
+  const committed = sold + held + blocked
+  return <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs tabular-nums text-muted-foreground">
+    <Meter value={capacity ? committed / capacity : 0} segments={10} label={`${committed} of ${capacity} committed`} />
+    <span><span className="text-foreground">{sold}</span> sold</span>
+    <span><span className="text-foreground">{held}</span> held</span>
+    <span><span className="text-foreground">{blocked}</span> blk</span>
+    <span><span className="text-foreground">{capacity}</span> cap</span>
+  </span>
+}
 
 const emptyFareBrandPage = (state: FareBrandWorklistPage['state']): FareBrandWorklistPage => ({
   items: [], totalCount: null, hasNextPage: false, nextCursor: null, state,
@@ -547,110 +601,246 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
     }), 'Dated flight, inventory bucket, and published seat map provisioned idempotently.')
   }
 
-  return <div className="space-y-6">
-    {message && <p role={messageFailed ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${messageFailed ? 'bg-destructive/10 text-destructive' : 'bg-primary/10'}`}>{message}</p>}
-    {mode !== 'inventory' && scheduleWorklist && <section aria-label="Published schedule worklist" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm">
-      {scheduleWorklist.state === 'unavailable' ? <p role="alert">Carrier-authorized published schedules or their count are denied or incomplete. No empty state is inferred; schedule provisioning is unavailable.</p>
-        : scheduleWorklist.state === 'empty' ? <p>No carrier-authorized published schedules are available to provision.</p>
-          : scheduleWorklist.state === 'stale' ? <div role="status"><p>This schedule continuation returned no published schedules; its cursor may be stale or the authorized set may have changed.</p>{scheduleFirstHref && <Link href={scheduleFirstHref} className="mt-1 inline-flex font-medium underline">Return to first schedule page</Link>}</div>
-            : scheduleWorklist.state === 'inconsistent' ? <div role="status"><p>Published schedule rows and their carrier-authorized count disagree; the separate reads may have observed concurrent changes.</p>{scheduleFirstHref && <Link href={scheduleFirstHref} className="mt-1 inline-flex font-medium underline">Reload first schedule page</Link>}</div>
-              : <><p>{scheduleWorklist.pageItemCount} published schedules on this page · {scheduleWorklist.totalCount} carrier-authorized schedules total.</p><div className="flex gap-3">{scheduleFirstHref && <Link href={scheduleFirstHref} className="font-medium underline">First page</Link>}{scheduleNextHref && <Link href={scheduleNextHref} className="font-medium underline">Next 100 schedules →</Link>}</div></>}
-    </section>}
-    {mode === 'inventory' && !inventoryActorCarrierId && <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The current operator carrier scope is unavailable. Inventory bucket reads and authorization controls are blocked.</p>}
-    {flightWorklist && <section aria-label="Future dated flight worklist" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm">
-      {flightWorklist.state === 'unavailable' ? <p role="alert">Carrier-authorized future flights, nested inventory buckets, or their count are denied or incomplete. No empty state is inferred; verify network and inventory read scope.</p>
-        : flightWorklist.state === 'empty' ? <p>No carrier-authorized future dated flights match this worklist.</p>
-          : flightWorklist.state === 'stale' ? <div role="status"><p>This flight continuation returned no rows; its cursor may be stale or the authorized future-flight set may have changed.</p>{flightFirstHref && <Link href={flightFirstHref} className="mt-1 inline-flex font-medium underline">Return to first flight page</Link>}</div>
-            : flightWorklist.state === 'inconsistent' ? <div role="status"><p>Dated-flight rows and their carrier-authorized count disagree; the separate reads may have observed concurrent changes.</p>{flightFirstHref && <Link href={flightFirstHref} className="mt-1 inline-flex font-medium underline">Reload first flight page</Link>}</div>
-              : <><p>{flightWorklist.pageItemCount} future flights on this page · {flightWorklist.totalCount} carrier-authorized future flights total.</p><div className="flex gap-3">{flightFirstHref && <Link href={flightFirstHref} className="font-medium underline">First page</Link>}{flightNextHref && <Link href={flightNextHref} className="font-medium underline">Next 50 flights →</Link>}</div></>}
-    </section>}
-    {mode !== 'inventory' && scheduleSelectionInvalid && <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The previously selected schedule is no longer published or carrier-authorized. Choose an available schedule before provisioning.</p>}
-    {mode !== 'inventory' && <form onSubmit={provision} className="grid gap-4 rounded-2xl border bg-card p-5 md:grid-cols-2 xl:grid-cols-4">
-      <div className="md:col-span-2 xl:col-span-4"><h2 className="font-semibold">Provision sellable dated service</h2><p className="mt-1 text-sm text-muted-foreground">Creates one immutable dated-flight identity, one bounded fare bucket, and a standard published seat map. Replays never overwrite retained service.</p>
-        {cabinPage.state === 'loading' ? <p role="status" className="mt-2 text-sm text-muted-foreground">Loading carrier-authorized cabins…</p>
-          : cabinPage.state === 'denied' ? <p role="alert" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The current role lacks Cabin read permission. No cabin rows are shown and provisioning is unavailable.</p>
-            : cabinPage.state === 'unavailable' ? <p role="alert" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The session, carrier scope, authorized cabin rows, or count is unavailable. No empty cabin list is inferred.</p>
-              : cabinPage.state === 'stale' ? <div role="status" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"><p>This carrier-cabin continuation is stale or outside the authorized result. No rows are shown.</p><button type="button" onClick={restartCabinList} className="mt-1 font-medium underline">Restart the cabin list</button></div>
-                : cabinPage.state === 'inconsistent' ? <div role="status" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"><p>Cabin rows and their carrier-authorized count disagree; separate reads may have observed concurrent changes. No rows are shown.</p><button type="button" onClick={restartCabinList} className="mt-1 font-medium underline">Reload first cabin page</button></div>
-                  : cabinPage.state === 'empty' ? <p role="status" className="mt-2 text-sm text-muted-foreground">No carrier-authorized cabins match this search.</p>
-                    : cabinPage.state === 'overflow' ? <p role="status" className="mt-2 text-sm text-muted-foreground">More than {CABIN_WORKLIST_PAGE_SIZE} carrier-authorized cabins match this search. Showing {cabinPage.items.length} on this page of {cabinPage.totalCount}; continue through the bounded list.</p>
-                      : <p className="mt-2 text-sm text-muted-foreground">{cabinPage.items.length} carrier-authorized cabins on this page · {cabinPage.totalCount} total.</p>}
-        {!selectedCabinId && (cabinPage.state === 'ready' || cabinPage.state === 'overflow') ? <p className="mt-1 text-sm text-muted-foreground">Choose a cabin to load its active fare brands.</p>
-          : selectedCabinId && fareBrandPage.state === 'loading' ? <p role="status" className="mt-2 text-sm text-muted-foreground">Loading active fare brands for the selected cabin…</p>
-            : selectedCabinId && fareBrandPage.state === 'denied' ? <p role="alert" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The current role lacks FareBrand read permission. No brand rows are shown and provisioning is unavailable.</p>
-              : selectedCabinId && fareBrandPage.state === 'unavailable' ? <p role="alert" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The selected-cabin fare-brand rows or count are unavailable. No empty catalog is inferred and provisioning is blocked.</p>
-                : selectedCabinId && fareBrandPage.state === 'stale' ? <div role="status" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"><p>This cabin/search continuation is stale or outside the authorized result. No rows are shown.</p><button type="button" onClick={restartFareBrandList} className="mt-1 font-medium underline">Restart this fare-brand list</button></div>
-                  : selectedCabinId && fareBrandPage.state === 'inconsistent' ? <div role="status" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"><p>Fare-brand rows and their selected-cabin count disagree; separate reads may have observed concurrent changes. No rows are shown.</p><button type="button" onClick={restartFareBrandList} className="mt-1 font-medium underline">Reload first fare-brand page</button></div>
-                    : selectedCabinId && fareBrandPage.state === 'empty' ? <p role="status" className="mt-2 text-sm text-muted-foreground">No active fare brands match this cabin and search.</p>
-                      : selectedCabinId && fareBrandPage.state === 'overflow' ? <p role="status" className="mt-2 text-sm text-muted-foreground">More than {FARE_BRAND_WORKLIST_PAGE_SIZE} active fare brands match this cabin/search. Showing {fareBrandPage.items.length} on this page of {fareBrandPage.totalCount}; continue through the bounded list.</p>
-                        : selectedCabinId && fareBrandPage.state === 'ready' ? <p className="mt-2 text-sm text-muted-foreground">{fareBrandPage.items.length} matching active fare brands on this page · {fareBrandPage.totalCount} total.</p> : null}
-      </div>
-      <label className="text-sm font-medium">Published schedule<select value={scheduleId} onChange={event => selectSchedule(event.target.value)} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2"><option value="">Select a published schedule</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.route.origin.iataCode}–{schedule.route.destination.iataCode} · {schedule.flightNumber}</option>)}</select></label>
-      <div className="text-sm font-medium"><label htmlFor="provisioning-cabin-select">Cabin<select id="provisioning-cabin-select" value={selectedCabinId} onChange={event => selectCabin(event.target.value)} disabled={cabinPage.state !== 'ready' && cabinPage.state !== 'overflow'} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2"><option value="">Select a carrier-authorized cabin</option>{cabinPage.items.map(cabin => <option key={cabin.id} value={cabin.id}>{cabin.code} · {cabin.name}</option>)}</select></label><span className="mt-1 block text-xs text-muted-foreground">Paging or searching clears the cabin and fare-brand selection; choose from the current authorized page.</span><div className="mt-2 flex flex-wrap gap-3 text-xs">{cabinCursorStack.length > 0 && <button type="button" onClick={previousCabinPage} disabled={cabinPage.state === 'loading'} className="font-medium underline disabled:opacity-50">Previous {CABIN_WORKLIST_PAGE_SIZE} cabins</button>}{cabinPage.hasNextPage && <button type="button" onClick={nextCabinPage} disabled={cabinPage.state === 'loading'} className="font-medium underline disabled:opacity-50">Next {CABIN_WORKLIST_PAGE_SIZE} cabins →</button>}</div></div>
-      <div className="text-sm font-medium"><label htmlFor="cabin-search">Search carrier cabins</label><div className="mt-2 flex gap-2"><input id="cabin-search" type="search" maxLength={80} value={cabinSearchInput} onChange={event => setCabinSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); searchCabins() } }} className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" /><button type="button" onClick={searchCabins} disabled={cabinPage.state === 'loading'} className="rounded-lg border px-3 py-2 disabled:opacity-50">Search</button></div></div>
-      <div className="text-sm font-medium"><label htmlFor="fare-brand-search">Search active fare brands in this cabin</label><div className="mt-2 flex gap-2"><input id="fare-brand-search" type="search" maxLength={80} value={fareBrandSearchInput} onChange={event => setFareBrandSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); searchFareBrands() } }} className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" /><button type="button" onClick={searchFareBrands} disabled={fareBrandPage.state === 'loading'} className="rounded-lg border px-3 py-2 disabled:opacity-50">Search</button></div></div>
-      <div className="text-sm font-medium"><label htmlFor="fare-brand-select">Fare brand<select id="fare-brand-select" value={selectedFareBrandId} onChange={event => setFareBrandId(event.target.value)} disabled={!selectedCabinId || (fareBrandPage.state !== 'ready' && fareBrandPage.state !== 'overflow')} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2"><option value="">Select an active fare brand</option>{compatibleBrands.map(brand => <option key={brand.id} value={brand.id}>{brand.code} · {brand.name}</option>)}</select></label>
-        <span className="mt-1 block text-xs text-muted-foreground">Cabin changes and list navigation clear the selection; choose from the current authorized page.</span>
-        {staleFareBrandSelection && <span role="alert" className="mt-1 block text-xs text-destructive">The prior fare-brand selection is no longer on this active cabin page. No replacement was selected.</span>}
-        <div className="mt-2 flex flex-wrap gap-3 text-xs">{fareBrandCursorStack.length > 0 && <button type="button" onClick={previousFareBrandPage} disabled={fareBrandPage.state === 'loading'} className="font-medium underline disabled:opacity-50">Previous {FARE_BRAND_WORKLIST_PAGE_SIZE} brands</button>}{fareBrandPage.hasNextPage && <button type="button" onClick={nextFareBrandPage} disabled={fareBrandPage.state === 'loading'} className="font-medium underline disabled:opacity-50">Next {FARE_BRAND_WORKLIST_PAGE_SIZE} brands →</button>}</div>
-      </div>
-      <label className="text-sm font-medium">Service date<input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(`${next}T09:00`); setArrival(`${next}T10:20`) }} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2" /></label>
-      <label className="text-sm font-medium">Departure ({defaultTimezone} local)<input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2" /></label>
-      <label className="text-sm font-medium">Arrival ({defaultTimezone} local)<input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2" /></label>
-      <label className="text-sm font-medium">Capacity<input type="number" min={1} max={300} value={capacity} onChange={event => setCapacity(event.target.value)} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2" /></label>
-      <label className="text-sm font-medium">Currency<input value={currencyCode} onChange={event => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2 uppercase" /></label>
-      <label className="text-sm font-medium">Base amount (minor units)<input type="number" min={0} value={baseAmount} onChange={event => setBaseAmount(event.target.value)} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2" /></label>
-      <label className="text-sm font-medium">Tax amount (minor units)<input type="number" min={0} value={taxAmount} onChange={event => setTaxAmount(event.target.value)} required className="mt-2 w-full rounded-lg border bg-background px-3 py-2" /></label>
-      <button disabled={working === 'provision' || !scheduleId || scheduleSelectionInvalid || !schedules.length || !fareBrandBinding} className="self-end rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-50">Provision dated flight</button>
-    </form>}
-    <section className="space-y-3">
-      <div><h2 className="font-semibold">{mode === 'schedules' ? 'Provisioned dated flights' : 'Maintained dated inventory'}</h2><p className="text-sm text-muted-foreground">Open or close sales and change authorization without reducing it below sold, held, and blocked inventory.</p></div>
-      {flights.map(flight => {
-        const inventoryFlightBinding = mode === 'inventory'
-          ? resolveInventoryFlightSelection(flights, flight.id, inventoryActorCarrierId ?? '')
-          : null
-        const canSelectInventoryFlight = inventoryFlightBinding?.state === 'authorized'
-        return <article key={flight.id} className="rounded-2xl border bg-card p-5">
-          {mode !== 'inventory' && flight.inventoryBucketsOverflow && <p role="status" className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">More than 25 inventory buckets exist; only the first 25 are shown and authorization editing is unavailable for this incomplete projection.</p>}
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div><Link href={mode === 'inventory' ? `/dashboard/platform/schedules/${flight.id}` : `${detailBase}/${flight.id}`} className="font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{flight.origin.iataCode} → {flight.destination.iataCode} · Flight {flight.flightNumber}</Link><p className="text-sm text-muted-foreground">{departureDateTime.format(new Date(flight.scheduledDepartureAt))} · {flight.status}</p>{inventoryFlightBinding?.state === 'stale' && <p role="status" className="mt-1 text-xs text-muted-foreground">This flight is outside the current carrier-authorized inventory scope; bucket access is stale.</p>}{inventoryActorCarrierId && inventoryFlightBinding?.state === 'unavailable' && <p role="alert" className="mt-1 text-xs text-muted-foreground">The flight carrier scope is unavailable; bucket access is blocked.</p>}</div>
-            <div className="flex flex-wrap gap-2">
-              {mode === 'inventory' && <button type="button" disabled={!canSelectInventoryFlight} aria-pressed={inventoryFlightId === flight.id && selectedInventoryFlight.state === 'authorized'} onClick={() => selectInventoryFlight(flight.id)} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">{inventoryFlightId === flight.id && selectedInventoryFlight.state === 'authorized' ? 'Reload buckets' : 'View buckets'}</button>}
-              {mode !== 'schedules' && <><button disabled={working === flight.id || flight.status === 'open_for_sale'} onClick={() => run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'open_for_sale', key: `open-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales opened.')} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Open sales</button><button disabled={working === flight.id || flight.status === 'closed_for_sale'} onClick={() => window.confirm(`Close sales for ${flight.flightNumber}? Customers can no longer book it until sales reopen.`) && run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'closed_for_sale', key: `close-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales closed without changing retained counts.')} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Close sales</button></>}
+  const openOnPage = flights.filter(flight => flight.status === 'open_for_sale').length
+  const closedOnPage = flights.filter(flight => flight.status === 'closed_for_sale').length
+  const showReadouts = scheduleWorklist?.state === 'ready' || flightWorklist?.state === 'ready' || flights.length > 0
+
+  const flightsSection = <DeskSection
+    title={mode === 'schedules' ? 'Dated flights' : 'Dated inventory'}
+    count={flightWorklist ? (flightWorklist.totalCount ?? undefined) : flights.length}
+    actions={flightWorklist?.state === 'ready' ? <div className="flex flex-wrap items-center gap-2">
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">{flightWorklist.pageItemCount} on page</span>
+      <PageLinks firstHref={flightFirstHref} nextHref={flightNextHref} nextLabel="Next 50" />
+    </div> : undefined}
+  >
+    <section aria-label="Future dated flight worklist" className="space-y-3">
+      {flightWorklist && (flightWorklist.state === 'unavailable' ? <Notice tone="bad" role="alert">Future flights, inventory buckets, or their count are unavailable.</Notice>
+        : flightWorklist.state === 'empty' ? <Well role="status">No future dated flights.</Well>
+          : flightWorklist.state === 'stale' ? <StateNotice role="status" action={flightFirstHref && <Pill asChild><Link href={flightFirstHref}>First page</Link></Pill>}>Flight page is stale.</StateNotice>
+            : flightWorklist.state === 'inconsistent' ? <StateNotice role="status" action={flightFirstHref && <Pill asChild><Link href={flightFirstHref}>Reload first page</Link></Pill>}>Flight rows and count disagree.</StateNotice>
+              : null)}
+      {flights.length > 0 && <Panel className="divide-y">
+        {flights.map(flight => {
+          const inventoryFlightBinding = mode === 'inventory'
+            ? resolveInventoryFlightSelection(flights, flight.id, inventoryActorCarrierId ?? '')
+            : null
+          const canSelectInventoryFlight = inventoryFlightBinding?.state === 'authorized'
+          const isSelectedInventoryFlight = inventoryFlightId === flight.id && selectedInventoryFlight.state === 'authorized'
+          const buckets = flight.inventoryBuckets ?? []
+          return <article key={flight.id} className={cn('min-w-0 px-4 py-3', isSelectedInventoryFlight && 'bg-muted/40')}>
+            {mode !== 'inventory' && flight.inventoryBucketsOverflow && <Notice tone="warn" role="status" className="mb-3">Over 25 buckets; showing 25. Authorization editing disabled.</Notice>}
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="min-w-0">
+                <TitleLine tone={flightTone(flight.status)} status={flight.status.replaceAll('_', ' ')} className="text-sm">
+                  <Link href={mode === 'inventory' ? `/dashboard/platform/schedules/${flight.id}` : `${detailBase}/${flight.id}`} className={cn('inline-flex flex-wrap items-center gap-x-3 gap-y-1', linkFocus)}>
+                    <span className="font-mono font-semibold tabular-nums text-foreground">{flight.flightNumber}</span>
+                    <Route from={flight.origin.iataCode} to={flight.destination.iataCode} />
+                  </Link>
+                </TitleLine>
+                <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
+                  <span className="font-mono tabular-nums">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}</span>
+                  <span className="capitalize"> · {flight.status.replaceAll('_', ' ')}</span>
+                </p>
+                {inventoryFlightBinding?.state === 'stale' && <p role="status" className="mt-1 pl-4 text-xs text-muted-foreground">Outside carrier inventory scope.</p>}
+                {inventoryActorCarrierId && inventoryFlightBinding?.state === 'unavailable' && <p role="alert" className="mt-1 pl-4 text-xs text-muted-foreground">Carrier scope unavailable.</p>}
+              </div>
+              {mode !== 'schedules' && <Track>
+                {mode === 'inventory' && <Pill disabled={!canSelectInventoryFlight} aria-pressed={isSelectedInventoryFlight} onClick={() => selectInventoryFlight(flight.id)}>
+                  {isSelectedInventoryFlight ? <><RotateCcw />Reload buckets</> : 'View buckets'}
+                </Pill>}
+                <Pill disabled={working === flight.id || flight.status === 'open_for_sale'} onClick={() => run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'open_for_sale', key: `open-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales opened.')}>Open sales</Pill>
+                <Pill variant="danger" disabled={working === flight.id || flight.status === 'closed_for_sale'} onClick={() => window.confirm(`Close sales for ${flight.flightNumber}? Customers can no longer book it until sales reopen.`) && run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'closed_for_sale', key: `close-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales closed without changing retained counts.')}>Close sales</Pill>
+              </Track>}
             </div>
-          </div>
-          {mode === 'inventory'
-            ? <p className="mt-3 text-xs text-muted-foreground">Bucket details load only for one selected flight at a time under the current inventory-read scope.</p>
-            : <div className="mt-4 grid gap-3 md:grid-cols-2">{(flight.inventoryBuckets ?? []).map(bucket => { const minimum = bucket.sold + bucket.held + bucket.blocked; const value = authorizations[bucket.id] ?? String(bucket.authorized); return <div key={bucket.id} className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3 sm:flex-row sm:items-end sm:justify-between"><div><Link href={`${detailBase}/${flight.id}`} className="text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Class {bucket.bookingClassCode} · {bucket.status}</Link><p className="text-xs text-muted-foreground">{bucket.sold} sold · {bucket.held} held · {bucket.blocked} blocked · {bucket.capacity} capacity</p></div>{mode !== 'schedules' && <div className="flex items-end gap-2"><label className="text-xs font-medium">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={flight.inventoryBucketsOverflow} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className="mt-1 w-24 rounded-lg border bg-background px-3 py-2 text-sm" /></label><button disabled={flight.inventoryBucketsOverflow || working === bucket.id || Number(value) === bucket.authorized} onClick={() => run(bucket.id, () => mutate(`mutation($bucket:ID!,$authorized:Int!,$key:String!){setInventoryAuthorization(inventoryBucketId:$bucket,authorized:$authorized,idempotencyKey:$key){status}}`, { bucket: bucket.id, authorized: Number(value), key: `authorize-${bucket.id}-${crypto.randomUUID()}` }), 'Inventory authorization updated.')} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Save</button></div>}</div> })}</div>}
-        </article>
-      })}
-      {!flights.length && !flightWorklist && <p className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">No dated flights are provisioned yet.</p>}
+            {mode !== 'inventory' && buckets.length > 0 && <div className="mt-3 divide-y border-t pl-4">
+              {buckets.map(bucket => {
+                const minimum = bucket.sold + bucket.held + bucket.blocked
+                const value = authorizations[bucket.id] ?? String(bucket.authorized)
+                return <div key={bucket.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+                  <div className="min-w-0 space-y-1">
+                    <TitleLine as="p" tone={statusTone(bucket.status)} status={bucket.status} className="text-sm">
+                      <Link href={`${detailBase}/${flight.id}`} className={cn('font-mono font-medium tabular-nums text-foreground', linkFocus)}>Class {bucket.bookingClassCode}</Link>
+                      <span className="ml-2 text-xs capitalize text-muted-foreground">{bucket.status.replaceAll('_', ' ')}</span>
+                    </TitleLine>
+                    <div className="pl-4"><BucketFigures sold={bucket.sold} held={bucket.held} blocked={bucket.blocked} capacity={bucket.capacity} /></div>
+                  </div>
+                  {mode !== 'schedules' && <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={flight.inventoryBucketsOverflow} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className={cn(deskInput, 'h-8 w-20 font-mono tabular-nums')} /></label>
+                    <Track><Pill disabled={flight.inventoryBucketsOverflow || working === bucket.id || Number(value) === bucket.authorized} onClick={() => run(bucket.id, () => mutate(`mutation($bucket:ID!,$authorized:Int!,$key:String!){setInventoryAuthorization(inventoryBucketId:$bucket,authorized:$authorized,idempotencyKey:$key){status}}`, { bucket: bucket.id, authorized: Number(value), key: `authorize-${bucket.id}-${crypto.randomUUID()}` }), 'Inventory authorization updated.')}>Save</Pill></Track>
+                  </div>}
+                </div>
+              })}
+            </div>}
+          </article>
+        })}
+      </Panel>}
+      {!flights.length && !flightWorklist && <Well>No dated flights provisioned.</Well>}
     </section>
-    {mode === 'inventory' && <section aria-label="Selected flight inventory bucket worklist" className="space-y-3 rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">Inventory buckets for one flight</h2><p className="text-sm text-muted-foreground">Only one carrier-owned flight is paged at a time; authorization controls bind to the visible bucket IDs on this page.</p></div>{inventoryFlightId && <button type="button" onClick={() => selectInventoryFlight('')} className="rounded-lg border px-3 py-2 text-sm">Clear selected flight</button>}</div>
-      {selectedInventoryFlight.state === 'none' ? <p role="status" className="text-sm text-muted-foreground">Choose “View buckets” on a flight to inspect its bounded bucket pages.</p>
-        : selectedInventoryFlight.state === 'stale' ? <div role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The selected flight is no longer on the current carrier-authorized inventory page or belongs to another carrier. No bucket rows are shown.</div>
-          : selectedInventoryFlight.state === 'unavailable' ? <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The selected flight’s carrier scope is unavailable. No bucket query or edit control is enabled.</p>
+  </DeskSection>
+
+  const bucketsSection = mode === 'inventory' && <DeskSection
+    title="Buckets"
+    count={(inventoryBucketPage.state === 'ready' || inventoryBucketPage.state === 'overflow') ? (inventoryBucketPage.totalCount ?? undefined) : undefined}
+    actions={inventoryFlightId ? <Track><Pill onClick={() => selectInventoryFlight('')}><X />Clear</Pill></Track> : undefined}
+  >
+    <section aria-label="Selected flight inventory bucket worklist" className="space-y-3">
+      {selectedInventoryFlight.state === 'none' ? <Well role="status">Select a flight.</Well>
+        : selectedInventoryFlight.state === 'stale' ? <Notice tone="warn" role="status">Selected flight is no longer in carrier inventory scope.</Notice>
+          : selectedInventoryFlight.state === 'unavailable' ? <Notice tone="bad" role="alert">Selected flight carrier scope unavailable.</Notice>
             : <>
-              {selectedInventoryFlightRecord && <p className="text-sm font-medium">Flight {selectedInventoryFlightRecord.flightNumber} · {selectedInventoryFlightRecord.origin.iataCode} → {selectedInventoryFlightRecord.destination.iataCode}</p>}
-              {inventoryBucketPage.state === 'loading' ? <p role="status" className="text-sm text-muted-foreground">Loading carrier-authorized bucket rows and count…</p>
-                : inventoryBucketPage.state === 'denied' ? <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The current role lacks InventoryBucket read permission. No rows are shown.</p>
-                  : inventoryBucketPage.state === 'unavailable' ? <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">The carrier/inventory scope, bucket rows, or count is unavailable. No empty worklist is inferred.</p>
-                    : inventoryBucketPage.state === 'stale' ? <div role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"><p>This bucket cursor is stale or outside the selected flight/carrier filter. No rows are shown.</p><button type="button" onClick={restartInventoryBucketList} className="mt-1 font-medium underline">Reload first bucket page</button></div>
-                      : inventoryBucketPage.state === 'inconsistent' ? <div role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"><p>Bucket rows and their selected-flight count disagree or returned a foreign row. No rows are shown.</p><button type="button" onClick={restartInventoryBucketList} className="mt-1 font-medium underline">Reload first bucket page</button></div>
-                        : inventoryBucketPage.state === 'empty' ? <p role="status" className="text-sm text-muted-foreground">No carrier-authorized inventory buckets exist for this flight.</p>
+              {selectedInventoryFlightRecord && <TitleLine as="p" tone={flightTone(selectedInventoryFlightRecord.status)} status={selectedInventoryFlightRecord.status.replaceAll('_', ' ')} className="text-sm">
+                <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-mono font-semibold tabular-nums text-foreground">{selectedInventoryFlightRecord.flightNumber}</span>
+                  <Route from={selectedInventoryFlightRecord.origin.iataCode} to={selectedInventoryFlightRecord.destination.iataCode} />
+                </span>
+              </TitleLine>}
+              {inventoryBucketPage.state === 'loading' ? <Well role="status">Loading buckets…</Well>
+                : inventoryBucketPage.state === 'denied' ? <Notice tone="bad" role="alert">No permission to read inventory buckets.</Notice>
+                  : inventoryBucketPage.state === 'unavailable' ? <Notice tone="bad" role="alert">Buckets or their count are unavailable.</Notice>
+                    : inventoryBucketPage.state === 'stale' ? <StateNotice role="status" action={<Pill onClick={restartInventoryBucketList}><RotateCcw />Reload first page</Pill>}>Bucket page is stale.</StateNotice>
+                      : inventoryBucketPage.state === 'inconsistent' ? <StateNotice role="status" action={<Pill onClick={restartInventoryBucketList}><RotateCcw />Reload first page</Pill>}>Bucket rows and count disagree.</StateNotice>
+                        : inventoryBucketPage.state === 'empty' ? <Well role="status">No buckets for this flight.</Well>
                           : <>
-                            <p role="status" className="text-sm text-muted-foreground">{inventoryBucketPage.items.length} buckets on this page · {inventoryBucketPage.totalCount} carrier-authorized buckets for this flight.{inventoryBucketPage.state === 'overflow' ? ` More than ${INVENTORY_BUCKET_WORKLIST_PAGE_SIZE} results; continue to later buckets.` : ''}</p>
-                            {!inventoryBucketPage.canManageInventory && <p role="status" className="text-sm text-muted-foreground">Read-only: this role can inspect inventory buckets but cannot manage authorization.</p>}
-                            <div className="grid gap-3 md:grid-cols-2">{inventoryBucketPage.items.map(bucket => {
+                            <p role="status" className="font-mono text-xs tabular-nums text-muted-foreground">{inventoryBucketPage.items.length} of {inventoryBucketPage.totalCount}{inventoryBucketPage.state === 'overflow' ? ` · over ${INVENTORY_BUCKET_WORKLIST_PAGE_SIZE}, more on later pages` : ''}</p>
+                            {!inventoryBucketPage.canManageInventory && <Notice role="status">Read-only</Notice>}
+                            <Panel className="divide-y">{inventoryBucketPage.items.map(bucket => {
                               const minimum = bucket.sold + bucket.held + bucket.blocked
                               const value = authorizations[bucket.id] ?? String(bucket.authorized)
                               const canEdit = canEditVisibleInventoryBucket({ page: inventoryBucketPage, flightId: selectedInventoryFlight.flightId ?? '', carrierId: inventoryActorCarrierId ?? '', bucketId: bucket.id })
-                              return <div key={bucket.id} className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3 sm:flex-row sm:items-end sm:justify-between"><div><Link href={`${detailBase}/${bucket.id}`} className="text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Class {bucket.bookingClassCode} · {bucket.status}</Link><p className="text-xs text-muted-foreground">{bucket.sold} sold · {bucket.held} held · {bucket.blocked} blocked · {bucket.capacity} capacity</p></div>{inventoryBucketPage.canManageInventory && <div className="flex items-end gap-2"><label className="text-xs font-medium">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={!canEdit} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className="mt-1 w-24 rounded-lg border bg-background px-3 py-2 text-sm" /></label><button disabled={!canEdit || working === bucket.id || Number(value) === bucket.authorized} onClick={() => saveSelectedBucketAuthorization(bucket.id, Number(value))} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Save</button></div>}</div>
-                            })}</div>
-                            <div className="flex gap-3 text-sm">{inventoryBucketCursorStack.length > 0 && <button type="button" onClick={previousInventoryBucketPage} className="font-medium underline">Previous {INVENTORY_BUCKET_WORKLIST_PAGE_SIZE} buckets</button>}{inventoryBucketPage.hasNextPage && <button type="button" onClick={nextInventoryBucketPage} className="font-medium underline">Next {INVENTORY_BUCKET_WORKLIST_PAGE_SIZE} buckets →</button>}</div>
+                              return <div key={bucket.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                                <div className="min-w-0 space-y-1">
+                                  <TitleLine as="p" tone={statusTone(bucket.status)} status={bucket.status} className="text-sm">
+                                    <Link href={`${detailBase}/${bucket.id}`} className={cn('font-mono font-medium tabular-nums text-foreground', linkFocus)}>Class {bucket.bookingClassCode}</Link>
+                                    <span className="ml-2 text-xs capitalize text-muted-foreground">{bucket.status.replaceAll('_', ' ')}</span>
+                                  </TitleLine>
+                                  <div className="pl-4"><BucketFigures sold={bucket.sold} held={bucket.held} blocked={bucket.blocked} capacity={bucket.capacity} /></div>
+                                </div>
+                                {inventoryBucketPage.canManageInventory && <div className="flex items-center gap-2">
+                                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={!canEdit} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className={cn(deskInput, 'h-8 w-20 font-mono tabular-nums')} /></label>
+                                  <Track><Pill variant="primary" disabled={!canEdit || working === bucket.id || Number(value) === bucket.authorized} onClick={() => saveSelectedBucketAuthorization(bucket.id, Number(value))}>Save</Pill></Track>
+                                </div>}
+                              </div>
+                            })}</Panel>
+                            {(inventoryBucketCursorStack.length > 0 || inventoryBucketPage.hasNextPage) && <Track>
+                              {inventoryBucketCursorStack.length > 0 && <Pill onClick={previousInventoryBucketPage}><ChevronLeft />Previous {INVENTORY_BUCKET_WORKLIST_PAGE_SIZE}</Pill>}
+                              {inventoryBucketPage.hasNextPage && <Pill onClick={nextInventoryBucketPage}>Next {INVENTORY_BUCKET_WORKLIST_PAGE_SIZE}<ChevronRight /></Pill>}
+                            </Track>}
                           </>}
             </>}
-    </section>}
+    </section>
+  </DeskSection>
+
+  const provisionSection = mode !== 'inventory' && <DeskSection
+    title="Provision dated flight"
+    count={scheduleWorklist?.state === 'ready' ? (scheduleWorklist.totalCount ?? undefined) : undefined}
+    actions={scheduleWorklist?.state === 'ready' ? <div className="flex flex-wrap items-center gap-2">
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">{scheduleWorklist.pageItemCount} schedules on page</span>
+      <PageLinks firstHref={scheduleFirstHref} nextHref={scheduleNextHref} nextLabel="Next 100" />
+    </div> : undefined}
+  >
+    <div className="space-y-3">
+      {scheduleWorklist && <section aria-label="Published schedule worklist">
+        {scheduleWorklist.state === 'unavailable' ? <Notice tone="bad" role="alert">Published schedules or their count are unavailable. Provisioning blocked.</Notice>
+          : scheduleWorklist.state === 'empty' ? <Well>No published schedules.</Well>
+            : scheduleWorklist.state === 'stale' ? <StateNotice role="status" action={scheduleFirstHref && <Pill asChild><Link href={scheduleFirstHref}>First page</Link></Pill>}>Schedule page is stale.</StateNotice>
+              : scheduleWorklist.state === 'inconsistent' ? <StateNotice role="status" action={scheduleFirstHref && <Pill asChild><Link href={scheduleFirstHref}>Reload first page</Link></Pill>}>Schedule rows and count disagree.</StateNotice>
+                : null}
+      </section>}
+      {scheduleSelectionInvalid && <Notice tone="warn" role="alert">Selected schedule is no longer published. Choose another.</Notice>}
+      {cabinPage.state === 'loading' ? <Notice role="status">Loading cabins…</Notice>
+        : cabinPage.state === 'denied' ? <Notice tone="bad" role="alert">No permission to read cabins. Provisioning unavailable.</Notice>
+          : cabinPage.state === 'unavailable' ? <Notice tone="bad" role="alert">Cabins or their count are unavailable.</Notice>
+            : cabinPage.state === 'stale' ? <StateNotice role="status" action={<Pill onClick={restartCabinList}><RotateCcw />Restart cabin list</Pill>}>Cabin page is stale.</StateNotice>
+              : cabinPage.state === 'inconsistent' ? <StateNotice role="status" action={<Pill onClick={restartCabinList}><RotateCcw />Reload first page</Pill>}>Cabin rows and count disagree.</StateNotice>
+                : cabinPage.state === 'empty' ? <Notice role="status">No cabins match.</Notice>
+                  : cabinPage.state === 'overflow' ? <Notice role="status">Over {CABIN_WORKLIST_PAGE_SIZE} cabins match. Showing {cabinPage.items.length} of {cabinPage.totalCount}.</Notice>
+                    : null}
+      {selectedCabinId && fareBrandPage.state === 'loading' ? <Notice role="status">Loading fare brands…</Notice>
+        : selectedCabinId && fareBrandPage.state === 'denied' ? <Notice tone="bad" role="alert">No permission to read fare brands. Provisioning unavailable.</Notice>
+          : selectedCabinId && fareBrandPage.state === 'unavailable' ? <Notice tone="bad" role="alert">Fare brands or their count are unavailable.</Notice>
+            : selectedCabinId && fareBrandPage.state === 'stale' ? <StateNotice role="status" action={<Pill onClick={restartFareBrandList}><RotateCcw />Restart fare-brand list</Pill>}>Fare-brand page is stale.</StateNotice>
+              : selectedCabinId && fareBrandPage.state === 'inconsistent' ? <StateNotice role="status" action={<Pill onClick={restartFareBrandList}><RotateCcw />Reload first page</Pill>}>Fare-brand rows and count disagree.</StateNotice>
+                : selectedCabinId && fareBrandPage.state === 'empty' ? <Notice role="status">No active fare brands match.</Notice>
+                  : selectedCabinId && fareBrandPage.state === 'overflow' ? <Notice role="status">Over {FARE_BRAND_WORKLIST_PAGE_SIZE} fare brands match. Showing {fareBrandPage.items.length} of {fareBrandPage.totalCount}.</Notice>
+                    : null}
+      <Panel>
+        <form onSubmit={provision} className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <label className={cn(fieldLabel, 'sm:col-span-2')}>Published schedule
+            <select value={scheduleId} onChange={event => selectSchedule(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')}>
+              <option value="">Select a schedule</option>
+              {schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.flightNumber} · {schedule.route.origin.iataCode}–{schedule.route.destination.iataCode}</option>)}
+            </select>
+          </label>
+          <div className={fieldLabel}>
+            <label htmlFor="cabin-search">Search cabins</label>
+            <div className="flex min-w-0 items-center gap-2">
+              <input id="cabin-search" type="search" maxLength={80} value={cabinSearchInput} onChange={event => setCabinSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); searchCabins() } }} className={cn(deskInput, 'flex-1')} />
+              <Track><Pill aria-label="Search cabins" onClick={searchCabins} disabled={cabinPage.state === 'loading'}><Search /></Pill></Track>
+            </div>
+          </div>
+          <div className={fieldLabel}>
+            <label htmlFor="provisioning-cabin-select" className="flex items-baseline justify-between gap-2">Cabin
+              {cabinPage.state === 'ready' && <span className="font-mono font-normal tabular-nums">{cabinPage.items.length} of {cabinPage.totalCount}</span>}
+            </label>
+            <select id="provisioning-cabin-select" value={selectedCabinId} onChange={event => selectCabin(event.target.value)} disabled={cabinPage.state !== 'ready' && cabinPage.state !== 'overflow'} required className={deskInput}>
+              <option value="">Select a cabin</option>
+              {cabinPage.items.map(cabin => <option key={cabin.id} value={cabin.id}>{cabin.code} · {cabin.name}</option>)}
+            </select>
+            {(cabinCursorStack.length > 0 || cabinPage.hasNextPage) && <Track className="self-start">
+              {cabinCursorStack.length > 0 && <Pill size="sm" onClick={previousCabinPage} disabled={cabinPage.state === 'loading'}><ChevronLeft />Previous {CABIN_WORKLIST_PAGE_SIZE}</Pill>}
+              {cabinPage.hasNextPage && <Pill size="sm" onClick={nextCabinPage} disabled={cabinPage.state === 'loading'}>Next {CABIN_WORKLIST_PAGE_SIZE}<ChevronRight /></Pill>}
+            </Track>}
+          </div>
+          <div className={fieldLabel}>
+            <label htmlFor="fare-brand-search">Search fare brands</label>
+            <div className="flex min-w-0 items-center gap-2">
+              <input id="fare-brand-search" type="search" maxLength={80} value={fareBrandSearchInput} onChange={event => setFareBrandSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); searchFareBrands() } }} className={cn(deskInput, 'flex-1')} />
+              <Track><Pill aria-label="Search fare brands" onClick={searchFareBrands} disabled={fareBrandPage.state === 'loading'}><Search /></Pill></Track>
+            </div>
+          </div>
+          <div className={fieldLabel}>
+            <label htmlFor="fare-brand-select" className="flex items-baseline justify-between gap-2">Fare brand
+              {selectedCabinId && fareBrandPage.state === 'ready' && <span className="font-mono font-normal tabular-nums">{fareBrandPage.items.length} of {fareBrandPage.totalCount}</span>}
+            </label>
+            <select id="fare-brand-select" value={selectedFareBrandId} onChange={event => setFareBrandId(event.target.value)} disabled={!selectedCabinId || (fareBrandPage.state !== 'ready' && fareBrandPage.state !== 'overflow')} required className={deskInput}>
+              <option value="">{!selectedCabinId && (cabinPage.state === 'ready' || cabinPage.state === 'overflow') ? 'Select a cabin first' : 'Select a fare brand'}</option>
+              {compatibleBrands.map(brand => <option key={brand.id} value={brand.id}>{brand.code} · {brand.name}</option>)}
+            </select>
+            {staleFareBrandSelection && <span role="alert" className="text-xs font-normal text-red-700 dark:text-red-300">Previous fare brand is no longer on this page.</span>}
+            {(fareBrandCursorStack.length > 0 || fareBrandPage.hasNextPage) && <Track className="self-start">
+              {fareBrandCursorStack.length > 0 && <Pill size="sm" onClick={previousFareBrandPage} disabled={fareBrandPage.state === 'loading'}><ChevronLeft />Previous {FARE_BRAND_WORKLIST_PAGE_SIZE}</Pill>}
+              {fareBrandPage.hasNextPage && <Pill size="sm" onClick={nextFareBrandPage} disabled={fareBrandPage.state === 'loading'}>Next {FARE_BRAND_WORKLIST_PAGE_SIZE}<ChevronRight /></Pill>}
+            </Track>}
+          </div>
+          <label className={fieldLabel}>Service date<input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(`${next}T09:00`); setArrival(`${next}T10:20`) }} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <label className={fieldLabel}>Departure ({defaultTimezone})<input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <label className={fieldLabel}>Arrival ({defaultTimezone})<input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <label className={fieldLabel}>Capacity<input type="number" min={1} max={300} value={capacity} onChange={event => setCapacity(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <label className={fieldLabel}>Currency<input value={currencyCode} onChange={event => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></label>
+          <label className={fieldLabel}>Base (minor units)<input type="number" min={0} value={baseAmount} onChange={event => setBaseAmount(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <label className={fieldLabel}>Tax (minor units)<input type="number" min={0} value={taxAmount} onChange={event => setTaxAmount(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <div className="flex items-end sm:col-span-2 sm:justify-end xl:col-span-1">
+            <Track>
+              <Pill type="submit" variant="primary" disabled={working === 'provision' || !scheduleId || scheduleSelectionInvalid || !schedules.length || !fareBrandBinding}>Provision dated flight</Pill>
+            </Track>
+          </div>
+        </form>
+      </Panel>
+    </div>
+  </DeskSection>
+
+  return <div className="min-w-0 space-y-6">
+    {message && <Notice tone={messageFailed ? 'bad' : 'ok'} role={messageFailed ? 'alert' : 'status'}>{message}</Notice>}
+    {mode === 'inventory' && !inventoryActorCarrierId && <Notice tone="warn" role="alert">Carrier scope unavailable. Inventory reads and authorization blocked.</Notice>}
+    {showReadouts && <ReadoutStrip>
+      {mode !== 'inventory' && scheduleWorklist?.state === 'ready' && <Readout label="Schedules" value={<span className="font-mono">{scheduleWorklist.totalCount}</span>} />}
+      {flightWorklist?.state === 'ready' && <Readout label="Future flights" value={<span className="font-mono">{flightWorklist.totalCount}</span>} />}
+      <Readout label="Open for sale" tone="ok" value={<span className="font-mono">{openOnPage}</span>} sub="This page" />
+      <Readout label="Closed for sale" tone="idle" value={<span className="font-mono">{closedOnPage}</span>} sub="This page" />
+    </ReadoutStrip>}
+    {mode === 'inventory'
+      ? <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">{flightsSection}{bucketsSection}</div>
+      : flightsSection}
+    {provisionSection}
   </div>
 }

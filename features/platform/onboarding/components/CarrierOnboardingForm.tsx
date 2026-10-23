@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { cn } from '@/lib/utils'
+import { Code, DeskSection, Field, Notice, Panel, Pill, StatusLabel, TitleLine, Track, deskInput, statusTone } from '@/features/platform/components/desk'
 import onboardingContract from '../seed.json'
 
 type CarrierIdentity = { id?: string; name: string; legalName: string; code: string; defaultCurrencyCode: string; defaultTimezone: string }
@@ -132,29 +134,81 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
     }
   }
 
-  return <form ref={formRef} onChange={() => setDirty(true)} action={submit} className="grid max-w-4xl gap-6 rounded-2xl border bg-background p-5 md:p-6">
-    <fieldset disabled={saving || credentialBusy} className="contents"><section className="space-y-4"><div><h2 className="font-semibold">1. Carrier identity</h2><p className="text-sm text-muted-foreground">Your airline's public name, legal name, carrier code, currency, and timezone.</p></div><div className="grid gap-4 sm:grid-cols-2">
-      <label className="text-sm font-medium">Carrier name<input className="mt-1 w-full rounded-md border p-2" name="name" defaultValue={initialCarrier?.name ?? ''} required /></label>
-      <label className="text-sm font-medium">Legal name<input className="mt-1 w-full rounded-md border p-2" name="legalName" defaultValue={initialCarrier?.legalName ?? ''} required /></label>
-      <label className="text-sm font-medium">Carrier code<input className="mt-1 w-full rounded-md border p-2 uppercase" name="code" defaultValue={initialCarrier?.code ?? ''} maxLength={3} required /></label>
-      <label className="text-sm font-medium">Currency<select className="mt-1 w-full rounded-md border bg-background p-2" name="currencyCode" defaultValue={initialCarrier?.defaultCurrencyCode ?? 'USD'} required>{[...new Set([...onboardingContract.supportedCurrencies, initialCarrier?.defaultCurrencyCode ?? 'USD'])].map(currency => <option key={currency} value={currency}>{currency}</option>)}</select></label>
-    </div><label className="block text-sm font-medium">Timezone<input className="mt-1 w-full rounded-md border p-2" name="timezone" defaultValue={initialCarrier?.defaultTimezone ?? 'America/New_York'} required /></label></section>
-    <section className="space-y-4 border-t pt-5"><div><h2 className="font-semibold">2. First sellable service</h2><p className="text-sm text-muted-foreground">Creates a route, published schedule, standard fare, dated flight, inventory, and seat map with dates relative to setup.</p></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <label className="text-sm font-medium">Origin<select name="originCode" defaultValue="JFK" required className="mt-1 w-full rounded-md border bg-background p-2"><option value="JFK">JFK — New York</option><option value="BOS">BOS — Boston</option></select></label>
-      <label className="text-sm font-medium">Destination<select name="destinationCode" defaultValue="BOS" required className="mt-1 w-full rounded-md border bg-background p-2"><option value="JFK">JFK — New York</option><option value="BOS">BOS — Boston</option></select></label>
-      <label className="text-sm font-medium">Flight number<input name="flightNumber" defaultValue="101" maxLength={6} required className="mt-1 w-full rounded-md border p-2 uppercase" /></label>
-      <label className="text-sm font-medium">Service date<input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(value => `${next}T${value.slice(11)}`); setArrival(value => { const dayOffset = Math.round((Date.parse(value.slice(0, 10)) - Date.parse(serviceDate)) / 86_400_000); const day = new Date(Date.parse(next) + (Number.isFinite(dayOffset) ? dayOffset : 0) * 86_400_000).toISOString().slice(0, 10); return `${day}T${value.slice(11)}` }) }} required className="mt-1 w-full rounded-md border p-2" /></label>
-      <label className="text-sm font-medium">Departure (in the carrier timezone above)<input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className="mt-1 w-full rounded-md border p-2" /></label>
-      <label className="text-sm font-medium">Arrival (in the carrier timezone above)<input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className="mt-1 w-full rounded-md border p-2" /></label>
-      <label className="text-sm font-medium">Capacity<input type="number" name="capacity" defaultValue={30} min={1} max={300} required className="mt-1 w-full rounded-md border p-2" /></label>
-      <label className="text-sm font-medium">Base amount (minor units)<input type="number" name="baseAmount" defaultValue={12900} min={0} required className="mt-1 w-full rounded-md border p-2" /></label>
-      <label className="text-sm font-medium">Tax amount (minor units)<input type="number" name="taxAmount" defaultValue={2580} min={0} required className="mt-1 w-full rounded-md border p-2" /></label>
-    </div></section>
-    <section className="space-y-3 border-t pt-5"><h2 className="font-semibold">3. Launch readiness</h2><p className="text-sm text-muted-foreground">The command grants this administrator station capabilities at the origin and configures manual external-settlement evidence with independent approval. Complete readiness also requires a distinct second payment operator and an active import credential. No provider, compliance, certification, regulatory, or safety success is asserted. <a href="/dashboard/users/create" target="_blank" rel="noreferrer" className="font-medium text-primary underline">Create the independent operator in a new tab</a>, then explicitly enable direct sales in <a href="/dashboard/carriers" className="font-medium text-primary underline">carrier settings</a> and rerun this setup.</p><div className="rounded-lg border bg-muted/30 p-3"><p className="text-sm font-medium">Settlement-import machine credential</p><p className="mt-1 text-xs text-muted-foreground">Issue only for the external ledger importer. The secret is displayed once and is never stored in this browser.</p>{settlementCredential ? <div className="mt-3 space-y-2"><code className="block overflow-x-auto rounded bg-background p-2 text-xs">{settlementCredential.token}</code><p className="text-xs text-muted-foreground">Expires {new Date(settlementCredential.expiresAt).toLocaleString()}</p><div className="flex gap-2"><button type="button" onClick={() => navigator.clipboard.writeText(settlementCredential.token).then(() => setMessage('Settlement credential copied.')).catch(() => setMessage('Copy failed. Select and copy the token below.'))} className="rounded-md border px-3 py-2 text-sm">Copy once</button><button type="button" disabled={credentialBusy} onClick={() => void revokeSettlementCredential(settlementCredential.credentialId)} className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive">Revoke</button></div></div> : <button type="button" disabled={credentialBusy || credentialUnknown} onClick={() => void issueSettlementCredential()} className="mt-3 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{credentialBusy ? 'Issuing…' : 'Issue import credential'}</button>}{credentialSummaries.length > 0 && <ul className="mt-3 space-y-2">{credentialSummaries.map(credential => <li key={credential.id} className="flex flex-col gap-2 rounded border bg-background p-2 text-xs sm:flex-row sm:items-center sm:justify-between"><span><strong>{credential.name}</strong> · {credential.tokenPreview} · {credential.status} · expires {new Date(credential.expiresAt).toLocaleDateString()}</span>{credential.status === 'active' && <button type="button" disabled={credentialBusy} onClick={() => void revokeSettlementCredential(credential.id)} className="w-fit rounded border border-destructive/40 px-2 py-1 text-destructive">Revoke</button>}</li>)}</ul>}</div><button className="w-fit rounded-md bg-foreground px-4 py-2 text-background disabled:opacity-50" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create or verify launch setup'}</button></section>
+  const step = (n: string, label: string) => <span className="flex items-baseline gap-2"><span className="font-mono text-xs tabular-nums text-muted-foreground">{n}</span>{label}</span>
+  const failed = /could not|unknown|failed/i.test(message)
+
+  return <form ref={formRef} onChange={() => setDirty(true)} action={submit} className="min-w-0 max-w-4xl space-y-8">
+    <fieldset disabled={saving || credentialBusy} className="min-w-0 space-y-8">
+      <DeskSection title={step('01', 'Carrier identity')}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Carrier name"><input className={deskInput} name="name" defaultValue={initialCarrier?.name ?? ''} required /></Field>
+          <Field label="Legal name"><input className={deskInput} name="legalName" defaultValue={initialCarrier?.legalName ?? ''} required /></Field>
+          <Field label="Carrier code"><input className={cn(deskInput, 'font-mono uppercase tabular-nums')} name="code" defaultValue={initialCarrier?.code ?? ''} maxLength={3} required /></Field>
+          <Field label="Currency"><select className={cn(deskInput, 'font-mono')} name="currencyCode" defaultValue={initialCarrier?.defaultCurrencyCode ?? 'USD'} required>{[...new Set([...onboardingContract.supportedCurrencies, initialCarrier?.defaultCurrencyCode ?? 'USD'])].map(currency => <option key={currency} value={currency}>{currency}</option>)}</select></Field>
+          <Field label="Timezone" className="sm:col-span-2"><input className={cn(deskInput, 'font-mono')} name="timezone" defaultValue={initialCarrier?.defaultTimezone ?? 'America/New_York'} required /></Field>
+        </div>
+      </DeskSection>
+
+      <DeskSection title={step('02', 'First sellable service')}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="Origin"><select name="originCode" defaultValue="JFK" required className={cn(deskInput, 'font-mono')}><option value="JFK">JFK · New York</option><option value="BOS">BOS · Boston</option></select></Field>
+          <Field label="Destination"><select name="destinationCode" defaultValue="BOS" required className={cn(deskInput, 'font-mono')}><option value="JFK">JFK · New York</option><option value="BOS">BOS · Boston</option></select></Field>
+          <Field label="Flight number"><input name="flightNumber" defaultValue="101" maxLength={6} required className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></Field>
+          <Field label="Service date"><input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(value => `${next}T${value.slice(11)}`); setArrival(value => { const dayOffset = Math.round((Date.parse(value.slice(0, 10)) - Date.parse(serviceDate)) / 86_400_000); const day = new Date(Date.parse(next) + (Number.isFinite(dayOffset) ? dayOffset : 0) * 86_400_000).toISOString().slice(0, 10); return `${day}T${value.slice(11)}` }) }} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Departure (carrier time)"><input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Arrival (carrier time)"><input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Capacity"><input type="number" name="capacity" defaultValue={30} min={1} max={300} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Base amount (minor units)"><input type="number" name="baseAmount" defaultValue={12900} min={0} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Tax amount (minor units)"><input type="number" name="taxAmount" defaultValue={2580} min={0} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+        </div>
+      </DeskSection>
+
+      <DeskSection title={step('03', 'Launch readiness')}>
+        <div className="space-y-4">
+          <Track className="flex-wrap rounded-2xl">
+            <Pill asChild><a href="/dashboard/users/create" target="_blank" rel="noreferrer">Create payment operator</a></Pill>
+            <Pill asChild><a href="/dashboard/carriers">Carrier settings</a></Pill>
+          </Track>
+          <Panel className="overflow-hidden">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+              <TitleLine as="p" tone={settlementCredential ? 'ok' : credentialUnknown ? 'warn' : 'idle'} className="text-sm font-medium text-foreground">Settlement import credential</TitleLine>
+              {!settlementCredential && <Track><Pill size="sm" disabled={credentialBusy || credentialUnknown} onClick={() => void issueSettlementCredential()}>{credentialBusy ? 'Issuing…' : 'Issue credential'}</Pill></Track>}
+            </div>
+            {settlementCredential && <div className="space-y-3 border-b px-4 py-3">
+              <code className="block overflow-x-auto rounded-lg bg-muted px-3 py-2 font-mono text-xs text-foreground">{settlementCredential.token}</code>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">Expires {new Date(settlementCredential.expiresAt).toLocaleString()}</span>
+                <Track>
+                  <Pill size="sm" onClick={() => navigator.clipboard.writeText(settlementCredential.token).then(() => setMessage('Settlement credential copied.')).catch(() => setMessage('Copy failed. Select and copy the token below.'))}>Copy once</Pill>
+                  <Pill size="sm" variant="danger" disabled={credentialBusy} onClick={() => void revokeSettlementCredential(settlementCredential.credentialId)}>Revoke</Pill>
+                </Track>
+              </div>
+            </div>}
+            {credentialSummaries.length > 0 && <ul className="divide-y">{credentialSummaries.map(credential => <li key={credential.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-sm">
+              <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="font-medium text-foreground">{credential.name}</span>
+                <Code>{credential.tokenPreview}</Code>
+                <StatusLabel status={credential.status} />
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">expires {new Date(credential.expiresAt).toLocaleDateString()}</span>
+              </span>
+              {credential.status === 'active' && <Track><Pill size="sm" variant="danger" disabled={credentialBusy} onClick={() => void revokeSettlementCredential(credential.id)}>Revoke</Pill></Track>}
+            </li>)}</ul>}
+          </Panel>
+        </div>
+      </DeskSection>
+
+      <Track><Pill type="submit" variant="primary" disabled={saving}>{saving ? 'Saving…' : 'Create or verify launch setup'}</Pill></Track>
     </fieldset>
-    {credentialError && <p role="alert" className="text-sm text-destructive">{credentialError}</p>}
-    <button type="button" disabled={credentialBusy} onClick={() => void loadCredentialSummaries().catch(() => setCredentialError('Credentials could not be loaded.'))} className="w-fit rounded border px-3 py-2 text-sm">Reload credential list</button>
-    {steps.length > 0 && <ol className="space-y-2">{steps.map(step => <li key={step.key} className="rounded-md border p-3 text-sm"><span className="font-medium">{onboardingContract.steps.find(entry => entry.key === step.key)?.label ?? step.key.replaceAll('_', ' ')}</span> · {step.status}{step.requirements.map(requirement => <p key={requirement} className="text-muted-foreground">{requirement}</p>)}</li>)}</ol>}
-    <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p>
+
+    {credentialError && <Notice tone="bad">{credentialError}</Notice>}
+    <Track><Pill disabled={credentialBusy} onClick={() => void loadCredentialSummaries().catch(() => setCredentialError('Credentials could not be loaded.'))}>Reload credential list</Pill></Track>
+    {steps.length > 0 && <Panel className="overflow-hidden"><ol className="divide-y">{steps.map(entry => <li key={entry.key} className="px-4 py-3 text-sm">
+      <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+        <TitleLine as="span" tone={statusTone(entry.status)} status={entry.status} className="font-medium text-foreground">{onboardingContract.steps.find(item => item.key === entry.key)?.label ?? entry.key.replaceAll('_', ' ')}</TitleLine>
+        <StatusLabel status={entry.status} />
+      </div>
+      {entry.requirements.map(requirement => <p key={requirement} className="mt-1 pl-4 text-muted-foreground">{requirement}</p>)}
+    </li>)}</ol></Panel>}
+    <div aria-live="polite">{message && <Notice tone={failed ? 'bad' : 'idle'} role="status">{message}</Notice>}</div>
   </form>
 }
