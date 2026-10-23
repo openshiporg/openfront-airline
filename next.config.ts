@@ -15,12 +15,17 @@ const nextConfig: NextConfig = {
   // },
   // Conventional operator module paths (/dashboard/flights, /dashboard/passengers, ...) and the retired pre-platform
   // desk URLs open the safeguarded workboards; item and create pages under those paths are untouched.
+  // robots.txt and sitemap.xml are served from /api, which the shared proxy never redirects to first-run setup.
   async redirects() {
-    return Object.entries({ ...operatorRouteAliases, ...retiredDeskRoutes }).map(([alias, destination]) => ({
-      source: `/dashboard/${alias}`,
-      destination,
-      permanent: false,
-    }))
+    return [
+      ...Object.entries({ ...operatorRouteAliases, ...retiredDeskRoutes }).map(([alias, destination]) => ({
+        source: `/dashboard/${alias}`,
+        destination,
+        permanent: false,
+      })),
+      { source: '/robots.txt', destination: '/api/robots.txt', permanent: false },
+      { source: '/sitemap.xml', destination: '/api/sitemap.xml', permanent: false },
+    ]
   },
   images: {
     remotePatterns: [

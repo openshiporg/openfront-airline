@@ -13,7 +13,8 @@ import {
   userReadFilter,
   userUpdateFilter,
 } from '../access'
-import { validateInitialOperatorInput } from '../lib/initial-operator-setup'
+import { ensureInitialCarrierAndRole, validateInitialOperatorInput } from '../lib/initial-operator-setup'
+import { permissionsList } from './fields'
 import { trackingFields } from './trackingFields'
 
 const canCreateUser = (args: any) => args.session
@@ -134,8 +135,21 @@ export const User = list({
     ...trackingFields,
   },
   hooks: {
+    // First-run setup (createInitialUser, no session, empty user table) attaches the operator to the carrier and
+    // full-permission role from ensureInitialCarrierAndRole. Invalid details write nothing: validate rejects them.
+    async resolveInput({ operation, resolvedData, inputData, context }: any) {
+      if (operation !== 'create' || context.session) return resolvedData
+      if (await context.prisma.user.count() !== 0) return resolvedData
+      try {
+        validateInitialOperatorInput({ name: String(inputData.name ?? ''), email: String(inputData.email ?? ''), password: String(inputData.password ?? '') })
+      } catch {
+        return resolvedData
+      }
+      const { carrierId, roleId } = await ensureInitialCarrierAndRole(context.prisma, permissionsList)
+      return { ...resolvedData, carrier: { connect: { id: carrierId } }, role: { connect: { id: roleId } } }
+    },
     // createInitialUser runs without a session while no user exists. Hold that first operator to the launch policy
-    // (16+ character password) the bootstrap CLI enforces, now that the shared sign-up action no longer checks it.
+    // (name, email and password rules).
     async validate({ operation, inputData, context, addValidationError }: any) {
       if (operation !== 'create' || context.session) return
       if (await context.prisma.user.count() !== 0) return

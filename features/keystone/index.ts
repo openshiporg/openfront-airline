@@ -10,6 +10,7 @@ import { resolveSessionSecret } from "./lib/session";
 import { hasFreshPermission } from "./access";
 import { permissionsList } from "./models/fields";
 import { initialOperatorSetupEnabled } from './lib/initial-operator-setup';
+import { anonymousIntrospectionGuard } from './lib/anonymous-introspection';
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -40,25 +41,7 @@ const { withAuth } = createAuth({
   // Keystone's normal empty-database init flow, as in E-commerce: it is permitted only while no User exists.
   initFirstItem: initialOperatorSetupEnabled() ? {
     fields: ["name", "email", "password"],
-    itemData: {
-      carrier: {
-        create: {
-          name: process.env.INITIAL_CARRIER_NAME || "Avante Air",
-          legalName: process.env.INITIAL_CARRIER_LEGAL_NAME || "Avante Air LLC",
-          code: process.env.INITIAL_CARRIER_CODE || "AV",
-          defaultCurrencyCode: process.env.INITIAL_CURRENCY_CODE || "USD",
-          defaultTimezone: process.env.INITIAL_TIMEZONE || "America/New_York",
-          status: 'active',
-          directSalesEnabled: false,
-        },
-      },
-      role: {
-        create: {
-          name: "Initial Carrier Administrator",
-          ...Object.fromEntries(permissionsList.map(permission => [permission, true])),
-        },
-      },
-    },
+    // The carrier and role are attached by the User resolveInput hook, in one transaction, only for valid details.
   } : undefined,
   passwordResetLink: {
     async sendToken(args) {
@@ -105,6 +88,7 @@ export default withAuth(
     session: statelessSessions(sessionConfig),
     graphql: {
       extendGraphqlSchema,
+      apolloConfig: { plugins: [anonymousIntrospectionGuard] },
     },
   })
 );
