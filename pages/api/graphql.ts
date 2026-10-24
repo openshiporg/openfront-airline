@@ -9,6 +9,7 @@ import { maskGraphqlError } from '../../features/keystone/lib/graphql-error-mask
 import { graphqlDepthLimitRule } from '../../features/keystone/lib/graphql-security'
 import { durableRequestFingerprint } from '../../features/keystone/lib/request-identity'
 import { consumeDurableRateLimit } from '../../features/keystone/lib/rate-limit'
+import { requestsIntrospection } from '../../features/keystone/lib/anonymous-introspection'
 
 export const config = {
   api: {
@@ -34,6 +35,16 @@ const authRateLimitPlugin: Plugin = {
   },
 }
 
+// Schema introspection is for signed-in operators (the AI assistant's MCP route forwards their session). Anonymous
+// callers keep every public storefront query; they just can't map the whole schema.
+const anonymousIntrospectionPlugin: Plugin = {
+  onExecute({ args }) {
+    if (!(args.contextValue as any)?.session && requestsIntrospection(args.document)) {
+      throw new GraphQLError('Introspection requires a signed-in operator.', { extensions: { code: 'FORBIDDEN' } })
+    }
+  },
+}
+
 const yoga = createYoga({
   graphqlEndpoint: '/api/graphql',
   schema: keystoneContext.graphql.schema,
@@ -44,7 +55,7 @@ const yoga = createYoga({
   // hidden behind a logged correlation ID.
   maskedErrors: { maskError: maskGraphqlError },
   multipart: false,
-  plugins: [depthLimitPlugin, authRateLimitPlugin],
+  plugins: [depthLimitPlugin, anonymousIntrospectionPlugin, authRateLimitPlugin],
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

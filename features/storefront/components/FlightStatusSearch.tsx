@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react'
 
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { customerSafeMessage } from '@/features/storefront/lib/request-errors'
+import { formatAirportTime } from '@/features/airline/lib/time'
 
 type FlightStatus = {
   id: string
@@ -45,10 +46,7 @@ function airportTime(flight: FlightStatus, leg: 'Departure' | 'Arrival', fallbac
   const estimated = leg === 'Departure' ? flight.estimatedDepartureAt : flight.estimatedArrivalAt
   const scheduled = leg === 'Departure' ? flight.scheduledDepartureAt : flight.scheduledArrivalAt
   const zone = (leg === 'Departure' ? flight.originTimezone : flight.destinationTimezone) || fallbackZone
-  const format = (value: string) => {
-    try { return new Intl.DateTimeFormat('en-US', { timeZone: zone, dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }).format(new Date(value)) }
-    catch { return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }).format(new Date(value)) }
-  }
+  const format = (value: string) => formatAirportTime(value, zone) ?? value
   if (actual) return `${format(actual)} (actual)`
   if (estimated) return `${format(estimated)} (estimated; scheduled ${format(scheduled)})`
   return `${format(scheduled)} (scheduled)`

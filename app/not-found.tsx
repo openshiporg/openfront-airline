@@ -1,15 +1,16 @@
 import Link from 'next/link'
 
 import { StorefrontFrame } from '@/features/storefront/components/StorefrontChrome'
-import { getStorefrontCarrierIdentity } from '@/features/storefront/lib/carrier'
-import { storefrontPageMetadata } from '@/features/storefront/lib/metadata'
+import { carrierMetadata } from '@/features/storefront/lib/branding'
+import { getStorefrontCarrierIdentityDirect } from '@/features/storefront/lib/carrier-direct'
 
 export async function generateMetadata() {
-  return storefrontPageMetadata('Page not found')
+  const carrier = await getStorefrontCarrierIdentityDirect()
+  return carrier ? { ...carrierMetadata(carrier), title: `Page not found · ${carrier.name}` } : { title: 'Page not found' }
 }
 
 export default async function NotFound() {
-  const carrier = await getStorefrontCarrierIdentity().catch(() => null)
+  const carrier = await getStorefrontCarrierIdentityDirect()
   return <StorefrontFrame carrier={carrier}>
     <section className="af-board">
       <div className="af-container py-24 sm:py-32">

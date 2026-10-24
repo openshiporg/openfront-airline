@@ -92,6 +92,16 @@ export type FlightOption = {
   unavailableReason?: string
 }
 
+// Fare comparison for shoppers: the included checked-bag allowance, or none when the policy is unset or invalid.
+function publicBaggageAllowance(value: unknown) {
+  try {
+    const policy = normalizeIncludedBaggageSnapshot(value)
+    return { baggagePieces: policy.pieces, baggageWeightGrams: policy.maxWeightGrams }
+  } catch {
+    return { baggagePieces: 0, baggageWeightGrams: 0 }
+  }
+}
+
 export async function searchAirlineFlights(
   _root: unknown,
   args: { originCode: string; destinationCode: string; serviceDate: string; passengerCount?: number | null },
@@ -122,7 +132,7 @@ export async function searchAirlineFlights(
       destination: { select: { iataCode: true, city: true } },
       inventoryBuckets: {
         where: { status: 'open', fareBrand: { status: 'active' } },
-        include: { holds: { where: { status: 'active', expiresAt: { gt: new Date() } }, select: { quantity: true } }, fareBrand: { select: { code: true, name: true, status: true } } },
+        include: { holds: { where: { status: 'active', expiresAt: { gt: new Date() } }, select: { quantity: true } }, fareBrand: { select: { code: true, name: true, status: true, description: true, includedBaggage: true } }, cabin: { select: { name: true, cabinClass: true } } },
         /* Active, unexpired holds are authoritative for shopping availability. */
         orderBy: { bookingClassCode: 'asc' },
         take: 3,
@@ -143,7 +153,10 @@ export async function searchAirlineFlights(
       fareBrand: {
         code: bucket.fareBrand?.code ?? bucket.bookingClassCode,
         name: bucket.fareBrand?.name ?? bucket.bookingClassCode,
+        description: bucket.fareBrand?.description || null,
+        ...publicBaggageAllowance(bucket.fareBrand?.includedBaggage),
       },
+      cabinName: bucket.cabin?.name || null,
       currencyCode: bucket.currencyCode,
       baseAmount: bucket.baseAmount,
       taxAmount: bucket.taxAmount,

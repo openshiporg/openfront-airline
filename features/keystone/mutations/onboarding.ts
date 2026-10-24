@@ -9,15 +9,14 @@ import onboardingContract from '../../platform/onboarding/seed.json'
 import { createDatedFlightRecords, serviceDateInTimezone, zonedLocalDateTime } from './airlineProvisioning'
 import { normalizeSearchDate } from './airlineWorkflows'
 import { DomainError } from '../lib/domain-error'
+import { AIRPORT_CATALOG } from '../../airline/lib/airport-catalog'
+import { hasConfiguredStorefrontBrand } from '../../airline/lib/branding'
 import { checkedMinorTotal } from '../lib/money'
 
 const [PROFILE_STEP, CATALOG_STEP, DATED_SERVICE_STEP, STATION_STEP, SETTLEMENT_STEP, REVIEW_STEP] = onboardingContract.steps.map(step => step.key)
 
 
-const initialAirportCatalog: Record<string, { name: string; city: string; countryCode: string; timezone: string }> = {
-  JFK: { name: 'John F. Kennedy International Airport', city: 'New York', countryCode: 'US', timezone: 'America/New_York' },
-  BOS: { name: 'Boston Logan International Airport', city: 'Boston', countryCode: 'US', timezone: 'America/New_York' },
-}
+const initialAirportCatalog = AIRPORT_CATALOG
 
 function required(value: string, label: string, pattern: RegExp) {
   const normalized = value.trim()
@@ -110,11 +109,12 @@ export async function completeCarrierOnboarding(
     const loadAirport = async (iataCode: string) => {
       const existing = await tx.airport.findUnique({ where: { iataCode } })
       const reference = initialAirportCatalog[iataCode]
+      // Any active airport already in the network (from this catalog or registered on the Network page) is used as is.
       if (existing) {
-        if (!existing.isActive || !reference || existing.name !== reference.name || existing.city !== reference.city || existing.timezone !== reference.timezone || existing.countryCode !== reference.countryCode) throw new DomainError(`Retained airport ${iataCode} differs from the authoritative launch catalog.`)
+        if (!existing.isActive) throw new DomainError(`Airport ${iataCode} is inactive.`)
         return existing
       }
-      if (!reference) throw new DomainError(`Airport ${iataCode} must be created as an authoritative global reference before onboarding.`)
+      if (!reference) throw new DomainError(`Add airport ${iataCode} on the Network page first.`)
       return tx.airport.create({ data: { iataCode, ...reference } })
     }
     const [origin, destination] = await Promise.all([loadAirport(data.originCode), loadAirport(data.destinationCode)])
@@ -264,13 +264,15 @@ export async function completeCarrierOnboarding(
       update: { status, requirements, inputDigest: digest, lastAttemptedAt: now, attemptCount: { increment: 1 }, ...(status === 'completed' ? { completedAt: now } : { completedAt: null }) },
       create: { carrierId: actor.carrierId, userId: actor.itemId, progressKey: `${actor.carrierId}:${actor.itemId}:${step}`, step, status, requirements, inputDigest: digest, attemptCount: 1, lastAttemptedAt: now, ...(status === 'completed' ? { completedAt: now } : {}) },
     })
+    // Selling also needs the public storefront branding; the review step points there until it is set.
+    const storefrontReady = hasConfiguredStorefrontBrand(carrierRecord)
     const steps = [
-      await upsertStep(PROFILE_STEP, profileReady ? 'completed' : 'needs_attention', profileReady ? [] : ['Reactivate direct sales through an explicit carrier-management decision; onboarding replay will not override retained suspension.']),
+      await upsertStep(PROFILE_STEP, profileReady ? 'completed' : 'needs_attention', profileReady ? [] : ['Turn on direct sales for your carrier in Carrier settings.']),
       await upsertStep(CATALOG_STEP, 'completed'),
-      await upsertStep(DATED_SERVICE_STEP, datedReady ? 'completed' : 'needs_attention', datedReady ? [] : ['Restore an open future flight and inventory authorization without overwriting retained counts.']),
-      await upsertStep(STATION_STEP, stationReady ? 'completed' : 'needs_attention', stationReady ? [] : ['Restore an active current origin-station assignment with check-in, bag, and boarding capabilities.']),
-      await upsertStep(SETTLEMENT_STEP, settlementReady ? 'completed' : 'needs_attention', settlementReady ? ['External funds remain unconfirmed until immutable settlement evidence is imported and independently approved.'] : ['Restore the evidence-only manual provider and settlement-import connection and authorize at least two payment operators and issue an active settlement-import credential with settlements:write for independent approval/import; no provider success is assumed.']),
-      await upsertStep(REVIEW_STEP, completed ? 'completed' : 'needs_attention', completed ? ['This setup does not certify provider, regulatory, compliance, or safety readiness.'] : ['Resolve retained dependency state before bounded launch review.']),
+      await upsertStep(DATED_SERVICE_STEP, datedReady ? 'completed' : 'needs_attention', datedReady ? [] : ['Open a future flight for sale on Schedules & flights.']),
+      await upsertStep(STATION_STEP, stationReady ? 'completed' : 'needs_attention', stationReady ? [] : ['Give an operator check-in, bag and boarding access at the origin airport on Stations & access.']),
+      await upsertStep(SETTLEMENT_STEP, settlementReady ? 'completed' : 'needs_attention', settlementReady ? ['One payment operator records money received; a second approves it.'] : ['Add a second user with payment permission (one records payments, another approves them), keep the manual settlement provider active on Payment providers, and keep an active settlement credential.']),
+      await upsertStep(REVIEW_STEP, completed ? 'completed' : 'needs_attention', completed ? (storefrontReady ? [] : ['Set the storefront title, description and brand colour in Storefront settings to start selling.']) : ['Finish the steps above, then run setup again.']),
     ]
     await tx.user.update({ where: { id: actor.itemId }, data: { onboardingStatus: completed ? 'completed' : 'in_progress' } })
     // The launch is per carrier: once it is complete, no other onboarding manager should still see the setup card.

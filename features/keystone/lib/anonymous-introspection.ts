@@ -1,6 +1,7 @@
-import { GraphQLError, visit, type DocumentNode } from 'graphql'
-import type { ApolloServerPlugin } from '@apollo/server'
+import { visit, type DocumentNode } from 'graphql'
 
+// True when an operation asks for __schema or __type (not __typename). pages/api/graphql.ts refuses these for
+// anonymous callers.
 export function requestsIntrospection(document: DocumentNode) {
   let found = false
   visit(document, {
@@ -9,18 +10,4 @@ export function requestsIntrospection(document: DocumentNode) {
     },
   })
   return found
-}
-
-// Schema introspection is for signed-in operators (the AI assistant's MCP route forwards their session).
-// Anonymous callers can still use every public storefront query; they just can't map the whole schema.
-export const anonymousIntrospectionGuard: ApolloServerPlugin<any> = {
-  async requestDidStart() {
-    return {
-      async didResolveOperation({ contextValue, document }) {
-        if (!contextValue?.session && requestsIntrospection(document)) {
-          throw new GraphQLError('Introspection requires a signed-in operator.', { extensions: { code: 'FORBIDDEN' } })
-        }
-      },
-    }
-  },
 }

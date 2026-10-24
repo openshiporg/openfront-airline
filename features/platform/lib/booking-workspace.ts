@@ -43,6 +43,13 @@ export async function readBookingWorkspace(variables: Record<string,unknown>) {
         data.bookings = data.bookings.map(booking => ({ ...booking, ...byId.get(booking.id) }))
       }
     } catch { /* A denied balance leaves the readable booking intact; refund remains unavailable. */ }
+    // Approved settlement evidence, so the desk can mark a booking paid with the reference the checker approved.
+    try {
+      const approved = await keystoneClient<{ manualPaymentEvidences: Array<{ id: string; purpose: string; externalReference: string; amount: number; booking: { id: string } | null }> }>(`query BookingApprovedEvidence($ids:[ID!]!){manualPaymentEvidences(where:{booking:{id:{in:$ids}},status:{equals:approved}},take:100,orderBy:[{approvedAt:desc}]){id purpose externalReference amount booking{id}}}`, { ids: data.bookings.map(booking => booking.id) })
+      if (approved.success) {
+        data.bookings = data.bookings.map(booking => ({ ...booking, approvedEvidence: approved.data.manualPaymentEvidences.filter(evidence => evidence.booking?.id === booking.id).map(({ booking: _booking, ...evidence }) => evidence) }))
+      }
+    } catch { /* Without payment read access the desk asks for the approved reference instead. */ }
   }
   return { success: true as const, data, sectionErrors }
 }

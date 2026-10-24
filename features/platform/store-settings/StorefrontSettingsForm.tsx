@@ -13,6 +13,9 @@ type Settings = {
   storefrontBrandColor?: string | null
   storefrontHomepageTitle?: string | null
   storefrontHomepageDescription?: string | null
+  storefrontContactEmail?: string | null
+  storefrontContactPhone?: string | null
+  storefrontServiceHours?: string | null
 }
 
 export function StorefrontSettingsForm({ initialSettings }: { initialSettings: Settings }) {
@@ -22,6 +25,9 @@ export function StorefrontSettingsForm({ initialSettings }: { initialSettings: S
     storefrontBrandColor: normalizeStorefrontBrandColor(initialSettings.storefrontBrandColor) ?? '',
     storefrontHomepageTitle: initialSettings.storefrontHomepageTitle ?? '',
     storefrontHomepageDescription: initialSettings.storefrontHomepageDescription ?? '',
+    storefrontContactEmail: initialSettings.storefrontContactEmail ?? '',
+    storefrontContactPhone: initialSettings.storefrontContactPhone ?? '',
+    storefrontServiceHours: initialSettings.storefrontServiceHours ?? '',
   })
   const [message, setMessage] = useState('')
   const [baseline, setBaseline] = useState(form)
@@ -45,7 +51,7 @@ export function StorefrontSettingsForm({ initialSettings }: { initialSettings: S
       try {
         const saved = await updateStorefrontSettings(submitted)
         if (!saved?.id) throw new Error('Missing saved settings')
-        const accepted = { name: saved.name, legalName: saved.legalName, storefrontBrandColor: normalizeStorefrontBrandColor(saved.storefrontBrandColor) ?? '', storefrontHomepageTitle: saved.storefrontHomepageTitle, storefrontHomepageDescription: saved.storefrontHomepageDescription }
+        const accepted = { name: saved.name, legalName: saved.legalName, storefrontBrandColor: normalizeStorefrontBrandColor(saved.storefrontBrandColor) ?? '', storefrontHomepageTitle: saved.storefrontHomepageTitle, storefrontHomepageDescription: saved.storefrontHomepageDescription, storefrontContactEmail: saved.storefrontContactEmail ?? '', storefrontContactPhone: saved.storefrontContactPhone ?? '', storefrontServiceHours: saved.storefrontServiceHours ?? '' }
         setBaseline(accepted)
         setForm(current => JSON.stringify(current) === JSON.stringify(submitted) ? accepted : current)
         setMessage('Submitted settings saved.')
@@ -73,6 +79,14 @@ export function StorefrontSettingsForm({ initialSettings }: { initialSettings: S
         <div className="space-y-4">
           <Field label="Homepage title"><input id="storefront-title" className={deskInput} maxLength={120} placeholder="Find your next flight" required value={form.storefrontHomepageTitle} onChange={event => setForm(current => ({ ...current, storefrontHomepageTitle: event.target.value }))} /></Field>
           <Field label="Homepage description"><textarea id="storefront-description" className={cn(deskInput, 'h-auto min-h-24 py-2')} maxLength={320} required value={form.storefrontHomepageDescription} onChange={event => setForm(current => ({ ...current, storefrontHomepageDescription: event.target.value }))} /></Field>
+        </div>
+      </DeskSection>
+
+      <DeskSection title="Customer service">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email"><input type="email" className={deskInput} maxLength={254} value={form.storefrontContactEmail} onChange={event => setForm(current => ({ ...current, storefrontContactEmail: event.target.value }))} /></Field>
+          <Field label="Phone"><input type="tel" className={cn(deskInput, 'font-mono')} maxLength={40} value={form.storefrontContactPhone} onChange={event => setForm(current => ({ ...current, storefrontContactPhone: event.target.value }))} /></Field>
+          <Field label="Hours" className="sm:col-span-2"><input className={deskInput} maxLength={200} placeholder="Daily 06:00–22:00 ET" value={form.storefrontServiceHours} onChange={event => setForm(current => ({ ...current, storefrontServiceHours: event.target.value }))} /></Field>
         </div>
       </DeskSection>
 

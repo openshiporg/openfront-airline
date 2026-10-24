@@ -26,9 +26,13 @@ export default async function ContactPage() {
         <ul className="mt-3 divide-y divide-[var(--af-line)]">{online.map(item => <li key={item.href}><Link href={item.href} className="flex min-h-12 items-center justify-between gap-3 font-semibold hover:text-[var(--af-accent)]">{item.label}<span className="af-mono text-xs text-[var(--af-ink-3)]">{item.href}</span></Link></li>)}</ul>
       </section>
       <section className="af-card p-5 sm:p-6">
-        <h2 className="af-eyebrow">Everything else</h2>
-        <p className="af-display mt-3 text-3xl uppercase">Airport service desk</p>
-        <p className="af-mono mt-3 text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]">{carrier?.legalName ?? ''}</p>
+        <h2 className="af-eyebrow">Customer service</h2>
+        {carrier?.storefrontContactPhone || carrier?.storefrontContactEmail ? <dl className="mt-3 space-y-3">
+          {carrier.storefrontContactPhone && <div><dt className="af-field-label">Phone</dt><dd><a href={`tel:${carrier.storefrontContactPhone.replace(/[^+0-9]/g, '')}`} className="af-mono text-xl font-semibold hover:text-[var(--af-accent)]">{carrier.storefrontContactPhone}</a></dd></div>}
+          {carrier.storefrontContactEmail && <div><dt className="af-field-label">Email</dt><dd><a href={`mailto:${carrier.storefrontContactEmail}`} className="break-all font-semibold hover:text-[var(--af-accent)]">{carrier.storefrontContactEmail}</a></dd></div>}
+          {carrier.storefrontServiceHours && <div><dt className="af-field-label">Hours</dt><dd className="text-sm">{carrier.storefrontServiceHours}</dd></div>}
+        </dl> : <p className="af-display mt-3 text-3xl uppercase">Airport service desk</p>}
+        <p className="af-mono mt-4 text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]">{carrier?.legalName ?? ''}</p>
         <p className="af-title-line mt-6 text-sm font-medium"><span className="af-dot" data-tone="warn" />We never ask for your access code.</p>
       </section>
     </div>

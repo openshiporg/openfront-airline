@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { NO_RECORD_ID } from '@/features/platform/lib/no-cursor'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, RotateCcw, Search, X } from 'lucide-react'
@@ -143,7 +144,7 @@ async function readInventoryBucketPage(flightId: string, carrierId: string, curs
           bucketWhere,
           bucketCursor: cursor ? { id: cursor } : null,
           bucketSkip: cursor ? 1 : 0,
-          bucketCursorId: cursor ?? '',
+          bucketCursorId: cursor ?? NO_RECORD_ID,
         },
       }),
     })
@@ -187,7 +188,7 @@ async function readCabinPage(search: string, cursor: string | null): Promise<Cab
           cabinWhere: cabinWorklistWhere(search),
           cabinCursor: cursor ? { id: cursor } : null,
           cabinSkip: cursor ? 1 : 0,
-          cabinCursorId: cursor ?? '',
+          cabinCursorId: cursor ?? NO_RECORD_ID,
         },
       }),
     })
@@ -231,7 +232,7 @@ async function readFareBrandPage(cabinId: string, search: string, cursor: string
           fareBrandWhere,
           fareBrandCursor: cursor ? { id: cursor } : null,
           fareBrandSkip: cursor ? 1 : 0,
-          fareBrandCursorId: cursor ?? '',
+          fareBrandCursorId: cursor ?? NO_RECORD_ID,
         },
       }),
     })

@@ -17,7 +17,10 @@ export const BOOKING_WORKLIST_QUERY = `query CarrierBookingWorklist(
     skip: $bookingSkip,
     orderBy: [{ createdAt: desc }, { id: asc }]
   ) {
-    id recordLocator status paymentStatus ticketingStatus totalAmount currencyCode metadata
+    id recordLocator status paymentStatus ticketingStatus totalAmount currencyCode metadata contactEmail contactPhone createdAt
+    passengersCount
+    passengers(take: 9, orderBy: [{ id: asc }]) { id passengerType isPrimaryContact passenger { givenName familyName } }
+    segments(take: 4, orderBy: [{ sequence: asc }, { id: asc }]) { id sequence status marketingFlightNumber originCode destinationCode scheduledDepartureAt }
   }
   bookingsCount(where: $where)
   refundCleanupBookings: bookings(where: $cleanupWhere, take: 101, orderBy: [{ updatedAt: desc }, { id: asc }]) {

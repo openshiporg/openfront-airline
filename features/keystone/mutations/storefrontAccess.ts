@@ -4,6 +4,7 @@ import type { Context } from '.keystone/types'
 import { DomainError } from '../lib/domain-error'
 import { emailConfigured, sendBookingConfirmationEmail } from '../lib/mail'
 import { formatMinorUnits } from '../lib/money'
+import { formatAirportTime } from '../../airline/lib/time'
 import { consumeDurableRateLimit } from '../lib/rate-limit'
 import { durableRequestFingerprint } from '../lib/request-identity'
 import { hashStorefrontToken } from '../lib/storefront-session'
@@ -38,8 +39,7 @@ export async function emailBookingAccess(context: Context, bookingId: string, ac
       totalLabel: formatMinorUnits(booking.totalAmount, booking.currencyCode),
       travelers: booking.passengers.map((entry: any) => `${entry.passenger.givenName} ${entry.passenger.familyName}`),
       segments: booking.segments.filter((segment: any) => segment.flightInstance).map((segment: any) => {
-        let departureLabel = new Date(segment.flightInstance.scheduledDepartureAt).toISOString()
-        try { departureLabel = new Intl.DateTimeFormat('en-US', { timeZone: segment.flightInstance.origin.timezone || 'UTC', dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }).format(new Date(segment.flightInstance.scheduledDepartureAt)) } catch { /* keep ISO */ }
+        const departureLabel = formatAirportTime(segment.flightInstance.scheduledDepartureAt, segment.flightInstance.origin.timezone) ?? ''
         return { flightNumber: segment.flightInstance.flightNumber, originCode: segment.flightInstance.origin.iataCode, destinationCode: segment.flightInstance.destination.iataCode, departureLabel }
       }),
     })

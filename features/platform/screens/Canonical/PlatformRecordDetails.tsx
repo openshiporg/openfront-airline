@@ -6,6 +6,7 @@ import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { Shell } from './PlatformDeskPages'
 import type { BookingReceipt } from '@/features/airline/lib/booking-receipt'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
+import { formatAirportTime } from '@/features/airline/lib/time'
 import { Code, DeskSection, Facts, Notice, Panel, Pill, Route, RowLink, StatusLabel, TitleLine, Track, Well, statusTone } from '@/features/platform/components/desk'
 
 type Desk = 'schedules' | 'inventory' | 'offers' | 'bookings' | 'passengers' | 'departures' | 'disruptions' | 'payments' | 'manifests' | 'settings'
@@ -16,7 +17,7 @@ const detail: Record<Desk, DetailDefinition> = {
   schedules: { title: 'Flight', backLabel: 'Schedules & flights', query: `query PlatformScheduleDetail($id:ID!){flightInstance(where:{id:$id}){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt departureGate departureTerminal origin{iataCode city} destination{iataCode city} inventoryBuckets(take:51,orderBy:[{id:asc}]){id bookingClassCode status capacity authorized sold held blocked} inventoryBucketsCount}}` },
   inventory: { title: 'Inventory bucket', backLabel: 'Inventory & fares', query: `query PlatformInventoryDetail($id:ID!){inventoryBucket(where:{id:$id}){id bucketKey status bookingClassCode capacity authorized sold held blocked baseAmount taxAmount currencyCode cabin{code name} fareBrand{code name} flightInstance{id flightNumber serviceDate origin{iataCode} destination{iataCode}}}}` },
   offers: { title: 'Offer', backLabel: 'Offers', query: `query PlatformOfferDetail($id:ID!){offer(where:{id:$id}){id offerNumber status source expiresAt baseAmount taxAmount feeAmount discountAmount totalAmount currencyCode passengersCount itemsCount booking{id recordLocator}}}` },
-  bookings: { title: 'Booking', backLabel: 'Bookings', query: `query PlatformBookingDetail($id:ID!){booking(where:{id:$id}){id recordLocator orderNumber status paymentStatus ticketingStatus source totalAmount currencyCode passengersCount segmentsCount ticketsCount refundsCount checkInsCount bagsCount createdAt}}`, actionHref: data => data.recordLocator ? `/dashboard/platform/bookings?locator=${encodeURIComponent(data.recordLocator)}` : null, actionLabel: 'Booking commands' },
+  bookings: { title: 'Booking', backLabel: 'Bookings', query: `query PlatformBookingDetail($id:ID!){booking(where:{id:$id}){id recordLocator orderNumber status paymentStatus ticketingStatus source totalAmount currencyCode passengersCount segmentsCount ticketsCount refundsCount checkInsCount bagsCount createdAt contactEmail contactPhone metadata passengers(take:9,orderBy:[{id:asc}]){id passengerType isPrimaryContact passenger{id givenName familyName}} segments(take:10,orderBy:[{sequence:asc},{id:asc}]){id sequence status marketingFlightNumber originCode destinationCode scheduledDepartureAt cabinCode fareBrandCode flightInstance{id origin{timezone}}}}}`, actionHref: data => data.recordLocator ? `/dashboard/platform/bookings?locator=${encodeURIComponent(data.recordLocator)}` : null, actionLabel: 'Booking commands' },
   passengers: { title: 'Passenger', backLabel: 'Passengers & service', query: `query PlatformPassengerDetail($id:ID!){passenger(where:{id:$id}){id passengerKey givenName middleNames familyName status preferredLanguage bookingPassengersCount serviceRequestsCount checkInsCount bagsCount ticketsCount reaccommodationsCount updatedAt bookingPassengers(take:21,orderBy:[{id:asc}]){id booking{id recordLocator segments(take:21,orderBy:[{sequence:asc},{id:asc}]){id originCode destinationCode flightInstance{id serviceDate}}}}}}` },
   departures: { title: 'Departure', backLabel: 'Departures', query: `query PlatformDepartureDetail($id:ID!){flightInstance(where:{id:$id}){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt departureGate departureTerminal origin{iataCode city} destination{iataCode city} checkInsCount}}`, actionHref: data => `/dashboard/platform/departures?date=${encodeURIComponent(data.serviceDate?.slice(0,10) ?? '')}&origin=${encodeURIComponent(data.origin?.iataCode ?? '')}`, actionLabel: 'Station manifest' },
   disruptions: { title: 'Disruption', backLabel: 'Disruptions', query: `query PlatformDisruptionDetail($id:ID!){disruption(where:{id:$id}){id disruptionKey type severity status publicSummary providerReference detectedAt publishedAt resolvedAt affectedSegmentsCount reaccommodationsCount flightInstance{id flightNumber serviceDate origin{iataCode} destination{iataCode}}}}`, actionHref: () => '/dashboard/platform/disruptions', actionLabel: 'Recovery commands' },
@@ -27,7 +28,11 @@ const detail: Record<Desk, DetailDefinition> = {
 
 type Related = { id?: string; recordLocator?: string; code?: string; name?: string; legalName?: string; iataCode?: string; city?: string; flightNumber?: string; serviceDate?: string; adapterType?: string; status?: string; type?: string }
 type Bucket = { id: string; bookingClassCode?: string; status?: string; capacity?: number; authorized?: number; sold?: number; held?: number; blocked?: number }
+type BookingTravelerRow = { id: string; passengerType?: string; isPrimaryContact?: boolean; passenger?: { id: string; givenName: string; familyName: string } | null }
+type BookingSegmentRow = { id: string; sequence: number; status: string; marketingFlightNumber: string; originCode: string; destinationCode: string; scheduledDepartureAt: string; cabinCode?: string; fareBrandCode?: string; flightInstance?: { id: string; origin?: { timezone?: string } | null } | null }
 type RecordData = Related & {
+  contactEmail?: string; contactPhone?: string; metadata?: { paymentDueAt?: string } | null;
+  passengers?: BookingTravelerRow[]; segments?: BookingSegmentRow[];
   id: string; offerNumber?: string; orderNumber?: string; passengerKey?: string; givenName?: string; middleNames?: string; familyName?: string;
   disruptionKey?: string; connectionKey?: string; paymentKey?: string; eventKey?: string; bucketKey?: string;
   source?: string; paymentStatus?: string; ticketingStatus?: string; preferredLanguage?: string; currencyCode?: string;
@@ -87,7 +92,8 @@ function recordFacts(desk: Desk, data: RecordData): FactGroup[] {
       ]
     case 'bookings':
       return [
-        { title: 'Booking', items: [code('Order number', data.orderNumber), state('Payment', data.paymentStatus), state('Ticketing', data.ticketingStatus), money('Total', data.totalAmount), at('Created', data.createdAt)] },
+        { title: 'Booking', items: [code('Order number', data.orderNumber), state('Payment', data.paymentStatus), state('Ticketing', data.ticketingStatus), money('Total', data.totalAmount), at('Created', data.createdAt), ...(data.paymentStatus === 'unpaid' && data.metadata?.paymentDueAt ? [at('Pay by', data.metadata.paymentDueAt)] : [])] },
+        { title: 'Contact', items: [text('Email', data.contactEmail), text('Phone', data.contactPhone)] },
         { title: 'Counts', items: [count('Travelers', data.passengersCount), count('Segments', data.segmentsCount), count('Tickets', data.ticketsCount), count('Refunds', data.refundsCount)] },
       ]
     case 'offers':
@@ -167,6 +173,20 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
       {groups.map(group => <DeskSection key={group.title} title={group.title}><Facts items={group.items} /></DeskSection>)}
     </div>
     <RelatedLinks desk={desk} data={data} />
+    {desk === 'bookings' && <div className="grid min-w-0 gap-6 md:grid-cols-2">
+      <DeskSection title="Travelers" count={data.passengersCount ?? undefined}>
+        {data.passengers?.length ? <Panel className="divide-y overflow-hidden">{data.passengers.map(entry => <div key={entry.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+          {entry.passenger?.id ? <Link href={`/dashboard/platform/passengers/${encodeURIComponent(entry.passenger.id)}`} className="min-w-0 break-words font-medium hover:underline">{entry.passenger.givenName} {entry.passenger.familyName}</Link> : <span className="text-muted-foreground">Traveler restricted</span>}
+          <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{readable(entry.passengerType ?? 'adult')}{entry.isPrimaryContact ? ' · lead' : ''}</span>
+        </div>)}</Panel> : <Well>Travelers unavailable</Well>}
+      </DeskSection>
+      <DeskSection title="Flights" count={data.segmentsCount ?? undefined}>
+        {data.segments?.length ? <Panel className="divide-y overflow-hidden">{data.segments.map(segment => <div key={segment.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+          <TitleLine as="span" tone={statusTone(segment.status)} status={readable(segment.status)} className="font-mono font-semibold">{segment.marketingFlightNumber} {segment.originCode}–{segment.destinationCode}</TitleLine>
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">{formatAirportTime(segment.scheduledDepartureAt, segment.flightInstance?.origin?.timezone)} · {segment.cabinCode ?? ''} {segment.fareBrandCode ?? ''}</span>
+        </div>)}</Panel> : <Well>Flights unavailable</Well>}
+      </DeskSection>
+    </div>}
     {desk === 'bookings' && <DeskSection title="Original accepted terms">
       {receipt?.accepted ? <div className="space-y-3">
         <Facts items={[{ label: 'Offer', value: receipt.accepted.offerNumber, mono: true }, { label: 'Total', value: formatMinorUnits(receipt.accepted.totalAmount, receipt.accepted.currencyCode), mono: true }]} />

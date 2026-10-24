@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { NO_RECORD_ID } from '@/features/platform/lib/no-cursor'
 
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
@@ -54,10 +55,10 @@ export default async function NetworkPage({ searchParams }: { searchParams?: Sea
     scheduleWhere: { status: { equals: 'published' } },
     scheduleCursor: scheduleCursor ? { id: scheduleCursor } : null,
     scheduleSkip: scheduleCursor ? 1 : 0,
-    selectedScheduleId: requestedScheduleId ?? '',
+    selectedScheduleId: requestedScheduleId ?? NO_RECORD_ID,
     flightWhere: futureFlightWorklistWhere(flightFrom),
     flightCursor: flightCursor ? { id: flightCursor } : null,
-    flightCursorId: flightCursor ?? '',
+    flightCursorId: flightCursor ?? NO_RECORD_ID,
     flightSkip: flightCursor ? 1 : 0,
   })
 

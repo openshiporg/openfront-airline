@@ -46,6 +46,8 @@ export async function ensureInitialCarrierAndRole(prisma: any, permissions: read
     const role = existingRole
       ? await tx.role.update({ where: { id: existingRole.id }, data: { carrierId: carrier.id, ...allPermissions }, select: { id: true } })
       : await tx.role.create({ data: { carrierId: carrier.id, name: INITIAL_ROLE_NAME, ...allPermissions }, select: { id: true } })
+    // Copies left by earlier failed attempts carry every permission and no carrier: remove them.
+    await tx.role.deleteMany({ where: { id: { not: role.id }, name: INITIAL_ROLE_NAME, carrierId: null, assignedTo: { none: {} } } })
     return { carrierId: carrier.id as string, roleId: role.id as string }
   })
 }

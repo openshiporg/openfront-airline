@@ -17,6 +17,8 @@ import {
   verifyPassengerTravelDocument,
 } from './airlineWorkflows';
 import { recoverCustomerBookingAccess } from './storefrontAccess'
+import { recordBagEvent, registerAirport, updateFlightOperations } from './airlineOperationsControl'
+import { recordReceivedPayment, reissueBookingAccessCode } from './airlinePaymentsDesk'
 import { assignCustomerSeat, cancelCustomerBooking, checkInCustomerBooking, createCustomerBooking, createCustomerOffer, getCustomerBooking, getPublicCarrierIdentity, publicAirlineFlightOptions, publicFlightStatuses, rotateCustomerBookingAccessToken } from './storefront'
 import { publishFlightDisruption, reaccommodateBooking } from './airlineRecovery'
 import { boardBookingPassenger, departureManifest, offloadBookingPassenger } from './airlineDepartures'
@@ -67,6 +69,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       type AirlineFareBrand {
         code: String!
         name: String!
+        description: String
+        baggagePieces: Int
+        baggageWeightGrams: Int
       }
 
       type PublicCarrierIdentity {
@@ -82,6 +87,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         storefrontHomepageDescription: String
         storefrontConfigured: Boolean!
         accessRecoveryEnabled: Boolean!
+        storefrontContactEmail: String
+        storefrontContactPhone: String
+        storefrontServiceHours: String
       }
 
       type AirlineFlightOption {
@@ -96,6 +104,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         destinationCode: String!
         destinationCity: String!
         fareBrand: AirlineFareBrand!
+        cabinName: String
         currencyCode: String!
         baseAmount: Int!
         taxAmount: Int!
@@ -230,6 +239,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           storefrontBrandColor: String!
           storefrontHomepageTitle: String!
           storefrontHomepageDescription: String!
+          storefrontContactEmail: String
+          storefrontContactPhone: String
+          storefrontServiceHours: String
         ): Carrier!
         completeCarrierOnboarding(
           name: String!
@@ -251,6 +263,23 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
         revokeMachineCredential(credentialId: ID!): Boolean!
         requeueDeadLetteredOutboxEvent(outboxEventId: ID!, expectedAttemptCount: Int!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
+        registerAirport(iataCode: String!, icaoCode: String, name: String!, city: String!, countryCode: String!, subdivisionCode: String, timezone: String!, idempotencyKey: String!): AirlineOperationResult!
+        updateFlightOperations(
+          flightInstanceId: ID!
+          departureTerminal: String
+          departureGate: String
+          arrivalTerminal: String
+          arrivalGate: String
+          estimatedDepartureAt: String
+          estimatedArrivalAt: String
+          actualDepartureAt: String
+          actualArrivalAt: String
+          status: String
+          idempotencyKey: String!
+        ): AirlineOperationResult!
+        recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
+        recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
+        reissueBookingAccessCode(bookingId: ID!): RotatedBookingAccess!
         rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
         recoverCustomerBookingAccess(carrierCode: String!, recordLocator: String!, email: String!): Boolean!
         cancelCustomerBooking(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
@@ -427,6 +456,11 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         createCustomerOffer,
         createCustomerBooking,
         rotateCustomerBookingAccessToken,
+        registerAirport,
+        updateFlightOperations,
+        recordBagEvent,
+        recordReceivedPayment,
+        reissueBookingAccessCode,
         recoverCustomerBookingAccess,
         cancelCustomerBooking,
         assignCustomerSeat,

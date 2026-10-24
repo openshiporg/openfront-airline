@@ -5,7 +5,9 @@ import { cache } from 'react'
 import { keystoneContext } from '@/features/keystone/context'
 
 export type StorefrontAirport = { code: string; city: string; name: string }
-export type StorefrontNetwork = { airports: StorefrontAirport[]; routes: Array<{ origin: string; destination: string }> }
+export type StorefrontNetwork = { airports: StorefrontAirport[]; routes: Array<{ origin: string; destination: string }>; serviceDates: Record<string, string[]> }
+
+export const routeDatesKey = (origin: string, destination: string) => `${origin}-${destination}`
 
 // The carrier's active routes, for the search console's airport pickers. Public data: codes, cities and names only.
 export const getStorefrontNetwork = cache(async (carrierId: string): Promise<StorefrontNetwork> => {
@@ -24,8 +26,23 @@ export const getStorefrontNetwork = cache(async (carrierId: string): Promise<Sto
       airports.set(route.destination.iataCode, { code: route.destination.iataCode, city: route.destination.city, name: route.destination.name })
       pairs.push({ origin: route.origin.iataCode, destination: route.destination.iataCode })
     }
-    return { airports: [...airports.values()].sort((a, b) => (a.city || a.code).localeCompare(b.city || b.code)), routes: pairs }
+    // Upcoming dates with a flight on sale, per route, so search can start on (and point to) a date that flies.
+    const flights = await (keystoneContext.prisma as any).flightInstance.findMany({
+      where: { carrierId, status: { in: ['scheduled', 'open_for_sale', 'delayed'] }, scheduledDepartureAt: { gt: new Date() } },
+      select: { serviceDate: true, origin: { select: { iataCode: true } }, destination: { select: { iataCode: true } } },
+      orderBy: [{ scheduledDepartureAt: 'asc' }],
+      take: 500,
+    })
+    const serviceDates: Record<string, string[]> = {}
+    for (const flight of flights) {
+      if (!flight.origin?.iataCode || !flight.destination?.iataCode) continue
+      const key = routeDatesKey(flight.origin.iataCode, flight.destination.iataCode)
+      const date = flight.serviceDate.toISOString().slice(0, 10)
+      const dates = serviceDates[key] ?? (serviceDates[key] = [])
+      if (!dates.includes(date) && dates.length < 60) dates.push(date)
+    }
+    return { airports: [...airports.values()].sort((a, b) => (a.city || a.code).localeCompare(b.city || b.code)), routes: pairs, serviceDates }
   } catch {
-    return { airports: [], routes: [] }
+    return { airports: [], routes: [], serviceDates: {} }
   }
 })

@@ -20,6 +20,7 @@ function fakePrisma(state: { carriers: any[]; roles: any[] }) {
       findFirst: async ({ where }: any) => state.roles.find(role => role.name === where.name && !role.users && (role.carrierId === null || role.carrierId === where.OR[0].carrierId)) ?? null,
       update: async ({ where, data }: any) => { const role = state.roles.find(entry => entry.id === where.id); Object.assign(role, data); return { id: role.id } },
       create: async ({ data }: any) => { const role = { id: `r${next++}`, users: 0, ...data }; state.roles.push(role); return { id: role.id } },
+      deleteMany: async ({ where }: any) => { state.roles = state.roles.filter(role => role.id === where.id.not || role.name !== where.name || role.carrierId !== null || role.users) },
     },
   }
   return { $transaction: (run: (client: typeof tx) => Promise<unknown>) => run(tx) }
@@ -32,6 +33,12 @@ test('a carrier and role left by a failed first attempt are reused, not recreate
   assert.equal(state.carriers.length, 1)
   assert.equal(state.roles[0].carrierId, 'orphan')
   assert.equal(state.roles[0].canManageUsers, true)
+})
+
+test('other orphaned admin roles are removed once one is reused', async () => {
+  const state: { carriers: any[]; roles: any[] } = { carriers: [{ id: 'orphan', code: 'AV', users: 0 }], roles: ['a', 'b', 'c'].map(id => ({ id, name: 'Initial Carrier Administrator', carrierId: null, users: 0 })) }
+  await ensureInitialCarrierAndRole(fakePrisma(state), ['canManageUsers'], { NODE_ENV: 'test' })
+  assert.deepEqual(state.roles.map(role => role.id), ['a'])
 })
 
 test('an empty database gets a new carrier and a full-permission role', async () => {

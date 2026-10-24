@@ -10,7 +10,6 @@ import { resolveSessionSecret } from "./lib/session";
 import { hasFreshPermission } from "./access";
 import { permissionsList } from "./models/fields";
 import { initialOperatorSetupEnabled } from './lib/initial-operator-setup';
-import { anonymousIntrospectionGuard } from './lib/anonymous-introspection';
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -88,7 +87,6 @@ export default withAuth(
     session: statelessSessions(sessionConfig),
     graphql: {
       extendGraphqlSchema,
-      apolloConfig: { plugins: [anonymousIntrospectionGuard] },
     },
   })
 );

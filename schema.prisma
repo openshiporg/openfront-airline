@@ -101,6 +101,9 @@ model Carrier {
   storefrontBrandColor                 String?
   storefrontHomepageTitle              String?
   storefrontHomepageDescription        String?
+  storefrontContactEmail               String                   @default("")
+  storefrontContactPhone               String                   @default("")
+  storefrontServiceHours               String                   @default("")
   users                                User[]                   @relation("User_carrier")
   roles                                Role[]                   @relation("Role_carrier")
   approvedAgents                       ApprovedAgent[]          @relation("ApprovedAgent_carrier")
@@ -949,9 +952,9 @@ model TicketCoupon {
   couponKey                String                  @unique @default("")
   ticket                   Ticket?                 @relation("TicketCoupon_ticket", fields: [ticketId], references: [id])
   ticketId                 String?                 @map("ticket")
-  serviceObligation        ServiceObligation?      @relation("TicketCoupon_serviceObligation", fields: [serviceObligationId], references: [id])
-  serviceObligationId      String?                 @map("serviceObligation")
-  serviceObligationVersion Int?
+  serviceObligation        ServiceObligation       @relation("TicketCoupon_serviceObligation", fields: [serviceObligationId], references: [id], onDelete: Restrict)
+  serviceObligationId      String                  @map("serviceObligation")
+  serviceObligationVersion Int
   bookingSegment           BookingSegment?         @relation("TicketCoupon_bookingSegment", fields: [bookingSegmentId], references: [id])
   bookingSegmentId         String?                 @map("bookingSegment")
   couponNumber             Int
@@ -978,12 +981,12 @@ model TicketCoupon {
 
 model ServiceObligation {
   id                 String                      @id @default(cuid())
-  carrier            Carrier?                    @relation("ServiceObligation_carrier", fields: [carrierId], references: [id])
-  carrierId          String?                     @map("carrier")
-  booking            Booking?                    @relation("ServiceObligation_booking", fields: [bookingId], references: [id])
-  bookingId          String?                     @map("booking")
-  bookingPassenger   BookingPassenger?           @relation("ServiceObligation_bookingPassenger", fields: [bookingPassengerId], references: [id])
-  bookingPassengerId String?                     @map("bookingPassenger")
+  carrier            Carrier                     @relation("ServiceObligation_carrier", fields: [carrierId], references: [id], onDelete: Restrict)
+  carrierId          String                      @map("carrier")
+  booking            Booking                     @relation("ServiceObligation_booking", fields: [bookingId], references: [id], onDelete: Restrict)
+  bookingId          String                      @map("booking")
+  bookingPassenger   BookingPassenger            @relation("ServiceObligation_bookingPassenger", fields: [bookingPassengerId], references: [id], onDelete: Restrict)
+  bookingPassengerId String                      @map("bookingPassenger")
   obligationKey      String                      @unique @default("")
   currentVersion     Int                         @default(1)
   status             ServiceObligationStatusType @default(active)
@@ -998,23 +1001,24 @@ model ServiceObligation {
 
 model TicketCouponLineage {
   id                 String                                @id @default(cuid())
-  carrier            Carrier?                              @relation("TicketCouponLineage_carrier", fields: [carrierId], references: [id])
-  carrierId          String?                               @map("carrier")
-  bookingPassenger   BookingPassenger?                     @relation("TicketCouponLineage_bookingPassenger", fields: [bookingPassengerId], references: [id])
-  bookingPassengerId String?                               @map("bookingPassenger")
+  carrier            Carrier                               @relation("TicketCouponLineage_carrier", fields: [carrierId], references: [id], onDelete: Restrict)
+  carrierId          String                                @map("carrier")
+  bookingPassenger   BookingPassenger                      @relation("TicketCouponLineage_bookingPassenger", fields: [bookingPassengerId], references: [id], onDelete: Restrict)
+  bookingPassengerId String                                @map("bookingPassenger")
   lineageKey         String                                @unique @default("")
   changeSetKey       String                                @default("")
   transformation     TicketCouponLineageTransformationType
   operationType      TicketCouponLineageOperationTypeType
   operationId        String                                @default("")
-  parentCoupon       TicketCoupon?                         @relation("TicketCouponLineage_parentCoupon", fields: [parentCouponId], references: [id])
-  parentCouponId     String?                               @map("parentCoupon")
-  childCoupon        TicketCoupon?                         @relation("TicketCouponLineage_childCoupon", fields: [childCouponId], references: [id])
-  childCouponId      String?                               @map("childCoupon")
+  parentCoupon       TicketCoupon                          @relation("TicketCouponLineage_parentCoupon", fields: [parentCouponId], references: [id], onDelete: Restrict)
+  parentCouponId     String                                @map("parentCoupon")
+  childCoupon        TicketCoupon                          @relation("TicketCouponLineage_childCoupon", fields: [childCouponId], references: [id], onDelete: Restrict)
+  childCouponId      String                                @map("childCoupon")
   metadata           Json?                                 @default("{}")
   createdAt          DateTime                              @default(now())
   updatedAt          DateTime                              @default(now()) @updatedAt
 
+  @@unique([parentCouponId, childCouponId], map: "TicketCouponLineage_parentCoupon_childCoupon_key")
   @@index([carrierId])
   @@index([bookingPassengerId])
   @@index([changeSetKey])
@@ -1454,6 +1458,7 @@ model BoardingPass {
   updatedAt              DateTime                @default(now()) @updatedAt
 
   @@index([carrierId])
+  @@index([checkInId])
   @@index([passengerId])
   @@index([bookingSegmentId])
   @@index([seatAssignmentId])
@@ -1774,6 +1779,8 @@ model OutboxEvent {
   updatedAt     DateTime               @default(now()) @updatedAt
 
   @@index([carrierId])
+  @@index([status, availableAt, createdAt], map: "OutboxEvent_status_availableAt_createdAt_idx")
+  @@index([status, leasedAt], map: "OutboxEvent_status_leasedAt_idx")
 }
 
 model OnboardingStep {

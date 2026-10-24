@@ -1,4 +1,5 @@
 import { readBookingWorkspace } from '@/features/platform/lib/booking-workspace'
+import { NO_RECORD_ID } from '@/features/platform/lib/no-cursor'
 import { detailWithReturn } from '@/features/platform/lib/desk-return'
 import { worklistSearch, withWorklistSearch, textSearch } from '@/features/platform/lib/worklist-search'
 import Link from 'next/link'
@@ -238,7 +239,7 @@ async function networkDataForInventory(flightCursor: string | null, flightFrom: 
   return keystoneClient<NetworkDeskResponse>(PLATFORM_INVENTORY_DESK_QUERY, {
     flightWhere: futureFlightWorklistWhere(flightFrom),
     flightCursor: flightCursor ? { id: flightCursor } : null,
-    flightCursorId: flightCursor ?? '',
+    flightCursorId: flightCursor ?? NO_RECORD_ID,
     flightSkip: flightCursor ? 1 : 0,
   })
 }
@@ -277,10 +278,10 @@ async function networkData(scheduleCursor: string | null, selectedScheduleId: st
     scheduleWhere: { status: { equals: 'published' } },
     scheduleCursor: scheduleCursor ? { id: scheduleCursor } : null,
     scheduleSkip: scheduleCursor ? 1 : 0,
-    selectedScheduleId: selectedScheduleId ?? '',
+    selectedScheduleId: selectedScheduleId ?? NO_RECORD_ID,
     flightWhere: futureFlightWorklistWhere(flightFrom),
     flightCursor: flightCursor ? { id: flightCursor } : null,
-    flightCursorId: flightCursor ?? '',
+    flightCursorId: flightCursor ?? NO_RECORD_ID,
     flightSkip: flightCursor ? 1 : 0,
   })
 }
@@ -388,11 +389,11 @@ export async function PlatformPaymentsPage({ searchParams }: { searchParams?: Se
     paymentWhere: PAYMENT_RECORD_WORKLIST_WHERE,
     paymentCursor: paymentCursor ? { id: paymentCursor } : null,
     paymentSkip: paymentCursor ? 1 : 0,
-    paymentCursorId: paymentCursor ?? '',
+    paymentCursorId: paymentCursor ?? NO_RECORD_ID,
     evidenceWhere: PAYMENT_EVIDENCE_WORKLIST_WHERE,
     evidenceCursor: evidenceCursor ? { id: evidenceCursor } : null,
     evidenceSkip: evidenceCursor ? 1 : 0,
-    evidenceCursorId: evidenceCursor ?? '',
+    evidenceCursorId: evidenceCursor ?? NO_RECORD_ID,
   })
   const paymentCursorAuthorized = !paymentCursor || Boolean(response.success && response.data.paymentCursorRecord?.some(record => record.id === paymentCursor))
   const evidenceCursorAuthorized = !evidenceCursor || Boolean(response.success && response.data.evidenceCursorRecord?.some(record => record.id === evidenceCursor))
@@ -470,7 +471,7 @@ export async function PlatformManifestsPage({ searchParams }: { searchParams?: S
       auditEventWhere: { AND: [AUDIT_EVENT_WORKLIST_WHERE, ...(filters.q ? [{ OR: [{ eventKey: textSearch(filters.q) }, { action: textSearch(filters.q) }, { aggregateId: textSearch(filters.q) }, { correlationId: textSearch(filters.q) }] }] : []), ...(filters.status ? [{ status: { equals: filters.status } }] : [])] },
       auditEventCursor: auditEventCursor ? { id: auditEventCursor } : null,
       auditEventSkip: auditEventCursor ? 1 : 0,
-      auditEventCursorId: auditEventCursor ?? '',
+      auditEventCursorId: auditEventCursor ?? NO_RECORD_ID,
     })
     : null
   const cursorAuthorized = !auditEventCursor || Boolean(response?.success && response.data.auditEventCursorRecord?.some(record => record.id === auditEventCursor))
@@ -520,7 +521,7 @@ export async function PlatformSettingsPage({ searchParams }: { searchParams?: Se
       providerConnectionWhere: { AND: [PROVIDER_CONNECTION_WORKLIST_WHERE, ...(filters.q ? [{ OR: [{ name: textSearch(filters.q) }, { connectionKey: textSearch(filters.q) }, { externalAccountId: textSearch(filters.q) }] }] : []), ...(filters.status ? [{ status: { equals: filters.status } }] : [])] },
       providerConnectionCursor: providerConnectionCursor ? { id: providerConnectionCursor } : null,
       providerConnectionSkip: providerConnectionCursor ? 1 : 0,
-      providerConnectionCursorId: providerConnectionCursor ?? '',
+      providerConnectionCursorId: providerConnectionCursor ?? NO_RECORD_ID,
     })
     : null
   const cursorAuthorized = !providerConnectionCursor || Boolean(response?.success && response.data.providerConnectionCursorRecord?.some(record => record.id === providerConnectionCursor))

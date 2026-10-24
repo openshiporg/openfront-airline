@@ -1,11 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { cn } from '@/lib/utils'
 import { Code, DeskSection, Field, Notice, Panel, Pill, StatusLabel, TitleLine, Track, deskInput, statusTone } from '@/features/platform/components/desk'
 import onboardingContract from '../seed.json'
+import { AIRPORT_CATALOG } from '@/features/airline/lib/airport-catalog'
+import { decimalToMinorUnits } from '@/features/keystone/lib/money'
+
+// Prices are entered in the carrier currency (129.00) and sent in minor units; unreadable input sends -1 so the
+// server's own validation message comes back.
+function majorToMinor(value: string, currencyCode: string) {
+  try { return decimalToMinorUnits(value.trim(), currencyCode) } catch { return -1 }
+}
 
 type CarrierIdentity = { id?: string; name: string; legalName: string; code: string; defaultCurrencyCode: string; defaultTimezone: string }
 type CredentialSummary = { id: string; name: string; tokenPreview: string; audience: string; scopes: string[]; status: string; expiresAt: string; lastUsedAt?: string | null }
@@ -47,6 +55,21 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
 
   useEffect(() => { void loadCredentialSummaries().catch(() => setCredentialError('Credentials could not be loaded. Reload the list to try again.')) }, [])
 
+  // Origin and destination: the reference catalog plus every airport registered on the Network page.
+  const [registeredAirports, setRegisteredAirports] = useState<Array<{ code: string; city: string }>>([])
+  useEffect(() => {
+    void fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query { airports(where: { isActive: { equals: true } }, orderBy: [{ iataCode: asc }], take: 500) { iataCode city } }' }) })
+      .then(response => response.json())
+      .then(payload => { if (Array.isArray(payload.data?.airports)) setRegisteredAirports(payload.data.airports.map((airport: { iataCode: string; city: string }) => ({ code: airport.iataCode, city: airport.city }))) })
+      .catch(() => undefined)
+  }, [])
+  const airportOptions = useMemo(() => {
+    const options = new Map<string, { code: string; city: string }>(Object.entries(AIRPORT_CATALOG).map(([code, airport]) => [code, { code, city: airport.city }]))
+    for (const airport of registeredAirports) options.set(airport.code, airport)
+    return [...options.values()].sort((left, right) => left.code.localeCompare(right.code))
+  }, [registeredAirports])
+  const resultsRef = useRef<HTMLDivElement>(null)
+
   async function submit(formData: FormData) {
     if (requestBusy.current) return
     requestBusy.current = true
@@ -66,8 +89,8 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
       scheduledDepartureAt: departure,
       scheduledArrivalAt: arrival,
       capacity: Number(formData.get('capacity')),
-      baseAmount: Number(formData.get('baseAmount')),
-      taxAmount: Number(formData.get('taxAmount')),
+      baseAmount: majorToMinor(String(formData.get('baseAmount') ?? ''), String(formData.get('currencyCode') ?? 'USD')),
+      taxAmount: majorToMinor(String(formData.get('taxAmount') ?? ''), String(formData.get('currencyCode') ?? 'USD')),
     }
     try {
       const response = await fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query, variables }) })
@@ -75,6 +98,7 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
       const progress = payload.data?.completeCarrierOnboarding
       if (!response.ok || payload.errors?.length || typeof progress?.completed !== 'boolean' || !Array.isArray(progress.steps) || progress.steps.some((step: { key?: unknown; status?: unknown; requirements?: unknown }) => typeof step.key !== 'string' || typeof step.status !== 'string' || !Array.isArray(step.requirements) || step.requirements.some((value: unknown) => typeof value !== 'string'))) throw new Error('Setup result unavailable')
       setSteps(progress.steps)
+      requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
       setDirty(false)
       setMessage(progress.completed ? 'Launch setup completed.' : 'Progress saved. Complete the remaining steps below.')
       // The sidebar card and Operations launch card read onboardingStatus on the server.
@@ -151,15 +175,16 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
 
       <DeskSection title={step('02', 'First sellable service')}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Origin"><select name="originCode" defaultValue="JFK" required className={cn(deskInput, 'font-mono')}><option value="JFK">JFK · New York</option><option value="BOS">BOS · Boston</option></select></Field>
-          <Field label="Destination"><select name="destinationCode" defaultValue="BOS" required className={cn(deskInput, 'font-mono')}><option value="JFK">JFK · New York</option><option value="BOS">BOS · Boston</option></select></Field>
+          <Field label="Origin"><select name="originCode" defaultValue="JFK" required className={cn(deskInput, 'font-mono')}>{airportOptions.map(airport => <option key={airport.code} value={airport.code}>{airport.code} · {airport.city}</option>)}</select></Field>
+          <Field label="Destination"><select name="destinationCode" defaultValue="BOS" required className={cn(deskInput, 'font-mono')}>{airportOptions.map(airport => <option key={airport.code} value={airport.code}>{airport.code} · {airport.city}</option>)}</select></Field>
           <Field label="Flight number"><input name="flightNumber" defaultValue="101" maxLength={6} required className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></Field>
           <Field label="Service date"><input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(value => `${next}T${value.slice(11)}`); setArrival(value => { const dayOffset = Math.round((Date.parse(value.slice(0, 10)) - Date.parse(serviceDate)) / 86_400_000); const day = new Date(Date.parse(next) + (Number.isFinite(dayOffset) ? dayOffset : 0) * 86_400_000).toISOString().slice(0, 10); return `${day}T${value.slice(11)}` }) }} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
           <Field label="Departure (carrier time)"><input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
           <Field label="Arrival (carrier time)"><input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
           <Field label="Capacity"><input type="number" name="capacity" defaultValue={30} min={1} max={300} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
-          <Field label="Base amount (minor units)"><input type="number" name="baseAmount" defaultValue={12900} min={0} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
-          <Field label="Tax amount (minor units)"><input type="number" name="taxAmount" defaultValue={2580} min={0} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Base fare per traveler"><input name="baseAmount" inputMode="decimal" defaultValue="129.00" required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Tax per traveler"><input name="taxAmount" inputMode="decimal" defaultValue="25.80" required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">Airports: <a href="/dashboard/platform/network?tab=airports" className="font-medium text-foreground underline underline-offset-2">Network</a></p>
         </div>
       </DeskSection>
 
@@ -168,6 +193,9 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
           <Track className="flex-wrap rounded-2xl">
             <Pill asChild><a href="/dashboard/users/create" target="_blank" rel="noreferrer">Create payment operator</a></Pill>
             <Pill asChild><a href="/dashboard/carriers">Carrier settings</a></Pill>
+            <Pill asChild><a href="/dashboard/platform/payment-providers">Payment providers</a></Pill>
+            <Pill asChild><a href="/dashboard/platform/stations">Stations & access</a></Pill>
+            <Pill asChild><a href="/dashboard/platform/store-settings">Storefront settings</a></Pill>
           </Track>
           <Panel className="overflow-hidden">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
@@ -202,6 +230,7 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
 
     {credentialError && <Notice tone="bad">{credentialError}</Notice>}
     <Track><Pill disabled={credentialBusy} onClick={() => void loadCredentialSummaries().catch(() => setCredentialError('Credentials could not be loaded.'))}>Reload credential list</Pill></Track>
+    <div ref={resultsRef} />
     {steps.length > 0 && <Panel className="overflow-hidden"><ol className="divide-y">{steps.map(entry => <li key={entry.key} className="px-4 py-3 text-sm">
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
         <TitleLine as="span" tone={statusTone(entry.status)} status={entry.status} className="font-medium text-foreground">{onboardingContract.steps.find(item => item.key === entry.key)?.label ?? entry.key.replaceAll('_', ' ')}</TitleLine>

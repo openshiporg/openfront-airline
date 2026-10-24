@@ -39,12 +39,15 @@ export function parseStorefrontSearchForm(formData: FormData): StorefrontSearchI
 
 export function parseStorefrontPassengers(formData: FormData, passengerCount: number): StorefrontPassengerInput[] {
   if (!Number.isInteger(passengerCount) || passengerCount < 1 || passengerCount > 9) throw new Error('Travelers must be between 1 and 9.')
+  // Only the lead traveler (the first) must give contact details; the others use the lead's when left blank.
+  const leadEmail = formText(formData, 'passenger.0.email')
+  const leadPhone = formText(formData, 'passenger.0.phone')
   return Array.from({ length: passengerCount }, (_, index) => ({
     givenName: formText(formData, `passenger.${index}.givenName`),
     familyName: formText(formData, `passenger.${index}.familyName`),
     dateOfBirth: formText(formData, `passenger.${index}.dateOfBirth`),
-    email: formText(formData, `passenger.${index}.email`),
-    phone: formText(formData, `passenger.${index}.phone`),
+    email: formText(formData, `passenger.${index}.email`) || leadEmail,
+    phone: formText(formData, `passenger.${index}.phone`) || (index === 0 ? '' : leadPhone),
   }))
 }
 

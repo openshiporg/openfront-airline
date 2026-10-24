@@ -621,6 +621,9 @@ type Carrier {
   storefrontBrandColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
+  storefrontContactEmail: String
+  storefrontContactPhone: String
+  storefrontServiceHours: String
   users(where: UserWhereInput! = {}, orderBy: [UserOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: UserWhereUniqueInput): [User!]
   usersCount(where: UserWhereInput! = {}): Int
   roles(where: RoleWhereInput! = {}, orderBy: [RoleOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: RoleWhereUniqueInput): [Role!]
@@ -688,6 +691,9 @@ input CarrierWhereInput {
   storefrontBrandColor: StringNullableFilter
   storefrontHomepageTitle: StringNullableFilter
   storefrontHomepageDescription: StringNullableFilter
+  storefrontContactEmail: StringFilter
+  storefrontContactPhone: StringFilter
+  storefrontServiceHours: StringFilter
   users: UserManyRelationFilter
   roles: RoleManyRelationFilter
   approvedAgents: ApprovedAgentManyRelationFilter
@@ -811,6 +817,9 @@ input CarrierOrderByInput {
   storefrontBrandColor: OrderDirection
   storefrontHomepageTitle: OrderDirection
   storefrontHomepageDescription: OrderDirection
+  storefrontContactEmail: OrderDirection
+  storefrontContactPhone: OrderDirection
+  storefrontServiceHours: OrderDirection
   createdAt: OrderDirection
   updatedAt: OrderDirection
 }
@@ -828,6 +837,9 @@ input CarrierUpdateInput {
   storefrontBrandColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
+  storefrontContactEmail: String
+  storefrontContactPhone: String
+  storefrontServiceHours: String
   users: UserRelateToManyForUpdateInput
   roles: RoleRelateToManyForUpdateInput
   approvedAgents: ApprovedAgentRelateToManyForUpdateInput
@@ -937,6 +949,9 @@ input CarrierCreateInput {
   storefrontBrandColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
+  storefrontContactEmail: String
+  storefrontContactPhone: String
+  storefrontServiceHours: String
   users: UserRelateToManyForCreateInput
   roles: RoleRelateToManyForCreateInput
   approvedAgents: ApprovedAgentRelateToManyForCreateInput
@@ -4130,7 +4145,7 @@ input TicketCouponWhereInput {
   couponKey: StringFilter
   ticket: TicketWhereInput
   serviceObligation: ServiceObligationWhereInput
-  serviceObligationVersion: IntNullableFilter
+  serviceObligationVersion: IntFilter
   bookingSegment: BookingSegmentWhereInput
   couponNumber: IntFilter
   status: TicketCouponStatusTypeNullableFilter
@@ -7141,17 +7156,24 @@ type Mutation {
   createInitialUser(data: CreateInitialUserInput!): UserAuthenticationWithPasswordSuccess!
   sendUserPasswordResetLink(email: String!): Boolean!
   redeemUserPasswordResetToken(email: String!, token: String!, password: String!): RedeemUserPasswordResetTokenResult
-  updateCarrierStorefrontSettings(name: String!, legalName: String!, storefrontBrandColor: String!, storefrontHomepageTitle: String!, storefrontHomepageDescription: String!): Carrier!
+  updateCarrierStorefrontSettings(name: String!, legalName: String!, storefrontBrandColor: String!, storefrontHomepageTitle: String!, storefrontHomepageDescription: String!, storefrontContactEmail: String, storefrontContactPhone: String, storefrontServiceHours: String): Carrier!
   completeCarrierOnboarding(name: String!, legalName: String!, code: String!, currencyCode: String!, timezone: String!, originCode: String!, destinationCode: String!, flightNumber: String!, serviceDate: String!, scheduledDepartureAt: String!, scheduledArrivalAt: String!, capacity: Int!, baseAmount: Int!, taxAmount: Int!): OnboardingProgress!
+  dismissCarrierOnboarding: OnboardingStatusResult!
   issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
   revokeMachineCredential(credentialId: ID!): Boolean!
+  requeueDeadLetteredOutboxEvent(outboxEventId: ID!, expectedAttemptCount: Int!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
+  registerAirport(iataCode: String!, icaoCode: String, name: String!, city: String!, countryCode: String!, subdivisionCode: String, timezone: String!, idempotencyKey: String!): AirlineOperationResult!
+  updateFlightOperations(flightInstanceId: ID!, departureTerminal: String, departureGate: String, arrivalTerminal: String, arrivalGate: String, estimatedDepartureAt: String, estimatedArrivalAt: String, actualDepartureAt: String, actualArrivalAt: String, status: String, idempotencyKey: String!): AirlineOperationResult!
+  recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
+  recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
+  reissueBookingAccessCode(bookingId: ID!): RotatedBookingAccess!
   rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
   recoverCustomerBookingAccess(carrierCode: String!, recordLocator: String!, email: String!): Boolean!
   cancelCustomerBooking(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
   assignCustomerSeat(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID!, idempotencyKey: String!): AirlineOperationResult!
   checkInCustomerBooking(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID, idempotencyKey: String!): AirlineOperationResult!
   createCustomerOffer(carrierCode: String!, flightInstanceId: ID!, inventoryBucketId: ID!, shoppingSessionToken: String!, idempotencyKey: String!, passengers: [CustomerPassengerInput!]!): AirlineOperationResult!
-  createCustomerBooking(offerId: ID!, passengerIds: [ID!]!, shoppingSessionToken: String!, idempotencyKey: String!): AirlineOperationResult!
+  createCustomerBooking(offerId: ID!, passengerIds: [ID!]!, shoppingSessionToken: String!, idempotencyKey: String!, recoverOnly: Boolean): AirlineOperationResult!
   createOfferFromShopping(flightInstanceId: ID!, inventoryBucketId: ID!, passengerIds: [ID!]!, idempotencyKey: String!): AirlineOperationResult!
   submitManualPaymentEvidence(bookingId: ID!, purpose: String!, externalReference: String!, ledgerSource: String!, evidenceDigest: String!, amount: Int!, currencyCode: String!, idempotencyKey: String!): AirlineOperationResult!
   approveManualPaymentEvidence(evidenceId: ID!, idempotencyKey: String!): AirlineOperationResult!
@@ -7170,7 +7192,7 @@ type Mutation {
   boardBookingPassenger(boardingPassId: ID!, idempotencyKey: String!): AirlineOperationResult!
   offloadBookingPassenger(boardingPassId: ID!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
   acceptCheckedBag(bookingPassengerId: ID!, flightInstanceId: ID!, idempotencyKey: String!, weightGrams: Int!): AirlineOperationResult!
-  createBookingFromOffer(offerId: ID!, passengerIds: [ID!]!, idempotencyKey: String!): AirlineOperationResult!
+  createBookingFromOffer(offerId: ID!, passengerIds: [ID!]!, idempotencyKey: String!, recoverOnly: Boolean): AirlineOperationResult!
   cancelBooking(bookingId: ID!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
 }
 
@@ -7383,8 +7405,9 @@ type Query {
   redirectToInit: Boolean
   airlineFlightOptions(originCode: String!, destinationCode: String!, serviceDate: String!, passengerCount: Int = 1): [AirlineFlightOption!]!
   customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
+  operatorBookingReceipt(bookingId: ID!): JSON!
   publicCarrierIdentity(carrierCode: String!): PublicCarrierIdentity
-  departureManifest(serviceDate: String!, originCode: String): JSON!
+  departureManifest(serviceDate: String!, originCode: String, cleanupCursor: String): JSON!
   machineCredentialSummaries: JSON!
   publicAirlineFlightOptions(carrierCode: String!, originCode: String!, destinationCode: String!, serviceDate: String!, passengerCount: Int = 1): [AirlineFlightOption!]!
   publicFlightStatuses(carrierCode: String!, flightNumber: String!, serviceDate: String!): [PublicFlightStatus!]!
@@ -7547,6 +7570,7 @@ type AirlineOperationResult {
   expiresAt: String
   passengerIds: [ID!]
   bookingAccessToken: String
+  bookingReceipt: JSON
   changed: Boolean!
   replayed: Boolean!
 }
@@ -7562,6 +7586,9 @@ type AirlineAvailability {
 type AirlineFareBrand {
   code: String!
   name: String!
+  description: String
+  baggagePieces: Int
+  baggageWeightGrams: Int
 }
 
 type PublicCarrierIdentity {
@@ -7577,6 +7604,9 @@ type PublicCarrierIdentity {
   storefrontHomepageDescription: String
   storefrontConfigured: Boolean!
   accessRecoveryEnabled: Boolean!
+  storefrontContactEmail: String
+  storefrontContactPhone: String
+  storefrontServiceHours: String
 }
 
 type AirlineFlightOption {
@@ -7591,6 +7621,7 @@ type AirlineFlightOption {
   destinationCode: String!
   destinationCity: String!
   fareBrand: AirlineFareBrand!
+  cabinName: String
   currencyCode: String!
   baseAmount: Int!
   taxAmount: Int!
@@ -7628,8 +7659,10 @@ type PublicFlightStatus {
   arrivalGate: String
   originCode: String!
   originCity: String!
+  originTimezone: String!
   destinationCode: String!
   destinationCity: String!
+  destinationTimezone: String!
   disruption: PublicFlightDisruption
 }
 
@@ -7648,6 +7681,11 @@ type OnboardingStepProgress {
 type OnboardingProgress {
   completed: Boolean!
   steps: [OnboardingStepProgress!]!
+}
+
+type OnboardingStatusResult {
+  id: ID!
+  onboardingStatus: String!
 }
 
 type IssuedMachineCredential {
@@ -7673,6 +7711,7 @@ type CustomerBooking {
   tickets: JSON!
   checkIns: JSON!
   reaccommodations: JSON!
+  bookingReceipt: JSON!
 }
 
 input CustomerPassengerInput {

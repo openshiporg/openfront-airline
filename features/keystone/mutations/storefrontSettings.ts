@@ -10,12 +10,30 @@ export type StorefrontSettingsInput = {
   storefrontBrandColor: string
   storefrontHomepageTitle: string
   storefrontHomepageDescription: string
+  storefrontContactEmail?: string | null
+  storefrontContactPhone?: string | null
+  storefrontServiceHours?: string | null
+}
+
+function optionalText(value: unknown, label: string, max: number) {
+  const normalized = String(value ?? '').trim()
+  if (normalized.length > max) throw new DomainError(`${label} must be at most ${max} characters.`)
+  return normalized
 }
 
 function boundedText(value: unknown, label: string, max: number) {
   const normalized = String(value ?? '').trim()
   if (!normalized || normalized.length > max) throw new DomainError(`${label} is required and must be at most ${max} characters.`)
   return normalized
+}
+
+// Customer service contact shown on the Contact page; each is optional, the email must be valid when given.
+function contactDetails(input: StorefrontSettingsInput) {
+  const storefrontContactEmail = optionalText(input.storefrontContactEmail, 'Contact email', 254).toLowerCase()
+  if (storefrontContactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(storefrontContactEmail)) throw new DomainError('Enter a valid contact email.')
+  const storefrontContactPhone = optionalText(input.storefrontContactPhone, 'Contact phone', 40)
+  if (storefrontContactPhone && !/^[+()0-9 .-]{5,40}$/.test(storefrontContactPhone)) throw new DomainError('Enter a valid contact phone.')
+  return { storefrontContactEmail, storefrontContactPhone, storefrontServiceHours: optionalText(input.storefrontServiceHours, 'Service hours', 200) }
 }
 
 export function normalizeStorefrontSettingsInput(input: StorefrontSettingsInput) {
@@ -27,6 +45,7 @@ export function normalizeStorefrontSettingsInput(input: StorefrontSettingsInput)
     storefrontBrandColor,
     storefrontHomepageTitle: boundedText(input.storefrontHomepageTitle, 'Homepage title', 120),
     storefrontHomepageDescription: boundedText(input.storefrontHomepageDescription, 'Homepage description', 320),
+    ...contactDetails(input),
   }
 }
 
@@ -39,7 +58,7 @@ export async function updateCarrierStorefrontSettings(
   const data = normalizeStorefrontSettingsInput(args)
   // Public identity changes are audited with before/after values, like other privileged carrier changes.
   return (context.prisma as any).$transaction(async (tx: any) => {
-    const before = await tx.carrier.findUniqueOrThrow({ where: { id: actor.carrierId }, select: { name: true, legalName: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true } })
+    const before = await tx.carrier.findUniqueOrThrow({ where: { id: actor.carrierId }, select: { name: true, legalName: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true } })
     const updated = await tx.carrier.update({ where: { id: actor.carrierId }, data })
     const now = new Date()
     await tx.auditEvent.create({ data: {

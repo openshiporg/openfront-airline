@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { decimalToMinorUnits, formatMinorUnits } from '@/features/keystone/lib/money'
 import { cn } from '@/lib/utils'
+import { formatAirportTime } from '@/features/airline/lib/time'
 import { Code, DeskSection, Notice, Panel, Pill, Readout, ReadoutStrip, Route, StatusDot, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
 
 import type { Offer, Booking, RefundCleanupBooking, Evidence } from '@/features/airline/lib/operator-bookings'
@@ -72,25 +73,45 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
   const [refundReferences, setRefundReferences] = useState<Record<string, string>>({})
   const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({})
   const [refundReasons, setRefundReasons] = useState<Record<string, string>>({})
-  const [evidenceSources, setEvidenceSources] = useState<Record<string, string>>({})
-  const [evidenceDigests, setEvidenceDigests] = useState<Record<string, string>>({})
+  const [receivedMethods, setReceivedMethods] = useState<Record<string, string>>({})
+  const [receivedReferences, setReceivedReferences] = useState<Record<string, string>>({})
+  const [receivedAt, setReceivedAt] = useState<Record<string, string>>({})
   const [evidencePurposes, setEvidencePurposes] = useState<Record<string, string>>({})
+  const [issuedAccess, setIssuedAccess] = useState<{ recordLocator: string; accessToken: string } | null>(null)
   const [cancellationReasons, setCancellationReasons] = useState<Record<string, string>>({})
   const [evidenceRejectionReasons, setEvidenceRejectionReasons] = useState<Record<string, string>>({})
   const refundAmountValue = (booking: Booking) => refundAmounts[booking.id] ?? ''
-  async function submitEvidence(booking: Booking) {
+  // Maker step: records money received (or a refund sent) outside the website, then a different operator approves.
+  async function recordReceived(booking: Booking) {
     const aggregate = booking.id
     if (!beginTask(aggregate)) return
     setWorking(`evidence:${booking.id}`); setMessageFailed(false); setMessage('')
     try {
-      const purpose = evidencePurposes[booking.id] ?? 'capture'
-      const reference = (purpose === 'capture' ? captureReferences : refundReferences)[booking.id]?.trim()
-      const source = evidenceSources[booking.id]?.trim(); const digest = evidenceDigests[booking.id]?.trim()
+      const purpose = evidencePurposes[booking.id] ?? (['paid', 'partially_refunded'].includes(booking.paymentStatus) ? 'refund' : 'capture')
+      const reference = receivedReferences[booking.id]?.trim()
+      const method = receivedMethods[booking.id] ?? 'bank_transfer'
       const amount = purpose === 'capture' ? booking.totalAmount : decimalToMinorUnits(refundAmountValue(booking), booking.currencyCode)
-      if (!reference || !source || !digest || !amount) throw new Error('Imported ledger reference, source, SHA-256 digest, and amount are required.')
-      await mutate(`mutation($booking:ID!,$purpose:String!,$reference:String!,$source:String!,$digest:String!,$amount:Int!,$currency:String!,$key:String!){submitManualPaymentEvidence(bookingId:$booking,purpose:$purpose,externalReference:$reference,ledgerSource:$source,evidenceDigest:$digest,amount:$amount,currencyCode:$currency,idempotencyKey:$key){status}}`, { booking: booking.id, purpose, reference, source, digest, amount, currency: booking.currencyCode, key: `evidence-${crypto.randomUUID()}` })
-      setMessage(`Evidence submitted for ${booking.recordLocator}. A different authorized user must approve it.`); router.refresh()
-    } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Evidence could not be submitted.') }
+      if (!reference) throw new Error('Enter the bank, terminal or receipt reference.')
+      if (!amount) throw new Error('Enter the refund amount.')
+      const when = receivedAt[booking.id] ? new Date(receivedAt[booking.id]).toISOString() : new Date().toISOString()
+      await mutate(`mutation($booking:ID!,$purpose:String!,$method:String!,$reference:String!,$amount:Int!,$at:String!,$key:String!){recordReceivedPayment(bookingId:$booking,purpose:$purpose,method:$method,externalReference:$reference,amount:$amount,receivedAt:$at,idempotencyKey:$key){status}}`, { booking: booking.id, purpose, method, reference, amount, at: when, key: `received-${crypto.randomUUID()}` })
+      if (purpose === 'capture') setCaptureReferences(values => ({ ...values, [booking.id]: reference }))
+      else setRefundReferences(values => ({ ...values, [booking.id]: reference }))
+      setMessage(`${purpose === 'capture' ? 'Payment' : 'Refund'} recorded for ${booking.recordLocator}. Another payment operator approves it under Settlement approval.`); router.refresh()
+    } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Payment could not be recorded.') }
+    endTask(aggregate)
+  }
+  async function reissueAccess(booking: Booking) {
+    if (!window.confirm(`Issue a new access code for ${booking.recordLocator}? The customer's current code stops working.`)) return
+    const aggregate = booking.id
+    if (!beginTask(aggregate)) return
+    setMessageFailed(false); setMessage('')
+    try {
+      const response = await fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ query: 'mutation($id:ID!){reissueBookingAccessCode(bookingId:$id){recordLocator accessToken}}', variables: { id: booking.id } }) })
+      const body = await response.json() as { data?: { reissueBookingAccessCode?: { recordLocator: string; accessToken: string } }; errors?: Array<{ message: string }> }
+      if (!body.data?.reissueBookingAccessCode) throw new Error(body.errors?.[0]?.message ?? 'A new access code could not be issued.')
+      setIssuedAccess(body.data.reissueBookingAccessCode)
+    } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'A new access code could not be issued.') }
     endTask(aggregate)
   }
   async function approveEvidence(evidence: Evidence) {
@@ -129,10 +150,10 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
     if (!beginTask(aggregate)) return
     setWorking(booking.id); setMessageFailed(false); setMessage('')
     try {
-      const providerReference = captureReferences[booking.id]?.trim()
-      if (!providerReference) throw new Error('An approved provider settlement reference is required.')
+      const providerReference = (booking.approvedEvidence?.find(evidence => evidence.purpose === 'capture')?.externalReference ?? captureReferences[booking.id])?.trim()
+      if (!providerReference) throw new Error('Record the payment and have another operator approve it first.')
       await mutate(`mutation($id: ID!, $key: String!, $reference: String!) { captureBookingPayment(bookingId: $id, idempotencyKey: $key, providerReference: $reference) { status } }`, { id: booking.id, reference: providerReference, key: `payment-${crypto.randomUUID()}` })
-      setMessage(`Externally settled payment recorded for ${booking.recordLocator}; this system did not initiate payment.`); router.refresh()
+      setMessage(`${booking.recordLocator} is paid. Issue the ticket next.`); router.refresh()
     } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Payment failed.') }
     endTask(aggregate)
   }
@@ -142,7 +163,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
     setWorking(booking.id); setMessageFailed(false); setMessage('')
     try {
       await mutate(`mutation($id: ID!, $key: String!) { issueBookingTickets(bookingId: $id, idempotencyKey: $key) { status } }`, { id: booking.id, key: `ticket-${crypto.randomUUID()}` })
-      setMessage(`Internal ticket record issued for ${booking.recordLocator}. Use Departure control for passenger service; external carrier issuance is not implied.`); router.refresh()
+      setMessage(`Tickets issued for ${booking.recordLocator}. Seats and check-in are now open.`); router.refresh()
     } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Ticketing failed.') }
     endTask(aggregate)
   }
@@ -188,6 +209,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
     </ReadoutStrip>}
     {Object.entries(sectionErrors).map(([section,error]) => <Notice key={section} tone="bad" role="alert"><span className="font-medium capitalize">{section === 'cleanup' ? 'Refund follow-up' : section}</span>: {error}</Notice>)}
     {message && <Notice tone={messageFailed ? 'bad' : 'ok'} role={messageFailed ? 'alert' : 'status'}>{message}</Notice>}
+    {issuedAccess && <Notice tone="warn" role="status"><span className="font-medium">New access code for <Code className="text-foreground">{issuedAccess.recordLocator}</Code>. Shown once.</span><span className="mt-2 flex flex-wrap items-center gap-2"><code className="max-w-full break-all rounded-md bg-background px-2 py-1 font-mono text-xs">{issuedAccess.accessToken}</code><Track><Pill size="sm" onClick={() => navigator.clipboard.writeText(issuedAccess.accessToken).then(() => setMessage('Access code copied.'), () => undefined)}>Copy</Pill><Pill size="sm" onClick={() => setIssuedAccess(null)}>Done</Pill></Track></span></Notice>}
     {originalBookingCommand && <section aria-label="Original operator booking command recovery" className="flex min-w-0 flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
       <TitleLine as="p" tone="warn" className="text-sm font-medium text-foreground">Booking acknowledgement pending</TitleLine>
       <Track><Pill disabled={Boolean(working)} onClick={() => accept(undefined, true)}>Recover receipt</Pill><Pill variant="primary" disabled={Boolean(working)} onClick={() => accept()}>Retry same command</Pill></Track>
@@ -204,18 +226,28 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
           </div>
           <span className="font-mono text-sm font-medium tabular-nums text-foreground">{formatMinorUnits(booking.totalAmount, booking.currencyCode)}</span>
         </div>
-        {booking.paymentStatus === 'unpaid' && booking.metadata?.paymentDueAt && <p className="flex items-baseline gap-2 text-xs text-amber-700 dark:text-amber-300"><StatusDot tone="warn" className="size-1.5 shadow-none" />Evidence due <span className="font-mono tabular-nums">{new Date(booking.metadata.paymentDueAt).toLocaleString()}</span>; expires when overdue</p>}
+        <div className="grid min-w-0 gap-1 text-sm sm:grid-cols-2">
+          <p className="min-w-0 break-words text-foreground">{booking.passengers?.length ? booking.passengers.map(entry => `${entry.passenger?.givenName ?? ''} ${entry.passenger?.familyName ?? ''}`.trim() + (entry.passengerType && entry.passengerType !== 'adult' ? ` (${entry.passengerType === 'child' ? 'child' : 'infant'})` : '')).join(', ') : <span className="text-muted-foreground">Travelers restricted</span>}{(booking.passengersCount ?? 0) > (booking.passengers?.length ?? 0) ? ` +${(booking.passengersCount ?? 0) - (booking.passengers?.length ?? 0)}` : ''}</p>
+          <p className="min-w-0 break-words text-muted-foreground sm:text-right">{[booking.contactEmail, booking.contactPhone].filter(Boolean).join(' · ') || 'No contact'}</p>
+          {booking.segments?.length ? <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs sm:col-span-2">{booking.segments.map(segment => <li key={segment.id} className="inline-flex items-baseline gap-2"><span className="font-mono font-semibold">{segment.marketingFlightNumber}</span><Route from={segment.originCode} to={segment.destinationCode} /><span className="font-mono tabular-nums text-muted-foreground">{formatAirportTime(segment.scheduledDepartureAt, 'UTC')}</span><StatusLabel status={segment.status} /></li>)}</ul> : null}
+        </div>
+        {booking.paymentStatus === 'unpaid' && booking.metadata?.paymentDueAt && <p className="flex items-baseline gap-2 text-xs text-amber-700 dark:text-amber-300"><StatusDot tone="warn" className="size-1.5 shadow-none" />Pay by <span className="font-mono tabular-nums">{formatAirportTime(booking.metadata.paymentDueAt, 'UTC')}</span></p>}
         <div className="space-y-2.5 border-t pt-3">
           {booking.status === 'confirmed' && booking.paymentStatus === 'paid' && booking.ticketingStatus === 'not_ticketed' && <CommandRow label="Ticket"><Track><Pill variant="primary" disabled={pending.includes(booking.id)} onClick={() => issue(booking)}>Issue ticket</Pill></Track></CommandRow>}
-          <CommandRow label="Evidence">
-            <select aria-label={`Evidence purpose for ${booking.recordLocator}`} value={evidencePurposes[booking.id] ?? 'capture'} onChange={event => setEvidencePurposes(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'sm:w-auto')}><option value="capture">Capture evidence</option><option value="refund">Refund evidence</option></select>
-            <input aria-label={`Ledger source for ${booking.recordLocator}`} value={evidenceSources[booking.id] ?? ''} onChange={event => setEvidenceSources(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Ledger source" className={rowInput} />
-            <input aria-label={`Evidence digest for ${booking.recordLocator}`} value={evidenceDigests[booking.id] ?? ''} onChange={event => setEvidenceDigests(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="SHA-256 digest" className={cn(rowInput, 'font-mono')} />
-            <Track><Pill disabled={pending.includes(booking.id)} onClick={() => submitEvidence(booking)}>Submit evidence</Pill></Track>
-          </CommandRow>
+          {!['cancelled', 'completed'].includes(booking.status) && ['unpaid', 'failed', 'paid', 'partially_refunded'].includes(booking.paymentStatus) && <CommandRow label="Received">
+            <select aria-label={`Money movement for ${booking.recordLocator}`} value={evidencePurposes[booking.id] ?? (['paid', 'partially_refunded'].includes(booking.paymentStatus) ? 'refund' : 'capture')} onChange={event => setEvidencePurposes(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'sm:w-auto')}>{['unpaid', 'failed'].includes(booking.paymentStatus) && <option value="capture">Payment received</option>}{['paid', 'partially_refunded'].includes(booking.paymentStatus) && <option value="refund">Refund sent</option>}</select>
+            <select aria-label={`Method for ${booking.recordLocator}`} value={receivedMethods[booking.id] ?? 'bank_transfer'} onChange={event => setReceivedMethods(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'sm:w-auto')}><option value="bank_transfer">Bank transfer</option><option value="card_terminal">Card terminal</option><option value="cash">Cash</option><option value="other">Other</option></select>
+            <input aria-label={`Reference for ${booking.recordLocator}`} value={receivedReferences[booking.id] ?? ''} onChange={event => setReceivedReferences(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Bank or receipt reference" className={cn(rowInput, 'font-mono')} />
+            <input aria-label={`Received at for ${booking.recordLocator}`} type="datetime-local" value={receivedAt[booking.id] ?? ''} onChange={event => setReceivedAt(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'sm:w-auto')} />
+            {(evidencePurposes[booking.id] ?? (['paid', 'partially_refunded'].includes(booking.paymentStatus) ? 'refund' : 'capture')) === 'capture' && <span className="font-mono text-sm tabular-nums">{formatMinorUnits(booking.totalAmount, booking.currencyCode)}</span>}
+            <Track><Pill disabled={pending.includes(booking.id)} onClick={() => recordReceived(booking)}>Record</Pill></Track>
+          </CommandRow>}
           {['unpaid', 'failed'].includes(booking.paymentStatus) && <CommandRow label="Payment">
-            <input aria-label={`Approved settlement reference for ${booking.recordLocator}`} value={captureReferences[booking.id] ?? ''} onChange={event => setCaptureReferences(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Settlement reference" className={cn(rowInput, 'font-mono')} />
-            <Track><Pill disabled={pending.includes(booking.id)} onClick={() => capture(booking)}>Record payment</Pill></Track>
+            {booking.approvedEvidence?.some(evidence => evidence.purpose === 'capture')
+              ? <span className="text-xs text-muted-foreground">Approved <Code className="text-foreground">{booking.approvedEvidence.find(evidence => evidence.purpose === 'capture')!.externalReference}</Code></span>
+              : booking.approvedEvidence ? <span className="text-xs text-muted-foreground">Awaiting approval</span>
+                : <input aria-label={`Approved settlement reference for ${booking.recordLocator}`} value={captureReferences[booking.id] ?? ''} onChange={event => setCaptureReferences(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Approved reference" className={cn(rowInput, 'font-mono')} />}
+            <Track><Pill variant="primary" disabled={pending.includes(booking.id) || Boolean(booking.approvedEvidence && !booking.approvedEvidence.some(evidence => evidence.purpose === 'capture'))} onClick={() => capture(booking)}>Mark paid</Pill></Track>
           </CommandRow>}
           {['paid', 'partially_refunded'].includes(booking.paymentStatus) && <CommandRow label="Refund">
             <input aria-label={`Refund amount in ${booking.currencyCode} for ${booking.recordLocator}`} placeholder={`${booking.currencyCode} amount`} inputMode="decimal" value={refundAmountValue(booking)} onChange={event => setRefundAmounts(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'font-mono tabular-nums sm:w-32')} />
@@ -224,6 +256,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             <Track><Pill disabled={pending.includes(booking.id) || !refundReasons[booking.id]?.trim()} onClick={() => refund(booking)}>Record refund</Pill></Track>
             <span className="text-xs text-muted-foreground">Remaining <span className="font-mono tabular-nums text-foreground">{formatMinorUnits(remainingRefund(booking), booking.currencyCode)}</span></span>
           </CommandRow>}
+          {!['cancelled', 'completed'].includes(booking.status) && <CommandRow label="Access"><Track><Pill size="sm" disabled={pending.includes(booking.id)} onClick={() => reissueAccess(booking)}>New access code</Pill></Track></CommandRow>}
           {!['cancelled', 'completed'].includes(booking.status) && ['unpaid', 'failed', 'refunded'].includes(booking.paymentStatus) && <CommandRow label="Cancel">
             <input aria-label={`Cancellation reason for ${booking.recordLocator}`} value={cancellationReasons[booking.id] ?? ''} onChange={event => setCancellationReasons(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Cancellation reason" className={rowInput} />
             <Track><Pill variant="danger" disabled={pending.includes(booking.id) || !cancellationReasons[booking.id]?.trim()} onClick={() => cancel(booking)}>Cancel & release</Pill></Track>
@@ -274,7 +307,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             <StateLabel label="Pay" status={booking.paymentStatus} />
             <StateLabel label="Ticket" status={booking.ticketingStatus} />
           </div>
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">{new Date(booking.updatedAt).toLocaleString()}</span>
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">{formatAirportTime(booking.updatedAt, 'UTC')}</span>
         </div>
         <p className="text-xs font-medium text-muted-foreground">{booking.status === 'cancelled' ? 'Cancelled · residual state' : 'Refund/void marked · cancellation review'}</p>
         {booking.segments.length ? <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1.5">{booking.segments.map(segment => <li key={segment.id} className="inline-flex items-baseline gap-2"><span className="font-mono text-xs tabular-nums text-muted-foreground">{segment.sequence}</span><Route from={segment.originCode} to={segment.destinationCode} /><StatusLabel status={segment.status} /></li>)}</ul> : <p className="text-xs text-muted-foreground">No segments</p>}

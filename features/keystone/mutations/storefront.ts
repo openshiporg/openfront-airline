@@ -65,7 +65,7 @@ export async function lookupDirectCarrier(prisma: any, carrierCode: string) {
 export async function lookupCarrierIdentity(prisma: any, carrierCode: string) {
   const carrier = await prisma.carrier.findUnique({
     where: { code: carrierCode.trim().toUpperCase() },
-    select: { id: true, code: true, name: true, legalName: true, defaultCurrencyCode: true, defaultTimezone: true, status: true, directSalesEnabled: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true },
+    select: { id: true, code: true, name: true, legalName: true, defaultCurrencyCode: true, defaultTimezone: true, status: true, directSalesEnabled: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true },
   })
   if (!carrier) throw new DomainError('Carrier identity is not configured.')
   const storefrontBrandColor = normalizeStorefrontBrandColor(carrier.storefrontBrandColor)
@@ -216,7 +216,8 @@ export async function createCustomerOffer(
         givenName: requiredText(input.givenName, `Passenger ${index + 1} given name`, 80),
         familyName: requiredText(input.familyName, `Passenger ${index + 1} family name`, 80),
         dateOfBirth,
-        email: email(input.email),
+        // Travelers after the lead may leave contact details blank; they share the lead traveler's.
+        email: email(input.email?.trim() ? input.email : args.passengers[0]?.email ?? ''),
         phone: input.phone?.trim().slice(0, 40) || '',
       }
     })
@@ -290,16 +291,21 @@ export async function createCustomerBooking(
   return { ...result, bookingAccessToken: current ? accessToken : null }
 }
 
-async function ownedBooking(context: Context, recordLocator: string, accessToken: string) {
+const BOOKING_ACCESS_MISMATCH = 'That booking reference and access code don’t match.'
+
+export async function ownedBooking(context: Context, recordLocator: string, accessToken: string) {
   // Prove possession with a bounded indexed lookup first; the expanded itinerary is read only for a proven holder.
-  const proof = await (context.prisma as any).booking.findFirst({
+  // A malformed code is just a failed proof: it is counted like any other mismatch.
+  let accessTokenHash: string | null = null
+  try { accessTokenHash = hashStorefrontToken(accessToken) } catch { accessTokenHash = null }
+  const proof = accessTokenHash ? await (context.prisma as any).booking.findFirst({
     where: {
       recordLocator: recordLocator.trim().toUpperCase(),
-      accessTokenHash: hashStorefrontToken(accessToken),
+      accessTokenHash,
       accessTokenExpiresAt: { gt: new Date() },
     },
     select: { id: true },
-  })
+  }) : null
   if (!proof) {
     // Only failed proofs count, per client network. Access tokens are high-entropy, so this bounds guessing, while
     // a holder's own repeated reads (a nine-passenger check-in makes about 37) never lock them out. Once the budget
@@ -309,7 +315,7 @@ async function ownedBooking(context: Context, recordLocator: string, accessToken
       throw new DomainError('This request cannot be completed right now.')
     }
     await consumeRateLimit(context, 'storefront.manage-booking', 30, 15 * 60_000)
-    throw new DomainError('Booking not found or inaccessible.')
+    throw new DomainError(BOOKING_ACCESS_MISMATCH)
   }
   const booking = await (context.prisma as any).booking.findUnique({
     where: { id: proof.id },
