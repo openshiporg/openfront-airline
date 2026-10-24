@@ -705,107 +705,117 @@ export async function issueBookingTickets(
 ): Promise<WorkflowResult> {
   return runSerializableTransaction(context, async transactionContext => {
     await requireFreshPermission(transactionContext, 'canManageTicketing')
-    const sudo = transactionContext.sudo() as any
-    const prisma = transactionContext.prisma as any
-    const bookingQuery = `id status paymentStatus ticketingStatus totalAmount currencyCode carrier { id code } passengers { id passenger { id } }`
-    let booking = await sudo.query.Booking.findOne({ where: { id: args.bookingId }, query: bookingQuery })
-    if (!booking) throw new DomainError('Booking not found.')
-    await requireFreshCarrierPermission(transactionContext, 'canManageTicketing', booking.carrier.id)
-    await lockBooking(transactionContext, booking.id)
-    booking = await sudo.query.Booking.findOne({ where: { id: booking.id }, query: bookingQuery })
-    if (!booking) throw new DomainError('Booking changed while preparing ticket issuance.')
-    const key = normalizeIdempotencyKey(args.idempotencyKey)
-    const request = { bookingId: booking.id }
-    const inspected = await inspectOperation(sudo, booking.carrier.id, key, 'ticket.issue', request)
-    if (inspected.replay) return { ...(inspected.replay.result ?? {}), replayed: true } as WorkflowResult
+    return issueBookingTicketsInTransaction(transactionContext, args, { authorize: true })
+  })
+}
 
-    const readSegments = (): Promise<TicketIssuanceSegment[]> => prisma.bookingSegment.findMany({
-      where: { bookingId: booking.id },
-      orderBy: [{ sequence: 'asc' }, { id: 'asc' }],
-      take: 51,
-      select: {
-        id: true, carrierId: true, bookingId: true, sequence: true, status: true, bookingClassCode: true, fareBasisCode: true, flightInstanceId: true,
-        flightInstance: { select: { id: true, carrierId: true, status: true, scheduledDepartureAt: true, estimatedDepartureAt: true, actualDepartureAt: true, actualArrivalAt: true } },
-      },
+// Initial ticket issuance inside the caller's transaction. Operators come through issueBookingTickets with their
+// ticketing permission; a verified online card payment issues tickets with authorize: false (the payment is the proof).
+export async function issueBookingTicketsInTransaction(
+  transactionContext: Context,
+  args: { bookingId: string; idempotencyKey: string },
+  options: { authorize: boolean },
+): Promise<WorkflowResult> {
+  const sudo = transactionContext.sudo() as any
+  const prisma = transactionContext.prisma as any
+  const bookingQuery = `id status paymentStatus ticketingStatus totalAmount currencyCode carrier { id code } passengers { id passenger { id } }`
+  let booking = await sudo.query.Booking.findOne({ where: { id: args.bookingId }, query: bookingQuery })
+  if (!booking) throw new DomainError('Booking not found.')
+  if (options.authorize) await requireFreshCarrierPermission(transactionContext, 'canManageTicketing', booking.carrier.id)
+  await lockBooking(transactionContext, booking.id)
+  booking = await sudo.query.Booking.findOne({ where: { id: booking.id }, query: bookingQuery })
+  if (!booking) throw new DomainError('Booking changed while preparing ticket issuance.')
+  const key = normalizeIdempotencyKey(args.idempotencyKey)
+  const request = { bookingId: booking.id }
+  const inspected = await inspectOperation(sudo, booking.carrier.id, key, 'ticket.issue', request)
+  if (inspected.replay) return { ...(inspected.replay.result ?? {}), replayed: true } as WorkflowResult
+
+  const readSegments = (): Promise<TicketIssuanceSegment[]> => prisma.bookingSegment.findMany({
+    where: { bookingId: booking.id },
+    orderBy: [{ sequence: 'asc' }, { id: 'asc' }],
+    take: 51,
+    select: {
+      id: true, carrierId: true, bookingId: true, sequence: true, status: true, bookingClassCode: true, fareBasisCode: true, flightInstanceId: true,
+      flightInstance: { select: { id: true, carrierId: true, status: true, scheduledDepartureAt: true, estimatedDepartureAt: true, actualDepartureAt: true, actualArrivalAt: true } },
+    },
+  })
+  const initialSegments = await readSegments()
+  if (initialSegments.length > 50) throw new DomainError('Booking exceeds the bounded 50-segment ticket-issuance limit.')
+  const flightIds = [...new Set(initialSegments.map((segment: any) => segment.flightInstanceId).filter((id: unknown): id is string => typeof id === 'string'))].sort()
+  if (flightIds.length) {
+    const flightLocks = await transactionContext.prisma.$queryRaw(Prisma.sql`SELECT "id" FROM "FlightInstance" WHERE "id" IN (${Prisma.join(flightIds)}) ORDER BY "id" FOR UPDATE`)
+    throwIfKeystonePrismaError(flightLocks)
+  }
+  const ticketableSegmentsRaw = await readSegments()
+  if (ticketableSegmentsRaw.length > 50) throw new DomainError('Booking exceeds the bounded 50-segment ticket-issuance limit.')
+  const inspectedAfterFlightLocks = await inspectOperation(sudo, booking.carrier.id, key, 'ticket.issue', request)
+  if (inspectedAfterFlightLocks.replay) return { ...(inspectedAfterFlightLocks.replay.result ?? {}), replayed: true } as WorkflowResult
+
+  if (booking.paymentStatus !== 'paid') throw new DomainError('Capture payment before issuing tickets.')
+  if (booking.ticketingStatus !== 'not_ticketed') throw new DomainError('Only a never-ticketed booking can receive its initial ticket issuance.')
+  if (booking.status !== 'confirmed') throw new DomainError('Only confirmed bookings can be ticketed.')
+  if (!booking.passengers?.length || booking.passengers.length > 9 || new Set(booking.passengers.map((passenger: any) => passenger.id)).size !== booking.passengers.length || booking.passengers.some((passenger: any) => !passenger.id || !passenger.passenger?.id)) {
+    throw new DomainError('Booking must have one to nine uniquely linked passengers before ticket issuance.')
+  }
+  if (ticketableSegmentsRaw.some((segment: any) => segment.bookingId !== booking.id || segment.carrierId !== booking.carrier.id || segment.flightInstance?.carrierId !== booking.carrier.id)) {
+    throw new DomainError('Ticketable itinerary ownership is inconsistent across booking, carrier, or dated service.')
+  }
+  const now = new Date()
+  const ticketableSegments = selectCurrentTicketableSegments(ticketableSegmentsRaw, now)
+  const [ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount] = await Promise.all([
+    prisma.ticket.count({ where: { bookingId: booking.id } }),
+    prisma.serviceObligation.count({ where: { bookingId: booking.id } }),
+    prisma.checkIn.count({ where: { bookingId: booking.id } }),
+    prisma.boardingPass.count({ where: { checkIn: { bookingId: booking.id } } }),
+    prisma.seatAssignment.count({ where: { bookingId: booking.id } }),
+    prisma.bag.count({ where: { bookingId: booking.id } }),
+    prisma.electronicMiscCoupon.count({ where: { document: { bookingId: booking.id } } }),
+  ])
+  const artifactBlockers = ticketIssuanceArtifactBlockers({ ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount })
+  if (artifactBlockers.length) throw new DomainError(`Initial ticket issuance is blocked by existing passenger-service artifacts: ${artifactBlockers.join(', ')}.`)
+
+  const claim = await beginOperation(sudo, transactionContext, booking.carrier.id, key, 'ticket.issue', request)
+  if (claim.replay) return { ...(claim.replay.result ?? {}), replayed: true } as WorkflowResult
+  const issuedAt = now.toISOString()
+  let ticketCountCreated = 0
+  for (const [passengerIndex, bookingPassenger] of booking.passengers.entries()) {
+    const passengerAmount = Math.floor(booking.totalAmount / booking.passengers.length) + (passengerIndex < booking.totalAmount % booking.passengers.length ? 1 : 0)
+    const ticket = await sudo.query.Ticket.createOne({
+      data: {
+        carrier: { connect: { id: booking.carrier.id } }, ticketNumber: `${booking.carrier.code}-${randomReference('', 12)}`,
+        booking: { connect: { id: booking.id } }, bookingPassenger: { connect: { id: bookingPassenger.id } }, passenger: { connect: { id: bookingPassenger.passenger.id } },
+        issuingCarrierCode: booking.carrier.code, validatingCarrierCode: booking.carrier.code, status: 'issued',
+        totalAmount: passengerAmount, currencyCode: booking.currencyCode, issuedAt, providerReference: `internal:${booking.id}`, metadata: { issuanceChannel: 'openfront', allocation: 'party-total-minor-units' },
+      }, query: 'id',
     })
-    const initialSegments = await readSegments()
-    if (initialSegments.length > 50) throw new DomainError('Booking exceeds the bounded 50-segment ticket-issuance limit.')
-    const flightIds = [...new Set(initialSegments.map((segment: any) => segment.flightInstanceId).filter((id: unknown): id is string => typeof id === 'string'))].sort()
-    if (flightIds.length) {
-      const flightLocks = await transactionContext.prisma.$queryRaw(Prisma.sql`SELECT "id" FROM "FlightInstance" WHERE "id" IN (${Prisma.join(flightIds)}) ORDER BY "id" FOR UPDATE`)
-      throwIfKeystonePrismaError(flightLocks)
-    }
-    const ticketableSegmentsRaw = await readSegments()
-    if (ticketableSegmentsRaw.length > 50) throw new DomainError('Booking exceeds the bounded 50-segment ticket-issuance limit.')
-    const inspectedAfterFlightLocks = await inspectOperation(sudo, booking.carrier.id, key, 'ticket.issue', request)
-    if (inspectedAfterFlightLocks.replay) return { ...(inspectedAfterFlightLocks.replay.result ?? {}), replayed: true } as WorkflowResult
-
-    if (booking.paymentStatus !== 'paid') throw new DomainError('Capture payment before issuing tickets.')
-    if (booking.ticketingStatus !== 'not_ticketed') throw new DomainError('Only a never-ticketed booking can receive its initial ticket issuance.')
-    if (booking.status !== 'confirmed') throw new DomainError('Only confirmed bookings can be ticketed.')
-    if (!booking.passengers?.length || booking.passengers.length > 9 || new Set(booking.passengers.map((passenger: any) => passenger.id)).size !== booking.passengers.length || booking.passengers.some((passenger: any) => !passenger.id || !passenger.passenger?.id)) {
-      throw new DomainError('Booking must have one to nine uniquely linked passengers before ticket issuance.')
-    }
-    if (ticketableSegmentsRaw.some((segment: any) => segment.bookingId !== booking.id || segment.carrierId !== booking.carrier.id || segment.flightInstance?.carrierId !== booking.carrier.id)) {
-      throw new DomainError('Ticketable itinerary ownership is inconsistent across booking, carrier, or dated service.')
-    }
-    const now = new Date()
-    const ticketableSegments = selectCurrentTicketableSegments(ticketableSegmentsRaw, now)
-    const [ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount] = await Promise.all([
-      prisma.ticket.count({ where: { bookingId: booking.id } }),
-      prisma.serviceObligation.count({ where: { bookingId: booking.id } }),
-      prisma.checkIn.count({ where: { bookingId: booking.id } }),
-      prisma.boardingPass.count({ where: { checkIn: { bookingId: booking.id } } }),
-      prisma.seatAssignment.count({ where: { bookingId: booking.id } }),
-      prisma.bag.count({ where: { bookingId: booking.id } }),
-      prisma.electronicMiscCoupon.count({ where: { document: { bookingId: booking.id } } }),
-    ])
-    const artifactBlockers = ticketIssuanceArtifactBlockers({ ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount })
-    if (artifactBlockers.length) throw new DomainError(`Initial ticket issuance is blocked by existing passenger-service artifacts: ${artifactBlockers.join(', ')}.`)
-
-    const claim = await beginOperation(sudo, transactionContext, booking.carrier.id, key, 'ticket.issue', request)
-    if (claim.replay) return { ...(claim.replay.result ?? {}), replayed: true } as WorkflowResult
-    const issuedAt = now.toISOString()
-    let ticketCountCreated = 0
-    for (const [passengerIndex, bookingPassenger] of booking.passengers.entries()) {
-      const passengerAmount = Math.floor(booking.totalAmount / booking.passengers.length) + (passengerIndex < booking.totalAmount % booking.passengers.length ? 1 : 0)
-      const ticket = await sudo.query.Ticket.createOne({
+    for (const [segmentIndex, segment] of ticketableSegments.entries()) {
+      const couponAmount = Math.floor(passengerAmount / ticketableSegments.length) + (segmentIndex < passengerAmount % ticketableSegments.length ? 1 : 0)
+      const obligation = await sudo.query.ServiceObligation.createOne({
         data: {
-          carrier: { connect: { id: booking.carrier.id } }, ticketNumber: `${booking.carrier.code}-${randomReference('', 12)}`,
-          booking: { connect: { id: booking.id } }, bookingPassenger: { connect: { id: bookingPassenger.id } }, passenger: { connect: { id: bookingPassenger.passenger.id } },
-          issuingCarrierCode: booking.carrier.code, validatingCarrierCode: booking.carrier.code, status: 'issued',
-          totalAmount: passengerAmount, currencyCode: booking.currencyCode, issuedAt, providerReference: `internal:${booking.id}`, metadata: { issuanceChannel: 'openfront', allocation: 'party-total-minor-units' },
+          carrier: { connect: { id: booking.carrier.id } }, booking: { connect: { id: booking.id } },
+          bookingPassenger: { connect: { id: bookingPassenger.id } }, obligationKey: createServiceObligationKey(),
+          currentVersion: 1, status: 'active',
         }, query: 'id',
       })
-      for (const [segmentIndex, segment] of ticketableSegments.entries()) {
-        const couponAmount = Math.floor(passengerAmount / ticketableSegments.length) + (segmentIndex < passengerAmount % ticketableSegments.length ? 1 : 0)
-        const obligation = await sudo.query.ServiceObligation.createOne({
-          data: {
-            carrier: { connect: { id: booking.carrier.id } }, booking: { connect: { id: booking.id } },
-            bookingPassenger: { connect: { id: bookingPassenger.id } }, obligationKey: createServiceObligationKey(),
-            currentVersion: 1, status: 'active',
-          }, query: 'id',
-        })
-        await sudo.query.TicketCoupon.createOne({
-          data: {
-            carrier: { connect: { id: booking.carrier.id } }, couponKey: `${ticket.id}:${segment.id}`,
-            ticket: { connect: { id: ticket.id } }, bookingSegment: { connect: { id: segment.id } }, serviceObligation: { connect: { id: obligation.id } }, serviceObligationVersion: 1, couponNumber: segment.sequence,
-            status: 'open', fareBasisCode: segment.fareBasisCode ?? 'STANDARD', bookingClassCode: segment.bookingClassCode ?? 'Y',
-            amount: couponAmount, currencyCode: booking.currencyCode, entitlementSnapshot: { bookingId: booking.id, segmentId: segment.id },
-          }, query: 'id',
-        })
-      }
-      ticketCountCreated += 1
+      await sudo.query.TicketCoupon.createOne({
+        data: {
+          carrier: { connect: { id: booking.carrier.id } }, couponKey: `${ticket.id}:${segment.id}`,
+          ticket: { connect: { id: ticket.id } }, bookingSegment: { connect: { id: segment.id } }, serviceObligation: { connect: { id: obligation.id } }, serviceObligationVersion: 1, couponNumber: segment.sequence,
+          status: 'open', fareBasisCode: segment.fareBasisCode ?? 'STANDARD', bookingClassCode: segment.bookingClassCode ?? 'Y',
+          amount: couponAmount, currencyCode: booking.currencyCode, entitlementSnapshot: { bookingId: booking.id, segmentId: segment.id },
+        }, query: 'id',
+      })
     }
-    await sudo.query.Booking.updateOne({ where: { id: booking.id }, data: { status: 'ticketed', ticketingStatus: 'ticketed', ticketedAt: issuedAt } })
-    await writeAudit(sudo, transactionContext, {
-      carrierId: booking.carrier.id, key: claim.storageKey, action: 'ticket.issue', aggregateType: 'Booking', aggregateId: booking.id,
-      after: { status: 'ticketed', ticketingStatus: 'ticketed' }, metadata: { ticketCount: ticketCountCreated, currentSegmentCount: ticketableSegments.length },
-    })
-    const result = { resourceType: 'Booking', resourceId: booking.id, status: 'ticketed', changed: true, replayed: false }
-    await finishOperation(sudo, claim.record.id, result)
-    return result
+    ticketCountCreated += 1
+  }
+  await sudo.query.Booking.updateOne({ where: { id: booking.id }, data: { status: 'ticketed', ticketingStatus: 'ticketed', ticketedAt: issuedAt } })
+  await writeAudit(sudo, transactionContext, {
+    carrierId: booking.carrier.id, key: claim.storageKey, action: 'ticket.issue', aggregateType: 'Booking', aggregateId: booking.id,
+    after: { status: 'ticketed', ticketingStatus: 'ticketed' }, metadata: { ticketCount: ticketCountCreated, currentSegmentCount: ticketableSegments.length },
   })
+  const result = { resourceType: 'Booking', resourceId: booking.id, status: 'ticketed', changed: true, replayed: false }
+  await finishOperation(sudo, claim.record.id, result)
+  return result
 }
 
 export async function registerPassengerTravelDocument(

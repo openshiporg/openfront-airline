@@ -181,6 +181,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
   useEffect(() => {
     const reference = new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase()
     if (reference && /^[A-Z0-9]{5,8}$/.test(reference) && recordLocatorInput.current && !recordLocatorInput.current.value) recordLocatorInput.current.value = reference
+    // Back from Stripe: retrieve the booking with the code saved in this browser, which finishes the payment.
+    if (reference && new URLSearchParams(window.location.search).get('checkout')) {
+      try {
+        const saved = localStorage.getItem(`${storagePrefix}:booking:${reference}`)
+        if (saved) { setBookingCredentials(reference, saved); requestAnimationFrame(() => manageForm.current?.requestSubmit()) }
+      } catch { /* the customer enters the code */ }
+    }
   }, [])
   const accessTokenInput = useRef<HTMLInputElement>(null)
   const money = useMemo(() => (amount: number) => formatMinorUnits(amount, selected?.currencyCode ?? carrier.defaultCurrencyCode), [selected?.currencyCode, carrier.defaultCurrencyCode])
@@ -312,10 +319,32 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
       const data = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: submitted.recordLocator, token: saved })
       if (confirmation && confirmation.recordLocator !== data.customerBooking.recordLocator) setConfirmation(null)
       setBookingCredentials(submitted.recordLocator, saved); setManagedBooking(data.customerBooking)
+      // Coming back from Stripe (or after a lost redirect): record the paid booking and its tickets, then reread.
+      if (carrier.onlinePaymentEnabled && ['unpaid', 'failed'].includes(data.customerBooking.paymentStatus)) {
+        const checkoutSessionId = new URLSearchParams(window.location.search).get('checkout')
+        try {
+          const finished = await graphql<{ completeCustomerCheckout: { status: string; ticketingStatus: string } }>(`mutation($carrier:String!,$record:String!,$token:String!,$session:String){completeCustomerCheckout(carrierCode:$carrier,recordLocator:$record,accessToken:$token,checkoutSessionId:$session){status ticketingStatus}}`, { carrier: carrier.code, record: data.customerBooking.recordLocator, token: saved, session: checkoutSessionId && checkoutSessionId.startsWith('cs_') ? checkoutSessionId : null })
+          if (finished.completeCustomerCheckout.status === 'paid') {
+            const paid = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: data.customerBooking.recordLocator, token: saved })
+            setManagedBooking(paid.customerBooking)
+            setStatus(finished.completeCustomerCheckout.ticketingStatus === 'ticketed' ? 'Payment received. Your tickets are issued: choose seats and check in below.' : 'Payment received. Your tickets will be issued shortly.')
+          } else if (checkoutSessionId === 'cancelled') setStatus('Payment cancelled. Your reservation is still held until its payment deadline.')
+        } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t confirm your payment yet.') }
+      }
     } catch (error) {
       if (refreshAfterChange) setStatus(current => `${current} We couldn’t refresh your booking just now; retrieve it again to see the latest details.`)
       else { setManagedBooking(null); setConfirmation(null); setStatus(error instanceof Error ? error.message : 'Booking could not be retrieved.') }
     }
+    setBusy(false)
+  }
+
+  async function payOnline(locator: string, token: string) {
+    setBusy(true); setStatus('')
+    try {
+      const data = await graphql<{ startCustomerCheckout: { url: string } }>(`mutation($carrier:String!,$record:String!,$token:String!){startCustomerCheckout(carrierCode:$carrier,recordLocator:$record,accessToken:$token){url}}`, { carrier: carrier.code, record: locator, token })
+      window.location.assign(data.startCustomerCheckout.url)
+      return
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Online payment couldn’t start.') }
     setBusy(false)
   }
 
@@ -394,7 +423,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         {([['adults', 'Adults 12+', 1, 9], ['children', 'Children 2–11', 0, 8], ['infants', 'Infants under 2', 0, party.adults]] as const).map(([key, text, min, max]) => <label key={key} className="af-field"><span className="af-field-label">{text}</span><select aria-label={text} value={party[key]} onChange={event => setParty(current => { const next = { ...current, [key]: Number(event.target.value) }; return { ...next, infants: Math.min(next.infants, next.adults) } })} className="af-input">{Array.from({ length: max - min + 1 }, (_, index) => <option key={index + min} value={index + min}>{index + min}</option>)}</select></label>)}
         <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Searching…' : 'Search flights'}</button></div>
       </div>
-      <p className="af-mono mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]"><span>Reservation only</span><span>Pay the airline directly</span><span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
+      <p className="af-mono mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
     </form>}
     {status && <p role="status" className="af-notice" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'}><span className="af-dot" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'} />{status}</p>}
     {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-raised af-pill-sm">Next flight: {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextServiceDate}T00:00:00.000Z`))}</button></div>}
@@ -414,7 +443,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         <div className="p-5 sm:p-6">
           <p className="af-field-label">Booking reference</p>
           <h2 className="af-mono mt-1 text-4xl font-semibold tracking-[0.18em] sm:text-5xl">{confirmation.recordLocator}</h2>
-          <p className="af-title-line mt-4 text-sm font-medium"><span className="af-dot" data-tone="warn" />Awaiting payment · expires after 24 hours unless paid</p>
+          <p className="af-title-line mt-4 text-sm font-medium"><span className="af-dot" data-tone="warn" />Awaiting payment · {carrier.onlinePaymentEnabled ? 'pay now to get your tickets' : 'expires after 24 hours unless paid'}</p>
         </div>
       </div>
       <div className="af-pass-stub p-5 sm:p-6">
@@ -422,6 +451,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         <code className="af-mono af-well mt-2 block overflow-x-auto px-3 py-2.5 text-xs">{confirmation.token}</code>
         <p className="mt-2 text-xs text-[var(--af-ink-3)]">{carrier.accessRecoveryEnabled ? 'Also emailed to the lead traveler.' : 'Save it now. It can’t be emailed.'}</p>
         <div className="af-track mt-3" data-block="true"><button onClick={() => navigator.clipboard.writeText(confirmation.token).then(() => setStatus('Access code copied.'), () => setStatus('Copy failed. Select the access code and copy it manually.'))} className="af-pill af-pill-raised">Copy access code</button></div>
+        {carrier.onlinePaymentEnabled && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void payOnline(confirmation.recordLocator, confirmation.token)} className="af-pill af-pill-primary">Pay now</button></div>}
         {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className="af-pill af-pill-primary">Book return flight</button></div>}
       </div>
     </section>}
@@ -490,14 +520,14 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
             <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-mono text-3xl font-semibold tracking-[0.16em]">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
             <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
-          {mode !== 'check-in' && <div className="af-track w-fit"><button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button onClick={cancelBooking} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
+          {mode !== 'check-in' && <div className="af-track w-fit">{carrier.onlinePaymentEnabled && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button onClick={cancelBooking} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
         </div>
         <div className="af-rule bg-[var(--af-paper)] px-5 py-4 sm:px-6">
           {managedBooking.bookingReceipt.accepted ? <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1"><p className="af-field-label">Booked fare · <span className="normal-case tracking-normal">{managedBooking.bookingReceipt.accepted.offerNumber}</span></p>{managedBooking.bookingReceipt.accepted.items.map((item, index) => <p key={index} className="text-sm">{item.description} · {item.quantity} travelers · {item.fareName ?? 'Accepted fare'}{item.includedBaggage ? ` · ${item.includedBaggage.pieces} bag(s), ${item.includedBaggage.maxWeightGrams / 1000} kg` : ''}</p>)}</div>
             <p className="af-mono text-xl font-semibold">{formatMinorUnits(managedBooking.bookingReceipt.accepted.totalAmount, managedBooking.bookingReceipt.accepted.currencyCode)}</p>
           </div> : <p role="status" className="text-sm text-[var(--af-ink-2)]">Original fare details unavailable.</p>}
-          <p className="af-mono mt-3 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">No online payment · paid once the airline confirms</p>
+          <p className="af-mono mt-3 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
         </div>
       </div>
       {managedBooking.segments.map(segment => {

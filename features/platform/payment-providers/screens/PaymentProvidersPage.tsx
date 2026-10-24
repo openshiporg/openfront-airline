@@ -4,7 +4,7 @@ import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { isEvidenceOnlyManualProvider } from '@/features/keystone/lib/bounded-payment-policy'
 import { Code, DeskHeader, type DeskTone, Notice, Panel, Pill, TitleLine, Track, Well } from '@/features/platform/components/desk'
-import { NewManualProvider, PaymentProviderActions } from '@/features/platform/payment-providers/components/PaymentProviderControls'
+import { NewManualProvider, NewStripeProvider, PaymentProviderActions } from '@/features/platform/payment-providers/components/PaymentProviderControls'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -86,7 +86,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
           </Notice>
         ) : (
           <>
-            {carrierCode ? <NewManualProvider carrierCode={carrierCode} /> : <Notice tone="warn">Carrier unavailable for your account.</Notice>}
+            {carrierCode ? <div className="flex flex-wrap items-start gap-3"><NewManualProvider carrierCode={carrierCode} /><NewStripeProvider /></div> : <Notice tone="warn">Carrier unavailable for your account.</Notice>}
 
             <Track aria-label="Provider status" className="max-w-full">
               {tabs.map(tab => (
@@ -116,7 +116,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
                         <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
                           <Code className="text-foreground">{provider.code}</Code>
                           <span>{adapter}</span>
-                          <span>{evidenceOnly ? 'Evidence only' : provider.adapterType === 'manual' ? 'Configuration not evidence-only' : 'Not installed'}</span>
+                          <span>{evidenceOnly ? 'Evidence only' : provider.adapterType === 'manual' ? 'Configuration not evidence-only' : provider.adapterType === 'stripe' ? 'Card payments online' : 'Not installed'}</span>
                           <span className="font-mono tabular-nums">{provider.paymentsCount ?? 0} payments</span>
                         </p>
                         <p className="pl-4"><Code className="break-all">{provider.providerKey}</Code></p>

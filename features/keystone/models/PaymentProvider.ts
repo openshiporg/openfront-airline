@@ -4,14 +4,16 @@ import { json, relationship, select, text } from '@keystone-6/core/fields'
 
 import { carrierScopedAccess, hasFreshPermission } from '../access'
 import { isEvidenceOnlyManualProvider } from '../lib/bounded-payment-policy'
+import { stripeSecretKey } from '../../integrations/payment/stripe'
 import { combineListHooks, requiredRelationshipHooks } from '../lib/validation'
 import { hiddenSensitiveUi } from './fields'
 import { trackingFields } from './trackingFields'
 
 const managePaymentSecrets = (args: any) => hasFreshPermission(args, 'canManagePayments')
 const legacySelectorUi = { createView: { fieldMode: 'hidden' as const }, itemView: { fieldMode: 'read' as const }, listView: { fieldMode: 'hidden' as const } }
-// Only the evidence-only manual adapter is installed; other adapter types are kept readable on retained records.
-const INSTALLED_ADAPTER_TYPES = ['manual']
+// Installed adapters: evidence-only manual settlement, and Stripe Checkout for online card payment. Other adapter
+// types are kept readable on retained records.
+const INSTALLED_ADAPTER_TYPES = ['manual', 'stripe']
 
 export const PaymentProvider = list({
   access: carrierScopedAccess('canReadPayments', 'canManagePayments'),
@@ -66,14 +68,18 @@ export const PaymentProvider = list({
     requiredRelationshipHooks(['carrier']),
     { validate({ resolvedData, item, addValidationError }: any) {
       if (resolvedData.adapterType !== undefined && resolvedData.adapterType !== item?.adapterType && !INSTALLED_ADAPTER_TYPES.includes(resolvedData.adapterType)) {
-        addValidationError('Only the manual (evidence-only) payment adapter is installed.')
+        addValidationError('Only the manual (evidence-only) and Stripe payment adapters are installed.')
       }
+      const adapterType = resolvedData.adapterType ?? item?.adapterType ?? null
       const status = resolvedData.status ?? item?.status
       const provider = {
         adapterType: resolvedData.adapterType ?? item?.adapterType ?? null,
         configuration: resolvedData.configuration ?? item?.configuration ?? null,
       }
-      if (status === 'active' && !isEvidenceOnlyManualProvider(provider)) addValidationError('Active payment providers must be configured for evidence-only manual settlement with independent approval.')
+      if (status === 'active' && adapterType === 'stripe') {
+        // A Stripe provider is active only with a secret key: sk_test_… for test mode, sk_live_… for live.
+        if (!stripeSecretKey(resolvedData.credentials ?? item?.credentials)) addValidationError('Active Stripe providers need a secret key (sk_test_… or sk_live_…).')
+      } else if (status === 'active' && !isEvidenceOnlyManualProvider(provider)) addValidationError('Active payment providers must be configured for evidence-only manual settlement with independent approval.')
     } },
   ),
 })

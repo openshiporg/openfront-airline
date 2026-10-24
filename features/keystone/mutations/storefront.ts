@@ -14,6 +14,7 @@ import { hasConfiguredStorefrontBrand, normalizeStorefrontBrandColor } from '../
 import { DomainError } from '../lib/domain-error'
 import { hasAccompanyingAdult, travelerDateOfBirth } from '../lib/passenger-age'
 import { accessRecoveryEnabled, emailBookingAccess } from './storefrontAccess'
+import { onlinePaymentEnabled } from './storefrontPayments'
 
 // Creation budgets are charged only for admitted new work (and failed proofs), after the exact accepted command has
 // been looked up: replays and read-only recovery of an ambiguous outcome never consume them.
@@ -107,7 +108,8 @@ export async function getPublicCarrierIdentity(
 ) {
   await assertConfiguredPublicCarrier((context as any).prisma, args.carrierCode)
   try {
-    const identity = { ...await lookupCarrierIdentity((context as any).prisma, args.carrierCode), accessRecoveryEnabled: accessRecoveryEnabled() }
+    const carrierIdentity = await lookupCarrierIdentity((context as any).prisma, args.carrierCode)
+    const identity = { ...carrierIdentity, accessRecoveryEnabled: accessRecoveryEnabled(), onlinePaymentEnabled: await onlinePaymentEnabled((context as any).prisma, carrierIdentity.id) }
     return operatorOnlyLaunchSetup() ? { ...identity, salesEnabled: false } : identity
   } catch (error) {
     if (error instanceof Error && error.message === 'Carrier identity is not configured.') return null

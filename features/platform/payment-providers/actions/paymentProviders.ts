@@ -55,6 +55,33 @@ export async function createManualPaymentProvider(input: { name: string; code: s
   return { ok: true }
 }
 
+// Card payments on the storefront through Stripe Checkout. The secret key is write-only: it is stored in the
+// provider's credentials, which the API never returns. The provider is created active.
+export async function createStripePaymentProvider(input: { name: string; secretKey: string }): Promise<ActionResult> {
+  const name = String(input.name ?? '').trim() || 'Card payments'
+  const secretKey = String(input.secretKey ?? '').trim()
+  if (name.length > 120) return { ok: false, error: 'Name is too long.' }
+  if (!/^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/.test(secretKey)) return { ok: false, error: 'Enter a Stripe secret key (sk_test_… or sk_live_…).' }
+
+  const identity = await keystoneClient<{ authenticatedItem: { carrier: { id: string; code: string | null } | null } | null }>(
+    `query PaymentProviderCarrier { authenticatedItem { ... on User { carrier { id code } } } }`,
+  )
+  if (!identity.success) return { ok: false, error: identity.error }
+  const carrier = identity.data.authenticatedItem?.carrier
+  if (!carrier?.id || !carrier.code) return { ok: false, error: 'Your account is not linked to a carrier.' }
+
+  const mode = secretKey.includes('_live_') ? 'live' : 'test'
+  const providerKey = `${carrier.code}:stripe:${mode}:${Date.now().toString(36)}`.toLowerCase()
+  const response = await keystoneClient<{ createPaymentProvider: { id: string } | null }>(
+    `mutation CreateStripePaymentProvider($data: PaymentProviderCreateInput!) { createPaymentProvider(data: $data) { id } }`,
+    { data: { carrier: { connect: { id: carrier.id } }, providerKey, name, code: `stripe-${mode}`, adapterType: 'stripe', status: 'active', credentials: { secretKey }, configuration: { mode } } },
+  )
+  if (!response.success) return { ok: false, error: response.error }
+  if (!response.data.createPaymentProvider) return { ok: false, error: 'Provider could not be created.' }
+  revalidatePath(PROVIDERS_PATH)
+  return { ok: true }
+}
+
 export async function setPaymentProviderStatus(id: string, status: 'active' | 'inactive' | 'disabled'): Promise<ActionResult> {
   if (!id) return { ok: false, error: 'Provider not found.' }
   if (!['active', 'inactive', 'disabled'].includes(status)) return { ok: false, error: 'Unsupported status.' }
@@ -67,11 +94,12 @@ export async function setPaymentProviderStatus(id: string, status: 'active' | 'i
   const provider = current.data.paymentProvider
   if (!provider) return { ok: false, error: 'Provider not found.' }
   if (provider.status === status) return { ok: true }
-  if (status === 'active' && provider.adapterType !== 'manual') return { ok: false, error: 'Only manual settlement providers can be activated.' }
+  if (status === 'active' && !['manual', 'stripe'].includes(provider.adapterType ?? '')) return { ok: false, error: 'Only manual settlement and Stripe providers can be activated.' }
 
   const data: Record<string, unknown> = { status }
-  // Activation pins the evidence-only configuration the policy requires; the operator never edits it.
-  if (status === 'active') data.configuration = evidenceOnlyConfiguration()
+  // Manual activation pins the evidence-only configuration the policy requires; the operator never edits it.
+  // A Stripe provider activates only if its stored secret key is valid (the model checks it).
+  if (status === 'active' && provider.adapterType === 'manual') data.configuration = evidenceOnlyConfiguration()
 
   const response = await keystoneClient<{ updatePaymentProvider: { id: string } | null }>(
     `mutation SetPaymentProviderStatus($id: ID!, $data: PaymentProviderUpdateInput!) { updatePaymentProvider(where: { id: $id }, data: $data) { id } }`,

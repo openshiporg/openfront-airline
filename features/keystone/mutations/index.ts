@@ -19,6 +19,7 @@ import {
 import { recoverCustomerBookingAccess } from './storefrontAccess'
 import { recordBagEvent, registerAirport, updateFlightOperations } from './airlineOperationsControl'
 import { recordReceivedPayment, reissueBookingAccessCode } from './airlinePaymentsDesk'
+import { completeCustomerCheckout, startCustomerCheckout } from './storefrontPayments'
 import { assignCustomerSeat, cancelCustomerBooking, checkInCustomerBooking, createCustomerBooking, createCustomerOffer, getCustomerBooking, getPublicCarrierIdentity, publicAirlineFlightOptions, publicFlightStatuses, rotateCustomerBookingAccessToken } from './storefront'
 import { publishFlightDisruption, reaccommodateBooking } from './airlineRecovery'
 import { boardBookingPassenger, departureManifest, offloadBookingPassenger } from './airlineDepartures'
@@ -87,6 +88,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         storefrontHomepageDescription: String
         storefrontConfigured: Boolean!
         accessRecoveryEnabled: Boolean!
+        onlinePaymentEnabled: Boolean!
         storefrontContactEmail: String
         storefrontContactPhone: String
         storefrontServiceHours: String
@@ -147,6 +149,16 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         destinationCity: String!
         destinationTimezone: String!
         disruption: PublicFlightDisruption
+      }
+
+      type CustomerCheckoutSession {
+        url: String!
+        checkoutSessionId: String!
+      }
+
+      type CustomerCheckoutResult {
+        status: String!
+        ticketingStatus: String!
       }
 
       type RotatedBookingAccess {
@@ -278,6 +290,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           idempotencyKey: String!
         ): AirlineOperationResult!
         recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
+        startCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!): CustomerCheckoutSession!
+        completeCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!, checkoutSessionId: String): CustomerCheckoutResult!
         recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
         reissueBookingAccessCode(bookingId: ID!): RotatedBookingAccess!
         rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
@@ -460,6 +474,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         updateFlightOperations,
         recordBagEvent,
         recordReceivedPayment,
+        startCustomerCheckout,
+        completeCustomerCheckout,
         reissueBookingAccessCode,
         recoverCustomerBookingAccess,
         cancelCustomerBooking,

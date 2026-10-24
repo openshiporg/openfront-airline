@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Field, Notice, Panel, Pill, Track, deskInput } from '@/features/platform/components/desk'
-import { createManualPaymentProvider, setPaymentProviderStatus } from '@/features/platform/payment-providers/actions/paymentProviders'
+import { createManualPaymentProvider, createStripePaymentProvider, setPaymentProviderStatus } from '@/features/platform/payment-providers/actions/paymentProviders'
 
 export function NewManualProvider({ carrierCode }: { carrierCode: string }) {
   const router = useRouter()
@@ -82,13 +82,66 @@ export function NewManualProvider({ carrierCode }: { carrierCode: string }) {
   )
 }
 
+export function NewStripeProvider() {
+  const router = useRouter()
+  const [open, setOpen] = React.useState(false)
+  const [name, setName] = React.useState('Card payments')
+  const [secretKey, setSecretKey] = React.useState('')
+  const [error, setError] = React.useState<string | null>(null)
+  const [pending, startTransition] = React.useTransition()
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError(null)
+    startTransition(async () => {
+      const result = await createStripePaymentProvider({ name, secretKey })
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setOpen(false)
+      setSecretKey('')
+      router.refresh()
+    })
+  }
+
+  if (!open) {
+    return (
+      <Track>
+        <Pill onClick={() => { setError(null); setOpen(true) }}>Card payments (Stripe)</Pill>
+      </Track>
+    )
+  }
+
+  return (
+    <Panel className="p-4">
+      <form onSubmit={submit} className="space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">Card payments (Stripe)</h2>
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <Field label="Name">
+            <input required maxLength={120} value={name} onChange={event => setName(event.target.value)} className={deskInput} />
+          </Field>
+          <Field label="Secret key">
+            <input required type="password" autoComplete="off" placeholder="sk_test_…" value={secretKey} onChange={event => setSecretKey(event.target.value)} className={`${deskInput} font-mono`} />
+          </Field>
+        </div>
+        {error && <Notice tone="bad">{error}</Notice>}
+        <Track>
+          <Pill type="submit" variant="primary" disabled={pending}>{pending ? 'Saving' : 'Connect Stripe'}</Pill>
+          <Pill disabled={pending} onClick={() => setOpen(false)}>Cancel</Pill>
+        </Track>
+      </form>
+    </Panel>
+  )
+}
+
 export function PaymentProviderActions({ id, status, adapterType }: { id: string; status: string | null; adapterType: string | null }) {
   const router = useRouter()
   const [error, setError] = React.useState<string | null>(null)
   const [confirmDisable, setConfirmDisable] = React.useState(false)
   const [pending, startTransition] = React.useTransition()
   const current = status ?? 'inactive'
-  const canActivate = adapterType === 'manual' && current !== 'active'
+  const canActivate = (adapterType === 'manual' || adapterType === 'stripe') && current !== 'active'
 
   function transition(next: 'active' | 'inactive' | 'disabled') {
     setError(null)

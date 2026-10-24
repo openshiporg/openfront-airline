@@ -7165,6 +7165,8 @@ type Mutation {
   registerAirport(iataCode: String!, icaoCode: String, name: String!, city: String!, countryCode: String!, subdivisionCode: String, timezone: String!, idempotencyKey: String!): AirlineOperationResult!
   updateFlightOperations(flightInstanceId: ID!, departureTerminal: String, departureGate: String, arrivalTerminal: String, arrivalGate: String, estimatedDepartureAt: String, estimatedArrivalAt: String, actualDepartureAt: String, actualArrivalAt: String, status: String, idempotencyKey: String!): AirlineOperationResult!
   recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
+  startCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!): CustomerCheckoutSession!
+  completeCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!, checkoutSessionId: String): CustomerCheckoutResult!
   recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
   reissueBookingAccessCode(bookingId: ID!): RotatedBookingAccess!
   rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
@@ -7607,6 +7609,7 @@ type PublicCarrierIdentity {
   storefrontContactEmail: String
   storefrontContactPhone: String
   storefrontServiceHours: String
+  onlinePaymentEnabled: Boolean!
 }
 
 type AirlineFlightOption {
@@ -7664,6 +7667,16 @@ type PublicFlightStatus {
   destinationCity: String!
   destinationTimezone: String!
   disruption: PublicFlightDisruption
+}
+
+type CustomerCheckoutSession {
+  url: String!
+  checkoutSessionId: String!
+}
+
+type CustomerCheckoutResult {
+  status: String!
+  ticketingStatus: String!
 }
 
 type RotatedBookingAccess {
