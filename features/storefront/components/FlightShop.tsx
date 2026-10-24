@@ -148,6 +148,35 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
     catch (error) { setIntentUnavailable(true); setStatus(error instanceof Error ? error.message : 'Original booking intent is unavailable; do not create a replacement.') }
   }, [intentStorageKey])
   const recordLocatorInput = useRef<HTMLInputElement>(null)
+  // Destination links (/?from=JFK&to=BOS&date=…) open the search on that route and date.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const from = params.get('from')?.toUpperCase() ?? ''
+    const to = params.get('to')?.toUpperCase() ?? ''
+    const date = params.get('date') ?? ''
+    if (/^[A-Z0-9]{3}$/.test(from) && /^[A-Z0-9]{3}$/.test(to) && (!routes.length || routes.some(route => route.origin === from && route.destination === to))) { setOrigin(from); setDestination(to) }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) setTimeout(() => setDepartDate(date), 0)
+  // Read once on load; routes come from the server render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // Bookings saved in this browser (reference → access code), newest first, for one-tap retrieval.
+  const [savedTrips, setSavedTrips] = useState<string[]>([])
+  const manageForm = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    try {
+      const prefix = `${storagePrefix}:booking:`
+      const trips: string[] = []
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index)
+        if (key?.startsWith(prefix)) trips.push(key.slice(prefix.length))
+      }
+      setSavedTrips(trips.sort())
+    } catch { setSavedTrips([]) }
+  }, [storagePrefix, confirmation])
+  function openSavedTrip(locator: string) {
+    try { setBookingCredentials(locator, localStorage.getItem(bookingKey(locator)) ?? '') } catch { return }
+    requestAnimationFrame(() => manageForm.current?.requestSubmit())
+  }
   // Links from the confirmation email open Manage booking with the reference filled in.
   useEffect(() => {
     const reference = new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase()
@@ -435,7 +464,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         </div> : <div className="af-track mt-auto" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">Hold fare for {passLabel}</button></div>}
       </div>
     </form>}
-    <form onSubmit={manage} className={`af-card relative z-10 p-4 sm:p-6 ${shoppingEnabled ? '' : 'shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)]'}`}>
+    <form ref={manageForm} onSubmit={manage} className={`af-card relative z-10 p-4 sm:p-6 ${shoppingEnabled ? '' : 'shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)]'}`}>
       <h2 className="af-eyebrow">{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
         <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
@@ -443,6 +472,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
       </div>
     </form>
+    {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card relative z-10 px-4 py-3 sm:px-6">
+      <div className="flex flex-wrap items-center gap-3"><h2 className="af-field-label">Your trips</h2><div className="af-track flex-wrap">{savedTrips.map(locator => <button key={locator} type="button" disabled={busy} onClick={() => openSavedTrip(locator)} aria-pressed={managedBooking?.recordLocator === locator} className="af-pill af-pill-sm af-mono tracking-[0.14em]">{locator}</button>)}</div></div>
+    </section>}
     {carrier.accessRecoveryEnabled ? <div className="af-card relative z-10 px-4 py-3 sm:px-6">
       {recovering ? <form onSubmit={recoverAccess} className="grid gap-4 py-2 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
         <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>

@@ -3,16 +3,25 @@ import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { Code, DeskHeader, DeskSection, Notice, Readout, ReadoutStrip, RowLink } from '@/features/platform/components/desk'
 import { OnboardingLaunchCard } from '@/features/platform/onboarding/components/OnboardingLaunchCard'
 
+// Same order as the platform sidebar: plan the network, sell, settle, run the day, recover.
 const workspaces = [
-  { href: '/dashboard/platform/schedules', title: 'Schedules' },
+  { href: '/dashboard/platform/network', title: 'Network' },
+  { href: '/dashboard/platform/fares', title: 'Fares & products' },
+  { href: '/dashboard/platform/schedules', title: 'Schedules & flights' },
+  { href: '/dashboard/platform/flight-ops', title: 'Flight operations' },
   { href: '/dashboard/platform/inventory', title: 'Inventory & fares' },
   { href: '/dashboard/platform/offers', title: 'Offers' },
   { href: '/dashboard/platform/bookings', title: 'Bookings' },
+  { href: '/dashboard/platform/tickets', title: 'Tickets' },
   { href: '/dashboard/platform/passengers', title: 'Passengers' },
   { href: '/dashboard/platform/departures', title: 'Departures' },
+  { href: '/dashboard/platform/baggage', title: 'Baggage' },
   { href: '/dashboard/platform/disruptions', title: 'Disruptions' },
-  { href: '/dashboard/platform/payments', title: 'Payments & refunds' },
+  { href: '/dashboard/platform/payments', title: 'Payments' },
+  { href: '/dashboard/platform/refunds', title: 'Refunds' },
+  { href: '/dashboard/platform/payment-providers', title: 'Payment providers' },
   { href: '/dashboard/platform/manifests', title: 'Manifest entry & audit' },
+  { href: '/dashboard/platform/stations', title: 'Stations & access' },
   { href: '/dashboard/platform/store-settings', title: 'Storefront settings' },
   { href: '/dashboard/platform/settings', title: 'Readiness & settings' },
 ] as const

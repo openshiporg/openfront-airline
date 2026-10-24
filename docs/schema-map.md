@@ -119,14 +119,14 @@ Generic list views (`/dashboard/<list>`) exist for every list, but they don't ru
 | Bucket authorization | `/dashboard/platform/inventory` | unchanged |
 | Flight operations (gates, times, departed, arrived) | **MISSING**: no command existed | `/dashboard/platform/flight-ops` (`features/platform/flight-ops`, `updateFlightOperations`) |
 | Offers | `/dashboard/platform/offers` | unchanged |
-| Bookings: accept, evidence, capture, ticket, cancel, refund | `/dashboard/platform/bookings` | unchanged |
+| Bookings: accept, evidence, capture, ticket, cancel, refund | `/dashboard/platform/bookings`; **THIN**: no traveler names, no access-code reissue | travelers, contact and flights on rows and detail; `reissueBookingAccessCode` |
 | Tickets and coupons | **THIN**: only a count on the booking detail | `/dashboard/platform/tickets` (`features/platform/tickets`) |
 | Passengers | `/dashboard/platform/passengers` | unchanged |
 | Departures: documents, check-in, bag acceptance, boarding, offload | `/dashboard/platform/departures` | unchanged |
 | Station assignments | **MISSING**: generic list only, but every station command needs one | `/dashboard/platform/stations` (`features/platform/stations`) |
 | Baggage tracking after acceptance | **MISSING**: no command or page | `/dashboard/platform/baggage` (`features/platform/baggage`, `recordBagEvent`) |
 | Disruptions and reaccommodation | `/dashboard/platform/disruptions` | unchanged |
-| Payments and the evidence queue | `/dashboard/platform/payments` | unchanged |
+| Payments and the evidence queue | `/dashboard/platform/payments`; **THIN**: bookings could only be marked paid through the machine settlement-import API | `/dashboard/platform/bookings` records money received (`recordReceivedPayment`) for maker-checker approval, then Mark paid |
 | Refunds | **THIN**: the alias pointed at payments, with no refund list | `/dashboard/platform/refunds` (`features/platform/refunds`) |
 | Payment providers (evidence-only manual settlement) | **MISSING**: generic list; the activation rule needs hand-typed JSON | `/dashboard/platform/payment-providers` (`features/platform/payment-providers`) |
 | Audit | `/dashboard/platform/manifests` | unchanged |
