@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "template": "full",
+  "description": "Avante Air demo network: a New York JFK carrier with four nonstop city pairs, daily service for the next two weeks, and a configured storefront.",
+  "carrier": {
+    "name": "Avante Air",
+    "legalName": "Avante Air LLC",
+    "code": "AV",
+    "currencyCode": "USD",
+    "timezone": "America/New_York"
+  },
+  "storefront": {
+    "brandColor": "indigo",
+    "homepageTitle": "Nonstop from New York",
+    "homepageDescription": "Avante Air flies nonstop from New York JFK to Boston, Chicago, Miami and Los Angeles. Every Standard fare includes seat selection and one checked bag.",
+    "contactEmail": "care@avante.example",
+    "contactPhone": "+1 212 555 0148",
+    "serviceHours": "Every day, 6:00 AM to 11:00 PM Eastern"
+  },
+  "serviceDays": 14,
+  "timesIn": "carrier timezone (America/New_York), HH:mm; arrival may not cross midnight",
+  "routes": [
+    { "origin": "JFK", "destination": "BOS", "flightNumber": "101", "departure": "07:00", "arrival": "08:20", "capacity": 48, "baseFare": "129.00", "tax": "25.80" },
+    { "origin": "BOS", "destination": "JFK", "flightNumber": "102", "departure": "18:30", "arrival": "19:50", "capacity": 48, "baseFare": "129.00", "tax": "25.80" },
+    { "origin": "JFK", "destination": "ORD", "flightNumber": "210", "departure": "08:15", "arrival": "10:45", "capacity": 60, "baseFare": "189.00", "tax": "33.10" },
+    { "origin": "ORD", "destination": "JFK", "flightNumber": "211", "departure": "15:00", "arrival": "18:05", "capacity": 60, "baseFare": "189.00", "tax": "33.10" },
+    { "origin": "JFK", "destination": "MIA", "flightNumber": "330", "departure": "09:30", "arrival": "12:45", "capacity": 60, "baseFare": "159.00", "tax": "29.40" },
+    { "origin": "MIA", "destination": "JFK", "flightNumber": "331", "departure": "14:15", "arrival": "17:20", "capacity": 60, "baseFare": "159.00", "tax": "29.40" },
+    { "origin": "JFK", "destination": "LAX", "flightNumber": "501", "departure": "08:00", "arrival": "14:25", "capacity": 72, "baseFare": "289.00", "tax": "46.20" },
+    { "origin": "LAX", "destination": "JFK", "flightNumber": "502", "departure": "13:00", "arrival": "21:20", "capacity": 72, "baseFare": "289.00", "tax": "46.20" }
+  ]
+}
