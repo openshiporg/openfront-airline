@@ -52,7 +52,15 @@ export function useDemoNetwork(carrierId: string) {
     const step = (label: string) => setProgress({ phase: 'running', label, done, total, failures: [...failures] })
     const attempt = async (label: string, action: () => Promise<unknown>) => {
       step(label)
-      try { await action() } catch (error) { failures.push(`${label}: ${error instanceof Error ? error.message : 'failed'}`) }
+      // Serializable setup transactions can collide on shared carrier rows; those are retried a few times.
+      for (let tries = 1; ; tries++) {
+        try { await action(); break } catch (error) {
+          const message = error instanceof Error ? error.message : 'failed'
+          if (tries < 4 && /changed concurrently|retry the request/i.test(message)) { await new Promise(resolve => setTimeout(resolve, 400 * tries + Math.random() * 400)); continue }
+          failures.push(`${label}: ${message}`)
+          break
+        }
+      }
       done += 1
       step(label)
     }
@@ -100,7 +108,7 @@ export function useDemoNetwork(carrierId: string) {
           })
         }
       }
-      await Promise.all([worker(), worker(), worker()])
+      await Promise.all([worker(), worker()])
       setProgress({ phase: failures.length ? 'failed' : 'done', label: failures.length ? `${failures.length} step(s) need attention` : 'Demo network loaded', done, total, failures })
     } finally {
       running.current = false
