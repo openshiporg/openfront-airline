@@ -164,7 +164,7 @@ export async function FlightOpsPage({ searchParams }: { searchParams?: SearchPar
     <FilterBar action={BASE}>
       <Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={`${deskInput} tabular-nums `} /></Field>
       <Field label="Station" className="sm:w-32"><input name="station" defaultValue={rawStation} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field>
-      <Track><Pill type="submit" variant="primary">Load</Pill><Pill asChild><Link href={BASE}>Today</Link></Pill></Track>
+      <Track><Pill type="submit">Load</Pill><Pill asChild><Link href={BASE}>Today</Link></Pill></Track>
     </FilterBar>
   )
 

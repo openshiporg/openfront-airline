@@ -203,7 +203,7 @@ export function Segmented<T extends string>({
   )
 }
 
-/** One headline figure. */
+/** One figure in the summary strip: label, then its tabular value on the same line. */
 export function Readout({
   label,
   value,
@@ -218,25 +218,19 @@ export function Readout({
   className?: string
 }) {
   return (
-    <div className={cn('min-w-0 px-4 py-2.5', className)}>
-      <TitleLine as="p" tone={tone} className="text-xs font-medium text-muted-foreground">
-        {label}
-      </TitleLine>
-      <p className="mt-1 truncate text-xl font-semibold tabular-nums tracking-tight text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p>}
+    <div className={cn('flex min-w-0 items-baseline gap-2 px-3 py-1.5 text-sm', className)}>
+      {tone && <StatusDot tone={tone} className="-translate-y-[0.1em]" />}
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-semibold tabular-nums text-foreground">{value}</span>
+      {sub && <span className="truncate text-xs text-muted-foreground">{sub}</span>}
     </div>
   )
 }
 
-/** One ruled strip of readouts, hairline-divided; two up on phones. */
+/** Summary figures as one inline strip between hairlines, never a row of tiles. */
 export function ReadoutStrip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div
-      className={cn(
-        'grid grid-cols-2 gap-px overflow-hidden rounded-[4px] border bg-border md:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] [&>*]:bg-background max-md:[&>*:last-child:nth-child(odd)]:col-span-2',
-        className,
-      )}
-    >
+    <div className={cn('flex min-w-0 flex-wrap items-center border-y [&>*:first-child]:pl-0 [&>*+*]:border-l', className)}>
       {children}
     </div>
   )

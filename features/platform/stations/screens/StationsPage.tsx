@@ -58,20 +58,6 @@ function effectiveState(assignment: Assignment, now: number): { label: string; t
   return { label: 'Active', tone: 'ok' }
 }
 
-function Chip({ on, children }: { on: boolean; children: React.ReactNode }) {
-  return (
-    <span
-      className={
-        on
-          ? 'inline-flex items-center rounded-[4px] border border-foreground/15 bg-background px-2 py-0.5 text-[11px] font-medium text-foreground'
-          : 'inline-flex items-center rounded-[4px] border border-dashed px-2 py-0.5 text-[11px] font-medium text-muted-foreground line-through decoration-muted-foreground/60'
-      }
-    >
-      <span className="sr-only">{on ? 'Allowed: ' : 'Not allowed: '}</span>
-      {children}
-    </span>
-  )
-}
 
 function hrefWith(current: { status: string; airport: string; user: string }, patch: Partial<{ status: string; airport: string; user: string }>) {
   const next = { ...current, ...patch }
@@ -224,7 +210,7 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
             </select>
           </Field>
           <Track>
-            <Pill type="submit" variant="primary">Filter</Pill>
+            <Pill type="submit">Filter</Pill>
             <Pill asChild><Link href={status ? `${PATH}?status=${status}` : PATH}>Clear</Link></Pill>
           </Track>
         </FilterBar>
@@ -261,11 +247,9 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
                             ) : 'User unavailable'}
                             <span className="ml-2 text-xs font-normal text-muted-foreground">{state.label}</span>
                           </TitleLine>
-                          <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-4">
-                            <Chip on={Boolean(row.canCheckIn)}>Check-in</Chip>
-                            <Chip on={Boolean(row.canAcceptBags)}>Bags</Chip>
-                            <Chip on={Boolean(row.canBoard)}>Boarding</Chip>
-                          </div>
+                          <p className="pl-[1.375rem] text-xs text-foreground/80">
+                            {[row.canCheckIn && 'Check-in', row.canAcceptBags && 'Bags', row.canBoard && 'Boarding'].filter(Boolean).join(', ') || <span className="text-muted-foreground">No duties</span>}
+                          </p>
                           <p className="pl-4 tabular-nums text-[12px]  text-muted-foreground">
                             {from ?? 'Immediately'} <span className="font-sans">to</span> {until ?? 'Open-ended'}
                           </p>

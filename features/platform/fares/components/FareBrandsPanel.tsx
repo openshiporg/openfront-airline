@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import { Code, DeskSection, Panel, Pill, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
+import { DeskSection, Panel, Pill, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
 import { createFareBrandAction, setFareBrandStatusAction, updateFareBrandAction } from '@/features/platform/fares/actions/fares'
 import { baggageOf, type CabinOption, type FareBrandRow } from '@/features/platform/fares/lib/types'
 import { DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from '@/features/platform/network/components/DeskForm'
@@ -31,8 +31,8 @@ function BrandItem({ brand, onEdit }: { brand: FareBrandRow; onEdit: () => void 
       }
     >
       <TitleLine tone={statusTone(brand.status)} status={brand.status} className="text-sm font-medium text-foreground">
-        <span className="tabular-nums font-semibold ">{brand.code}</span>
-        <span className="ml-2">{brand.name}</span>
+        <span className="font-semibold">{brand.name}</span>
+        {brand.code.toUpperCase() !== brand.name.toUpperCase() && <span className="ml-2 tabular-nums text-muted-foreground">{brand.code}</span>}
       </TitleLine>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <StatusLabel status={brand.status} />
@@ -41,7 +41,7 @@ function BrandItem({ brand, onEdit }: { brand: FareBrandRow; onEdit: () => void 
           {baggage.pieces === 0 ? 'No checked bags' : `${baggage.pieces} x ${baggage.maxWeightGrams ? formatKg(baggage.maxWeightGrams) : 'bag'}`}
         </span>
         <span className="tabular-nums ">{brand.rulesCount ?? 0} rules</span>
-        <Code>Order {brand.displayOrder ?? 0}</Code>
+        <span className="tabular-nums">Position {(brand.displayOrder ?? 0) + 1}</span>
       </div>
       {brand.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{brand.description}</p>}
     </DeskRow>

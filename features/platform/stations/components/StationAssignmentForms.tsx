@@ -226,19 +226,19 @@ export function StationAssignmentActions({ assignment }: { assignment: StationAs
   return (
     <div className="min-w-0 space-y-3">
       {!editing && (
-        <Track aria-label="Assignment actions">
+        <div role="group" aria-label="Assignment actions" className="flex flex-wrap items-center divide-x divide-border [&>*]:h-7 [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:px-2.5 [&>*]:text-xs [&>*:first-child]:pl-0 [&>*:hover]:bg-transparent [&>*:hover]:underline [&>*]:underline-offset-4">
           <Pill size="sm" disabled={pending} onClick={startEdit}>Edit</Pill>
           {status === 'active' && <Pill size="sm" disabled={pending} onClick={() => transition('suspended')}>Suspend</Pill>}
           {status === 'suspended' && <Pill size="sm" disabled={pending} onClick={() => transition('active')}>Reactivate</Pill>}
           {confirmRevoke ? (
             <>
-              <Pill size="sm" variant="danger" disabled={pending} onClick={() => transition('revoked')}>Confirm revoke</Pill>
+              <Pill size="sm" disabled={pending} className="font-semibold text-red-700 dark:text-red-400" onClick={() => transition('revoked')}>Confirm revoke</Pill>
               <Pill size="sm" disabled={pending} onClick={() => setConfirmRevoke(false)}>Keep</Pill>
             </>
           ) : (
-            <Pill size="sm" disabled={pending} onClick={() => setConfirmRevoke(true)}>Revoke</Pill>
+            <Pill size="sm" disabled={pending} className="text-red-700 dark:text-red-400" onClick={() => setConfirmRevoke(true)}>Revoke</Pill>
           )}
-        </Track>
+        </div>
       )}
       {editing && (
         <form onSubmit={save} className="space-y-3 rounded-[4px] border bg-background p-3">

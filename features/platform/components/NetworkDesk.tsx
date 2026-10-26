@@ -15,6 +15,7 @@ import {
   Readout,
   ReadoutStrip,
   Route,
+  StatusLabel,
   TitleLine,
   Track,
   Well,
@@ -621,6 +622,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
             : flightWorklist.state === 'inconsistent' ? <StateNotice role="status" action={flightFirstHref && <Pill asChild><Link href={flightFirstHref}>Reload first page</Link></Pill>}>Flight rows and count disagree.</StateNotice>
               : null)}
       {flights.length > 0 && <Panel className="divide-y">
+        <div aria-hidden="true" className="hidden gap-x-4 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[4.5rem_8.5rem_minmax(9rem,1fr)_8rem_minmax(7rem,auto)_auto]"><span>Flight</span><span>Route</span><span>Departs</span><span>State</span><span>Seats sold/cap</span><span /></div>
         {flights.map(flight => {
           const inventoryFlightBinding = mode === 'inventory'
             ? resolveInventoryFlightSelection(flights, flight.id, inventoryActorCarrierId ?? '')
@@ -628,32 +630,27 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
           const canSelectInventoryFlight = inventoryFlightBinding?.state === 'authorized'
           const isSelectedInventoryFlight = inventoryFlightId === flight.id && selectedInventoryFlight.state === 'authorized'
           const buckets = flight.inventoryBuckets ?? []
-          return <article key={flight.id} className={cn('min-w-0 px-4 py-3', isSelectedInventoryFlight && 'bg-muted/40')}>
-            {mode !== 'inventory' && flight.inventoryBucketsOverflow && <Notice tone="warn" role="status" className="mb-3">Over 25 buckets; showing 25. Authorization editing disabled.</Notice>}
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <div className="min-w-0">
-                <TitleLine tone={flightTone(flight.status)} status={flight.status.replaceAll('_', ' ')} className="text-sm">
-                  <Link href={mode === 'inventory' ? `/dashboard/platform/schedules/${flight.id}` : `${detailBase}/${flight.id}`} className={cn('inline-flex flex-wrap items-center gap-x-3 gap-y-1', linkFocus)}>
-                    <span className="tabular-nums font-semibold  text-foreground">{flight.flightNumber}</span>
-                    <Route from={flight.origin.iataCode} to={flight.destination.iataCode} />
-                  </Link>
-                </TitleLine>
-                <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
-                  <span className="tabular-nums ">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}</span>
-                  <span className="capitalize"> · {flight.status.replaceAll('_', ' ')}</span>
-                </p>
-                {inventoryFlightBinding?.state === 'stale' && <p role="status" className="mt-1 pl-4 text-xs text-muted-foreground">Outside carrier inventory scope.</p>}
-                {inventoryActorCarrierId && inventoryFlightBinding?.state === 'unavailable' && <p role="alert" className="mt-1 pl-4 text-xs text-muted-foreground">Carrier scope unavailable.</p>}
-              </div>
-              {mode !== 'schedules' && <Track>
-                {mode === 'inventory' && <Pill disabled={!canSelectInventoryFlight} aria-pressed={isSelectedInventoryFlight} onClick={() => selectInventoryFlight(flight.id)}>
-                  {isSelectedInventoryFlight ? <><RotateCcw />Reload buckets</> : 'View buckets'}
+          return <article key={flight.id} className={cn('min-w-0 px-3 py-2', isSelectedInventoryFlight && 'bg-muted/40')}>
+            {mode !== 'inventory' && flight.inventoryBucketsOverflow && <Notice tone="warn" role="status" className="mb-2">Over 25 buckets; showing 25. Authorization editing disabled.</Notice>}
+            <div className="grid min-w-0 items-center gap-x-4 gap-y-1 text-sm md:grid-cols-[4.5rem_8.5rem_minmax(9rem,1fr)_8rem_minmax(7rem,auto)_auto]">
+              <TitleLine as="p" tone={flightTone(flight.status)} status={flight.status.replaceAll('_', ' ')}>
+                <Link href={mode === 'inventory' ? `/dashboard/platform/schedules/${flight.id}` : `${detailBase}/${flight.id}`} className={cn('font-semibold tabular-nums text-foreground', linkFocus)}>{flight.flightNumber}</Link>
+              </TitleLine>
+              <Route from={flight.origin.iataCode} to={flight.destination.iataCode} />
+              <span className="tabular-nums text-foreground/80">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}</span>
+              <StatusLabel status={flight.status} />
+              <span className="flex flex-wrap gap-x-3 text-xs tabular-nums text-muted-foreground">{buckets.length ? buckets.map(bucket => <span key={bucket.id}><span className="font-semibold text-foreground">{bucket.bookingClassCode}</span> {bucket.sold + bucket.held}/{bucket.capacity}</span>) : '—'}</span>
+              {mode !== 'schedules' ? <div role="group" aria-label={`Actions for ${flight.flightNumber}`} className="flex flex-wrap items-center divide-x divide-border md:justify-end [&>*]:h-7 [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:px-2.5 [&>*]:text-xs [&>*:hover]:bg-transparent [&>*:hover]:underline [&>*]:underline-offset-4 [&>*:last-child]:pr-0">
+                {mode === 'inventory' && <Pill disabled={!canSelectInventoryFlight} onClick={() => selectInventoryFlight(flight.id)}>
+                  {isSelectedInventoryFlight ? 'Reload buckets' : 'View buckets'}
                 </Pill>}
-                <Pill disabled={working === flight.id || flight.status === 'open_for_sale'} onClick={() => run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'open_for_sale', key: `open-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales opened.')}>Open sales</Pill>
-                <Pill variant="danger" disabled={working === flight.id || flight.status === 'closed_for_sale'} onClick={() => window.confirm(`Close sales for ${flight.flightNumber}? Customers can no longer book it until sales reopen.`) && run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'closed_for_sale', key: `close-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales closed without changing retained counts.')}>Close sales</Pill>
-              </Track>}
+                {flight.status !== 'open_for_sale' && <Pill disabled={working === flight.id} onClick={() => run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'open_for_sale', key: `open-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales opened.')}>Open sales</Pill>}
+                {flight.status !== 'closed_for_sale' && <Pill disabled={working === flight.id} className="text-red-700 dark:text-red-400" onClick={() => window.confirm(`Close sales for ${flight.flightNumber}? Customers can no longer book it until sales reopen.`) && run(flight.id, () => mutate(`mutation($flight:ID!,$status:AirlineSalesStatus!,,$key:String!){setDatedFlightSalesStatus(flightInstanceId:$flight,status:$status,idempotencyKey:$key){status}}`, { flight: flight.id, status: 'closed_for_sale', key: `close-${flight.id}-${crypto.randomUUID()}` }), 'Flight sales closed without changing retained counts.')}>Close sales</Pill>}
+              </div> : <span />}
             </div>
-            {mode !== 'inventory' && buckets.length > 0 && <div className="mt-3 divide-y border-t pl-4">
+            {inventoryFlightBinding?.state === 'stale' && <p role="status" className="mt-1 text-xs text-muted-foreground">Outside carrier inventory scope.</p>}
+            {inventoryActorCarrierId && inventoryFlightBinding?.state === 'unavailable' && <p role="alert" className="mt-1 text-xs text-muted-foreground">Carrier scope unavailable.</p>}
+            {mode !== 'inventory' && buckets.length > 0 && <details className="group mt-1"><summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline [&::-webkit-details-marker]:hidden">Authorize seats by class</summary><div className="mt-2 divide-y border-t pl-4">
               {buckets.map(bucket => {
                 const minimum = bucket.sold + bucket.held + bucket.blocked
                 const value = authorizations[bucket.id] ?? String(bucket.authorized)
@@ -671,7 +668,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
                   </div>}
                 </div>
               })}
-            </div>}
+            </div></details>}
           </article>
         })}
       </Panel>}

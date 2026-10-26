@@ -23,9 +23,6 @@ const services = [
   { href: '/manage-booking', label: 'Manage booking', needs: 'Booking reference and access code' },
 ] as const
 
-// Cover plate: Unsplash photo 1500835556837-99ac94a94552 (Unsplash License), printed in one ink by CSS.
-const COVER_PLATE = 'https://images.unsplash.com/photo-1500835556837-99ac94a94552?w=900&q=70&auto=format&fit=crop'
-
 export default async function Home() {
   const carrier = await getStorefrontCarrierIdentity()
   // Same rule as every other storefront page: servicing works for any persisted carrier; selling also needs a
@@ -37,8 +34,8 @@ export default async function Home() {
 
   return <StorefrontFrame carrier={carrier} current="/">
     <section className="af-board" id="book">
-      <div className="af-container grid gap-8 pb-10 pt-10 sm:pt-14 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-10">
-        <div className="min-w-0">
+      <div className="af-container pb-10 pt-10 sm:pt-14">
+        <div className="min-w-0 max-w-[64rem]">
           <h1 className="af-display max-w-4xl text-6xl uppercase sm:text-8xl">{configured ? carrier!.storefrontHomepageTitle : carrier ? carrier.name : 'Flights'}</h1>
           {configured && <p className="mt-4 max-w-2xl text-lg leading-7 text-[var(--af-board-ink-2)]">{carrier!.storefrontHomepageDescription}</p>}
           <div className="mt-8">
@@ -49,7 +46,6 @@ export default async function Home() {
               </div>}
           </div>
         </div>
-        <figure aria-hidden="true" className="af-plate hidden rounded-[3px] lg:block"><img src={COVER_PLATE} alt="" loading="eager" decoding="async" /></figure>
       </div>
       <nav aria-label="Passenger services" className="border-t border-[var(--af-board-line)]">
         <ul className="af-container grid sm:grid-cols-3 sm:divide-x sm:divide-[var(--af-board-line)]">

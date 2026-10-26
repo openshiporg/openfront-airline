@@ -20,13 +20,15 @@ function clock(value: string, timeZone: string) {
 /** The carrier's schedule set as a pocket timetable: one group per origin, one line per route. Live data only. */
 export function Timetable({ network, carrierCode }: { network: StorefrontNetwork; carrierCode: string }) {
   const city = (code: string) => network.airports.find(airport => airport.code === code)?.city || code
-  const origins = [...new Set(network.routes.map(route => route.origin))].sort((left, right) => city(left).localeCompare(city(right)))
+  // The hub (the origin with the most routes) leads, as on a carrier's printed timetable; the rest follow by city.
+  const routeCount = (code: string) => network.routes.filter(route => route.origin === code).length
+  const origins = [...new Set(network.routes.map(route => route.origin))].sort((left, right) => routeCount(right) - routeCount(left) || city(left).localeCompare(city(right)))
   if (!origins.length) return null
   return <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
     {origins.map(origin => <section key={origin} aria-label={`From ${city(origin)}`} className="min-w-0">
       <h3 className="flex items-baseline gap-3 border-b-2 border-[var(--af-accent)] pb-1.5"><span className="af-display text-3xl uppercase">From {city(origin)}</span><span className="text-sm font-bold tracking-[0.06em] text-[var(--af-accent)]">{origin}</span></h3>
       <table className="w-full text-sm">
-        <thead><tr className="text-left text-xs text-[var(--af-ink-3)] [&>th]:py-2 [&>th]:font-semibold"><th scope="col">To</th><th scope="col">Flight</th><th scope="col">Dep</th><th scope="col">Arr</th><th scope="col" className="hidden sm:table-cell"><span className="sr-only">Days of operation</span><span aria-hidden="true">Days</span></th></tr></thead>
+        <thead><tr className="text-left text-xs text-[var(--af-ink-3)] [&>th]:py-2 [&>th]:font-semibold"><th scope="col">To</th><th scope="col">Flight</th><th scope="col">Dep</th><th scope="col">Arr</th><th scope="col"><span className="sr-only">Days of operation</span><span aria-hidden="true">Days</span></th></tr></thead>
         <tbody className="divide-y divide-[var(--af-line)] border-t border-[var(--af-line)]">
           {network.routes.filter(route => route.origin === origin).map(route => {
             const key = routeDatesKey(route.origin, route.destination)
@@ -39,7 +41,7 @@ export function Timetable({ network, carrierCode }: { network: StorefrontNetwork
               <td className="whitespace-nowrap pr-3 text-[var(--af-ink-2)]">{line ? `${carrierCode} ${line.flightNumber}` : '—'}</td>
               <td className="whitespace-nowrap pr-3 font-semibold">{line ? clock(line.departsAt, line.originTimezone) : '—'}</td>
               <td className="whitespace-nowrap pr-3">{line ? clock(line.arrivesAt, line.destinationTimezone) : '—'}</td>
-              <td className="hidden sm:table-cell">{dates?.length ? <span className="af-days" aria-label={`Operates ${DAY_NAMES.filter((_, index) => days.has(index)).join(', ')}`}>{DAYS.map((day, index) => <span key={index} className="af-day" data-on={days.has(index) ? 'true' : undefined}>{day}</span>)}</span> : <span className="text-xs text-[var(--af-ink-3)]">Not on sale</span>}</td>
+              <td>{dates?.length && days.size === 7 ? <span className="af-daily">Daily</span> : dates?.length ? <span className="af-days" aria-label={`Operates ${DAY_NAMES.filter((_, index) => days.has(index)).join(', ')}`}>{DAYS.map((day, index) => <span key={index} className="af-day" data-on={days.has(index) ? 'true' : undefined}>{day}</span>)}</span> : <span className="text-xs text-[var(--af-ink-3)]">Not on sale</span>}</td>
             </tr>
           })}
         </tbody>

@@ -112,7 +112,7 @@ function SearchFilters({ action, filters, label, statuses = [], hidden = {} }: {
     {Object.entries(hidden).map(([name,value]) => <input type="hidden" key={name} name={name} value={value} />)}
     <Field label={label} className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input type="search" name="q" defaultValue={filters.q} maxLength={120} className={`${deskInput} pl-9`} /></span></Field>
     {statuses.length > 0 && <Field label="Status" className="sm:w-44"><select name="status" defaultValue={filters.status} className={`${deskInput} capitalize`}><option value="">All</option>{statuses.map(status => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></Field>}
-    <Track><Pill type="submit" variant="primary">Search</Pill><Pill asChild><Link href={action}>Clear</Link></Pill></Track>
+    <Track><Pill type="submit">Search</Pill><Pill asChild><Link href={action}>Clear</Link></Pill></Track>
   </FilterBar>
 }
 
@@ -139,9 +139,17 @@ async function carrierToday() {
   }
 }
 
+// The station's working day: today, or the next service date with a dated flight when today has none.
+async function nextOperatingDate(today: string) {
+  const response = await keystoneClient<{ flightInstances: Array<{ serviceDate: string | null }> | null }>(`query DeparturesNextOperatingDate($from: DateTime!) { flightInstances(where: { serviceDate: { gte: $from }, status: { notIn: [cancelled] } }, orderBy: [{ serviceDate: asc }], take: 1) { serviceDate } }`, { from: `${today}T00:00:00.000Z` })
+  const next = response.success ? response.data.flightInstances?.[0]?.serviceDate?.slice(0, 10) : null
+  return next && next > today ? next : today
+}
+
 export async function PlatformDeparturesPage({ searchParams }: { searchParams?: SearchParams }) {
   const params = searchParams ? await searchParams : {}
-  const serviceDate = typeof params.date === 'string' ? params.date : await carrierToday()
+  const today = typeof params.date === 'string' ? null : await carrierToday()
+  const serviceDate = typeof params.date === 'string' ? params.date : await nextOperatingDate(today!)
   const originCode = typeof params.origin === 'string' && params.origin.trim() ? params.origin.trim().toUpperCase() : null
   const cleanupCursor = typeof params.cleanupCursor === 'string' ? params.cleanupCursor : null
   const response = await keystoneClient<{ departureManifest: any }>(`query PlatformDepartureManifest($serviceDate:String!,$originCode:String,$cleanupCursor:String){departureManifest(serviceDate:$serviceDate,originCode:$originCode,cleanupCursor:$cleanupCursor)}`, { serviceDate, originCode, cleanupCursor })
@@ -149,8 +157,8 @@ export async function PlatformDeparturesPage({ searchParams }: { searchParams?: 
   const nextCleanupParams = nextCleanupCursor ? new URLSearchParams({ date: serviceDate, cleanupCursor: nextCleanupCursor }) : null
   if (nextCleanupParams && originCode) nextCleanupParams.set('origin', originCode)
   const cleanupNextHref = nextCleanupParams ? `/dashboard/platform/departures?${nextCleanupParams.toString()}` : null
-  return <Shell title="Departures" eyebrow="Station" meta={<span className="tabular-nums ">{serviceDate}{originCode ? ` · ${originCode}` : ' · All stations'}</span>}>
-    <FilterBar><Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={deskInput} /></Field><Field label="Station" className="sm:w-32"><input name="origin" defaultValue={originCode ?? ''} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field><Track><Pill type="submit" variant="primary">Load manifest</Pill></Track></FilterBar>
+  return <Shell title="Departures" eyebrow="Station" meta={<span className="tabular-nums">{today && serviceDate !== today ? `Next operating day ${serviceDate} (none today)` : serviceDate}{originCode ? ` · ${originCode}` : ' · All stations'}</span>}>
+    <FilterBar><Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={deskInput} /></Field><Field label="Station" className="sm:w-32"><input name="origin" defaultValue={originCode ?? ''} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field><Track><Pill type="submit">Load manifest</Pill></Track></FilterBar>
     {response.success ? <DepartureDesk manifest={response.data.departureManifest} detailBase="/dashboard/platform/departures" cleanupNextHref={cleanupNextHref} /> : <Failure error={response.error} />}
   </Shell>
 }
@@ -181,7 +189,7 @@ export async function PlatformBookingsPage({ searchParams }: { searchParams?: Se
     ? bookingWorklistNextHref('/dashboard/platform/bookings', locator, bookingPage.nextCursor)
     : null
   return <Shell title="Bookings" eyebrow="Reservations" meta={bookingPage ? <span className="tabular-nums ">{bookingPage.totalCount} bookings</span> : undefined}>
-    <FilterBar action="/dashboard/platform/bookings"><Field label="Record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input name="locator" defaultValue={locator} placeholder="ABC123" className={`${deskInput} pl-9 tabular-nums uppercase tracking-wider`} /></span></Field><Track><Pill type="submit" variant="primary">Find booking</Pill>{locator && <Pill asChild><Link href="/dashboard/platform/bookings">Clear</Link></Pill>}</Track></FilterBar>
+    <FilterBar action="/dashboard/platform/bookings"><Field label="Record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input name="locator" defaultValue={locator} placeholder="ABC123" className={`${deskInput} pl-9 tabular-nums uppercase tracking-wider`} /></span></Field><Track><Pill type="submit">Find booking</Pill>{locator && <Pill asChild><Link href="/dashboard/platform/bookings">Clear</Link></Pill>}</Track></FilterBar>
     {response.success ? <BookingDesk offers={response.data.offers} bookings={bookingPage?.items ?? []} bookingCount={bookingPage?.totalCount ?? 0} bookingHasNextPage={bookingPage?.hasNextPage ?? false} bookingNextHref={bookingNextHref} refundCleanupBookings={response.data.refundCleanupBookings.slice(0, 100)} refundCleanupTruncated={response.data.refundCleanupBookingsCount > 100} evidences={response.data.manualPaymentEvidences} sectionErrors={response.sectionErrors} detailBase="/dashboard/platform/bookings" /> : <Failure error="Bookings could not be loaded" />}
   </Shell>
 }

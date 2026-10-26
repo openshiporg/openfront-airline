@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide-react'
 import { decimalToMinorUnits, formatMinorUnits } from '@/features/keystone/lib/money'
 import { cn } from '@/lib/utils'
 import { formatAirportTime } from '@/features/airline/lib/time'
-import { Code, DeskSection, Notice, Panel, Pill, Readout, ReadoutStrip, Route, StatusDot, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
+import { Code, DeskSection, Notice, Panel, Pill, Route, StatusDot, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
 
 import type { Offer, Booking, RefundCleanupBooking, Evidence } from '@/features/airline/lib/operator-bookings'
 
@@ -202,12 +202,6 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
   const heldOffers = offers.filter(offer => ['held', 'available'].includes(offer.status))
   const awaitingEvidence = evidences.filter(evidence => evidence.status === 'submitted')
   return <div className="space-y-8">
-    {(!sectionErrors.bookings || !sectionErrors.offers || !sectionErrors.evidence || !sectionErrors.cleanup) && <ReadoutStrip>
-      {!sectionErrors.bookings && <Readout label="Bookings" value={<span className="tabular-nums">{bookingCount}</span>} />}
-      {!sectionErrors.offers && <Readout label="Held offers" tone={heldOffers.length ? 'warn' : undefined} value={<span className="tabular-nums">{heldOffers.length}</span>} />}
-      {!sectionErrors.evidence && <Readout label="Awaiting approval" tone={awaitingEvidence.length ? 'warn' : undefined} value={<span className="tabular-nums">{awaitingEvidence.length}</span>} />}
-      {!sectionErrors.cleanup && <Readout label="Refund / void" value={<span className="tabular-nums">{refundCleanupBookings.length}{refundCleanupTruncated ? '+' : ''}</span>} />}
-    </ReadoutStrip>}
     {Object.entries(sectionErrors).map(([section,error]) => <Notice key={section} tone="bad" role="alert"><span className="font-medium capitalize">{section === 'cleanup' ? 'Refund follow-up' : section}</span>: {error}</Notice>)}
     {message && <Notice tone={messageFailed ? 'bad' : 'ok'} role={messageFailed ? 'alert' : 'status'}>{message}</Notice>}
     {issuedAccess && <Notice tone="warn" role="status"><span className="font-medium">New access code for <Code className="text-foreground">{issuedAccess.recordLocator}</Code>. Shown once.</span><span className="mt-2 flex flex-wrap items-center gap-2"><code className="max-w-full break-all rounded-[3px] bg-background px-2 py-1 tabular-nums text-xs">{issuedAccess.accessToken}</code><Track><Pill size="sm" onClick={() => navigator.clipboard.writeText(issuedAccess.accessToken).then(() => setMessage('Access code copied.'), () => undefined)}>Copy</Pill><Pill size="sm" onClick={() => setIssuedAccess(null)}>Done</Pill></Track></span></Notice>}
@@ -224,7 +218,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             <span className="text-xs font-medium capitalize text-muted-foreground">{evidence.purpose}</span>
             <Code>{evidence.externalReference}</Code>
           </div>
-          <p className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground"><span className="tabular-nums text-sm font-medium  text-foreground">{formatMinorUnits(evidence.amount, evidence.currencyCode)}</span><span>Source {evidence.ledgerSource}</span><span>Maker {evidence.submittedBy?.name ?? 'restricted'}</span></p>
+          <p className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground"><span className="tabular-nums text-sm font-medium  text-foreground">{formatMinorUnits(evidence.amount, evidence.currencyCode)}</span><span>Received by {evidence.ledgerSource.replace(/^operator:/, 'operator · ').replaceAll('_', ' ')}</span><span>Maker {evidence.submittedBy?.name ?? 'restricted'}</span></p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <input aria-label={`Rejection reason for evidence ${evidence.externalReference}`} value={evidenceRejectionReasons[evidence.id] ?? ''} onChange={event => setEvidenceRejectionReasons(values => ({ ...values, [evidence.id]: event.target.value }))} placeholder="Rejection reason" className={cn(deskInput, 'sm:w-48')} />
@@ -260,7 +254,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             </div>
             <span className="font-semibold tabular-nums text-foreground lg:text-right">{formatMinorUnits(booking.totalAmount, booking.currencyCode)}</span>
             <div className="flex lg:justify-end">
-              <Pill size="sm" variant={nextAction && !open ? 'primary' : 'raised'} aria-expanded={open} aria-controls={`booking-commands-${booking.id}`} onClick={() => setExpanded(values => values.includes(booking.id) ? values.filter(value => value !== booking.id) : [...values, booking.id])}>
+              <Pill size="sm" variant="raised" aria-expanded={open} aria-controls={`booking-commands-${booking.id}`} onClick={() => setExpanded(values => values.includes(booking.id) ? values.filter(value => value !== booking.id) : [...values, booking.id])}>
                 {open ? 'Close' : nextAction === 'ticket' ? 'Issue ticket' : nextAction === 'payment' ? 'Take payment' : 'Service'}<ChevronRight className={cn('transition-transform', open && 'rotate-90')} />
               </Pill>
             </div>

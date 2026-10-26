@@ -111,10 +111,10 @@ export default async function OperationsPage() {
           {flights === null ? <Notice tone="warn">Flights could not be loaded. Check your network access.</Notice>
             : flights.length === 0 ? <Well>No upcoming departures. Publish a schedule to generate dated flights.</Well>
             : <div className="overflow-x-auto rounded-[4px] border">
-              <table className="w-full min-w-[40rem] text-sm">
+              <table className="w-full text-sm md:min-w-[40rem]">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-medium">
-                    <th scope="col">Departs</th><th scope="col">Flight</th><th scope="col">Route</th><th scope="col">Arrives</th><th scope="col">Gate</th><th scope="col" className="text-right">Load</th><th scope="col">Status</th>
+                    <th scope="col">Departs</th><th scope="col">Flight</th><th scope="col">Route</th><th scope="col" className="hidden md:table-cell">Arrives</th><th scope="col" className="hidden md:table-cell">Gate</th><th scope="col" className="text-right">Load</th><th scope="col">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -122,11 +122,11 @@ export default async function OperationsPage() {
                     const seats = load(flight)
                     const date = flight.serviceDate?.slice(0, 10)
                     return <tr key={flight.id} className="tabular-nums [&>td]:px-3 [&>td]:py-2">
-                      <td className="whitespace-nowrap font-semibold">{formatAirportClock(flight.estimatedDepartureAt ?? flight.scheduledDepartureAt, flight.origin?.timezone) ?? '—'}<span className="ml-2 text-xs font-normal text-muted-foreground">{date}</span></td>
+                      <td className="whitespace-nowrap font-semibold">{formatAirportClock(flight.estimatedDepartureAt ?? flight.scheduledDepartureAt, flight.origin?.timezone) ?? '—'}<span className="ml-2 hidden text-xs font-normal text-muted-foreground sm:inline">{date}</span></td>
                       <td><Link href={`/dashboard/platform/departures?date=${encodeURIComponent(date ?? '')}&origin=${encodeURIComponent(flight.origin?.iataCode ?? '')}`} className="font-semibold underline-offset-4 hover:underline">{flight.flightNumber || '—'}</Link></td>
                       <td><Route from={flight.origin?.iataCode} to={flight.destination?.iataCode} /></td>
-                      <td className="whitespace-nowrap text-muted-foreground">{formatAirportClock(flight.scheduledArrivalAt, flight.destination?.timezone) ?? '—'}</td>
-                      <td>{flight.departureGate || <span className="text-muted-foreground">—</span>}</td>
+                      <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">{formatAirportClock(flight.scheduledArrivalAt, flight.destination?.timezone) ?? '—'}</td>
+                      <td className="hidden md:table-cell">{flight.departureGate || <span className="text-muted-foreground">—</span>}</td>
                       <td className="whitespace-nowrap text-right">{seats ? <>{seats.taken}<span className="text-muted-foreground">/{seats.capacity}</span></> : <span className="text-muted-foreground">—</span>}</td>
                       <td><StatusLabel status={flight.status} /></td>
                     </tr>

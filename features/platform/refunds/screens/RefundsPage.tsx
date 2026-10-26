@@ -130,7 +130,7 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
             </span>
           </Field>
           <Track>
-            <Pill type="submit" variant="primary">Search</Pill>
+            <Pill type="submit">Search</Pill>
             <Pill asChild><Link href={status ? `${PATH}?status=${status}` : PATH}>Clear</Link></Pill>
           </Track>
         </FilterBar>

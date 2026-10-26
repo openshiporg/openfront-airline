@@ -73,7 +73,7 @@ export function DeskSearch({ action, hidden, q, label }: { action: string; hidde
         </span>
       </Field>
       <Track>
-        <Pill type="submit" variant="primary">Search</Pill>
+        <Pill type="submit">Search</Pill>
         {q && <Pill asChild><Link href={deskHref(action, hidden)}>Clear</Link></Pill>}
       </Track>
     </FilterBar>
