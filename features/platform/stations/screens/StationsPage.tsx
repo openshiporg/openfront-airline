@@ -234,28 +234,29 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
                 count={group.rows.length}
               >
                 <Panel className="divide-y">
+                  <div aria-hidden="true" className="hidden gap-x-4 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(10rem,1fr)_auto]"><span>Assignee</span><span>Duties</span><span>Valid</span><span /></div>
                   {group.rows.map(row => {
                     const state = effectiveState(row, now)
                     const from = formatInstant(row.validFrom)
                     const until = formatInstant(row.validUntil)
                     return (
-                      <div key={row.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0 space-y-1.5">
-                          <TitleLine as="h3" tone={state.tone} status={state.label} className="text-sm font-medium text-foreground">
+                      <div key={row.id} className="grid min-w-0 gap-x-4 gap-y-1 px-3 py-2 text-sm lg:grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(10rem,1fr)_auto] lg:items-start">
+                        <div className="min-w-0">
+                          <TitleLine as="h3" tone={state.tone} status={state.label} className="font-medium text-foreground">
                             {row.user ? (
                               <Link href={hrefWith(filters, { user: row.user.id })} className="hover:underline hover:underline-offset-4">{row.user.name || row.user.email || 'Unnamed user'}</Link>
                             ) : 'User unavailable'}
                             <span className="ml-2 text-xs font-normal text-muted-foreground">{state.label}</span>
                           </TitleLine>
-                          <p className="pl-[1.375rem] text-xs text-foreground/80">
-                            {[row.canCheckIn && 'Check-in', row.canAcceptBags && 'Bags', row.canBoard && 'Boarding'].filter(Boolean).join(', ') || <span className="text-muted-foreground">No duties</span>}
-                          </p>
-                          <p className="pl-4 tabular-nums text-[12px]  text-muted-foreground">
-                            {from ?? 'Immediately'} <span className="font-sans">to</span> {until ?? 'Open-ended'}
-                          </p>
-                          {row.user?.email && row.user.name && <p className="pl-4 text-xs text-muted-foreground">{row.user.email}</p>}
+                          {row.user?.email && row.user.name && <p className="pl-[1.375rem] text-xs text-muted-foreground">{row.user.email}</p>}
                         </div>
-                        <div className="min-w-0 pl-4 lg:pl-0">
+                        <p className="pl-[1.375rem] text-foreground/80 lg:pl-0">
+                          {[row.canCheckIn && 'Check-in', row.canAcceptBags && 'Bags', row.canBoard && 'Boarding'].filter(Boolean).join(', ') || <span className="text-muted-foreground">No duties</span>}
+                        </p>
+                        <p className="pl-[1.375rem] tabular-nums text-muted-foreground lg:pl-0">
+                          {from ?? 'Immediately'} to {until ?? 'Open-ended'}
+                        </p>
+                        <div className="min-w-0 pl-[1.375rem] lg:pl-0">
                           <StationAssignmentActions
                             assignment={{
                               id: row.id,

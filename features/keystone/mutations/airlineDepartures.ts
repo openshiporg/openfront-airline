@@ -60,7 +60,7 @@ export async function departureManifest(
   })
   if (!actor.canManageCarriers && !assignments.length) {
     if (cleanupCursor) throw new DomainError('Refund-cleanup cursor is outside your current station scope; reload the station manifest to restart.')
-    return { carrierId: actor.carrierId, serviceDate: normalized, canVerifyDocuments, canManageBookings, canOpenBookingDesk, flights: [], refundCleanup: refundCleanupPage([], 0) }
+    return { carrierId: actor.carrierId, serviceDate: normalized, canVerifyDocuments, canManageBookings, canOpenBookingDesk, noStationScope: true, flights: [], refundCleanup: refundCleanupPage([], 0) }
   }
   const originIds = assignments.map((assignment: any) => assignment.airportId)
   const cleanupWhere = buildRefundCleanupScope({

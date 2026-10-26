@@ -251,7 +251,7 @@ export function RecoveryDesk({
           {flightHasNextPage && <Notice tone="warn">More candidate services on later pages</Notice>}
           {!replacementFlights.length && selectedDisruption && <p className="text-xs text-muted-foreground">No same-route replacement with open inventory</p>}
           <div className="flex justify-end border-t pt-4">
-            <Track><Pill variant="primary" disabled={working || !!affectedError || !disruptionId || !selectedBookingId || !selectedReplacementFlightId || !selectedBucketId} onClick={reaccommodate}>Confirm replacement</Pill></Track>
+            <Track><Pill disabled={working || !!affectedError || !disruptionId || !selectedBookingId || !selectedReplacementFlightId || !selectedBucketId} onClick={reaccommodate}>Confirm replacement</Pill></Track>
           </div>
         </Panel>
       </DeskSection>

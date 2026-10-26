@@ -59,7 +59,7 @@ type Flight = {
   departureTerminal?: string | null
   travelers: Traveler[]
 }
-type Manifest = { serviceDate: string; canVerifyDocuments: boolean; canOpenBookingDesk: boolean; carrier?: { name: string; code: string; defaultTimezone: string } | null; flights: Flight[]; refundCleanup: { items: RefundCleanupItem[]; pageSize: number; totalCount: number; hasNextPage: boolean; nextCursor: string | null } }
+type Manifest = { serviceDate: string; noStationScope?: boolean; canVerifyDocuments: boolean; canOpenBookingDesk: boolean; carrier?: { name: string; code: string; defaultTimezone: string } | null; flights: Flight[]; refundCleanup: { items: RefundCleanupItem[]; pageSize: number; totalCount: number; hasNextPage: boolean; nextCursor: string | null } }
 
 async function mutate(query: string, variables: Record<string, unknown>) {
   const response = await fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ query, variables }) })
@@ -96,6 +96,8 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
     return documentInputs[key] ?? { documentType: 'passport', documentNumber: '', issuingCountryCode: '', nationalityCode: '', expiresAt: '', providerReference: '', evidenceVersion: 'station-physical-check-v1' }
   }
 
+  // Manifests are station-scoped: an operator with no active station assignment sees none, whatever is flying.
+  if (manifest.noStationScope) return <Well>No departures to show: manifests list the stations you are assigned to, and you have no active station assignment. Assign stations in <Link href="/dashboard/platform/stations" className="font-medium text-foreground underline underline-offset-4">Stations &amp; access</Link>.</Well>
   if (!manifest.flights.length && !manifest.refundCleanup.items.length && manifest.refundCleanup.totalCount === 0) return <Well>No flights or refund/void segments for <span className="tabular-nums  text-foreground">{manifest.serviceDate}</span></Well>
   const allTravelers = manifest.flights.flatMap(flight => flight.travelers)
   const checkedInCount = allTravelers.filter(traveler => traveler.checkIn?.status === 'checked_in' || traveler.checkIn?.boardingPass?.status === 'boarded').length

@@ -622,7 +622,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
             : flightWorklist.state === 'inconsistent' ? <StateNotice role="status" action={flightFirstHref && <Pill asChild><Link href={flightFirstHref}>Reload first page</Link></Pill>}>Flight rows and count disagree.</StateNotice>
               : null)}
       {flights.length > 0 && <Panel className="divide-y">
-        <div aria-hidden="true" className="hidden gap-x-4 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[4.5rem_8.5rem_minmax(9rem,1fr)_8rem_minmax(7rem,auto)_auto]"><span>Flight</span><span>Route</span><span>Departs</span><span>State</span><span>Seats sold/cap</span><span /></div>
+        <div aria-hidden="true" className={cn("hidden gap-x-4 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground md:grid", mode === 'inventory' ? 'md:grid-cols-[4rem_7.5rem_minmax(8rem,1fr)_auto]' : 'md:grid-cols-[4.5rem_8.5rem_minmax(9rem,1fr)_8rem_minmax(7rem,auto)_auto]')}><span>Flight</span><span>Route</span><span>Departs</span>{mode !== 'inventory' && <><span>State</span><span>Seats sold/cap</span></>}<span /></div>
         {flights.map(flight => {
           const inventoryFlightBinding = mode === 'inventory'
             ? resolveInventoryFlightSelection(flights, flight.id, inventoryActorCarrierId ?? '')
@@ -632,14 +632,14 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
           const buckets = flight.inventoryBuckets ?? []
           return <article key={flight.id} className={cn('min-w-0 px-3 py-2', isSelectedInventoryFlight && 'bg-muted/40')}>
             {mode !== 'inventory' && flight.inventoryBucketsOverflow && <Notice tone="warn" role="status" className="mb-2">Over 25 buckets; showing 25. Authorization editing disabled.</Notice>}
-            <div className="grid min-w-0 items-center gap-x-4 gap-y-1 text-sm md:grid-cols-[4.5rem_8.5rem_minmax(9rem,1fr)_8rem_minmax(7rem,auto)_auto]">
+            <div className={cn('grid min-w-0 items-center gap-x-3 gap-y-1 text-sm', mode === 'inventory' ? 'md:grid-cols-[4rem_7.5rem_minmax(8rem,1fr)_auto]' : 'md:grid-cols-[4.5rem_8.5rem_minmax(9rem,1fr)_8rem_minmax(7rem,auto)_auto]')}>
               <TitleLine as="p" tone={flightTone(flight.status)} status={flight.status.replaceAll('_', ' ')}>
                 <Link href={mode === 'inventory' ? `/dashboard/platform/schedules/${flight.id}` : `${detailBase}/${flight.id}`} className={cn('font-semibold tabular-nums text-foreground', linkFocus)}>{flight.flightNumber}</Link>
               </TitleLine>
               <Route from={flight.origin.iataCode} to={flight.destination.iataCode} />
-              <span className="tabular-nums text-foreground/80">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}</span>
-              <StatusLabel status={flight.status} />
-              <span className="flex flex-wrap gap-x-3 text-xs tabular-nums text-muted-foreground">{buckets.length ? buckets.map(bucket => <span key={bucket.id}><span className="font-semibold text-foreground">{bucket.bookingClassCode}</span> {bucket.sold + bucket.held}/{bucket.capacity}</span>) : '—'}</span>
+              <span className="whitespace-nowrap tabular-nums text-foreground/80">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}{mode === 'inventory' && <span className="ml-2"><StatusLabel status={flight.status} /></span>}</span>
+              {mode !== 'inventory' && <StatusLabel status={flight.status} />}
+              {mode !== 'inventory' && <span className="flex flex-wrap gap-x-3 text-xs tabular-nums text-muted-foreground">{buckets.length ? buckets.map(bucket => <span key={bucket.id}><span className="font-semibold text-foreground">{bucket.bookingClassCode}</span> {bucket.sold + bucket.held}/{bucket.capacity}</span>) : '—'}</span>}
               {mode !== 'schedules' ? <div role="group" aria-label={`Actions for ${flight.flightNumber}`} className="flex flex-wrap items-center divide-x divide-border md:justify-end [&>*]:h-7 [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:px-2.5 [&>*]:text-xs [&>*:hover]:bg-transparent [&>*:hover]:underline [&>*]:underline-offset-4 [&>*:last-child]:pr-0">
                 {mode === 'inventory' && <Pill disabled={!canSelectInventoryFlight} onClick={() => selectInventoryFlight(flight.id)}>
                   {isSelectedInventoryFlight ? 'Reload buckets' : 'View buckets'}

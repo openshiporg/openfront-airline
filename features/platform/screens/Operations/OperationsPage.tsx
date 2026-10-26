@@ -114,7 +114,7 @@ export default async function OperationsPage() {
               <table className="w-full text-sm md:min-w-[40rem]">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-medium">
-                    <th scope="col">Departs</th><th scope="col">Flight</th><th scope="col">Route</th><th scope="col" className="hidden md:table-cell">Arrives</th><th scope="col" className="hidden md:table-cell">Gate</th><th scope="col" className="text-right">Load</th><th scope="col">Status</th>
+                    <th scope="col">Departs</th><th scope="col">Flight</th><th scope="col">Route</th><th scope="col" className="hidden md:table-cell">Arrives</th><th scope="col" className="hidden md:table-cell">Gate</th><th scope="col" className="hidden text-right sm:table-cell">Load</th><th scope="col">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -127,7 +127,7 @@ export default async function OperationsPage() {
                       <td><Route from={flight.origin?.iataCode} to={flight.destination?.iataCode} /></td>
                       <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">{formatAirportClock(flight.scheduledArrivalAt, flight.destination?.timezone) ?? '—'}</td>
                       <td className="hidden md:table-cell">{flight.departureGate || <span className="text-muted-foreground">—</span>}</td>
-                      <td className="whitespace-nowrap text-right">{seats ? <>{seats.taken}<span className="text-muted-foreground">/{seats.capacity}</span></> : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="hidden whitespace-nowrap text-right sm:table-cell">{seats ? <>{seats.taken}<span className="text-muted-foreground">/{seats.capacity}</span></> : <span className="text-muted-foreground">—</span>}</td>
                       <td><StatusLabel status={flight.status} /></td>
                     </tr>
                   })}
