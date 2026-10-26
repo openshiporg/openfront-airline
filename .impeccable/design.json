@@ -1,0 +1,490 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T00:00:00Z",
+  "title": "Design System: Openfront Airline",
+  "extensions": {
+    "colorMeta": {
+      "cover-brand": {
+        "role": "primary",
+        "displayName": "Carrier Cover (default Slate; runtime --storefront-brand)",
+        "canonical": "#334155",
+        "tonalRamp": [
+          "#050b15",
+          "#192638",
+          "#354357",
+          "#536278",
+          "#74849a",
+          "#96a6be",
+          "#b9cbe3",
+          "#e5efff"
+        ]
+      },
+      "cover-brand-hover": {
+        "role": "primary",
+        "displayName": "Carrier Cover Hover",
+        "canonical": "#1e293b"
+      },
+      "cover-brand-soft": {
+        "role": "primary",
+        "displayName": "Carrier Cover Soft",
+        "canonical": "#f1f5f9"
+      },
+      "signage-yellow": {
+        "role": "primary",
+        "displayName": "Signage Yellow",
+        "canonical": "#f5c400",
+        "tonalRamp": [
+          "#1b0400",
+          "#441600",
+          "#643700",
+          "#865800",
+          "#a97a00",
+          "#ce9e00",
+          "#f4c300",
+          "#ffec9d"
+        ]
+      },
+      "signage-yellow-edge": {
+        "role": "primary",
+        "displayName": "Signage Yellow Edge",
+        "canonical": "#d9ad00"
+      },
+      "signage-yellow-hover": {
+        "role": "primary",
+        "displayName": "Signage Yellow Hover",
+        "canonical": "#e6b800"
+      },
+      "signage-graphite": {
+        "role": "secondary",
+        "displayName": "Signage Graphite",
+        "canonical": "#1f2328",
+        "tonalRamp": [
+          "#090b0e",
+          "#21252a",
+          "#3e4248",
+          "#5d6268",
+          "#7e8389",
+          "#a0a6ac",
+          "#c4cad0",
+          "#ebeff3"
+        ]
+      },
+      "timetable-stock": {
+        "role": "neutral",
+        "displayName": "Timetable Stock",
+        "canonical": "#f6f7f5",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#252524",
+          "#414241",
+          "#616160",
+          "#828381",
+          "#a4a5a3",
+          "#c8c9c7",
+          "#eeefed"
+        ]
+      },
+      "stock-shade": {
+        "role": "neutral",
+        "displayName": "Stock Shade",
+        "canonical": "#ecedea"
+      },
+      "card-white": {
+        "role": "neutral",
+        "displayName": "Card White",
+        "canonical": "#ffffff"
+      },
+      "graphite-ink": {
+        "role": "neutral",
+        "displayName": "Graphite Ink",
+        "canonical": "#14171a",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#222529",
+          "#3f4246",
+          "#5e6265",
+          "#7f8387",
+          "#a1a5aa",
+          "#c5cace",
+          "#eceff1"
+        ]
+      },
+      "graphite-ink-2": {
+        "role": "neutral",
+        "displayName": "Graphite Ink 2",
+        "canonical": "#3b4148"
+      },
+      "graphite-ink-3": {
+        "role": "neutral",
+        "displayName": "Graphite Ink 3",
+        "canonical": "#636a72"
+      },
+      "keyline": {
+        "role": "neutral",
+        "displayName": "Keyline",
+        "canonical": "#d6d8d4",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#242623",
+          "#41433f",
+          "#60625e",
+          "#81837f",
+          "#a4a6a2",
+          "#c8cac6",
+          "#eeefec"
+        ]
+      },
+      "keyline-strong": {
+        "role": "neutral",
+        "displayName": "Keyline Strong",
+        "canonical": "#b9bcb7"
+      },
+      "state-ok": {
+        "role": "state",
+        "displayName": "State Green",
+        "canonical": "#17734b",
+        "tonalRamp": [
+          "#001203",
+          "#003310",
+          "#00522c",
+          "#17734b",
+          "#41956b",
+          "#66b98d",
+          "#8bdeb0",
+          "#cbfcdf"
+        ]
+      },
+      "state-warn": {
+        "role": "state",
+        "displayName": "State Amber",
+        "canonical": "#9a5b00",
+        "tonalRamp": [
+          "#1e0200",
+          "#490e00",
+          "#6b2f00",
+          "#8e5000",
+          "#b27227",
+          "#d8954e",
+          "#ffb972",
+          "#ffe6bd"
+        ]
+      },
+      "state-bad": {
+        "role": "state",
+        "displayName": "State Red",
+        "canonical": "#b42318",
+        "tonalRamp": [
+          "#2b0000",
+          "#620000",
+          "#8a0000",
+          "#b12015",
+          "#da4a3b",
+          "#ff705e",
+          "#ff9681",
+          "#ffd3c4"
+        ]
+      },
+      "state-idle": {
+        "role": "state",
+        "displayName": "State Idle",
+        "canonical": "#7b828a",
+        "tonalRamp": [
+          "#090b0f",
+          "#20262c",
+          "#3c434a",
+          "#5b626a",
+          "#7c838b",
+          "#9fa6ae",
+          "#c2cad3",
+          "#eaeff4"
+        ]
+      },
+      "shell-ground": {
+        "role": "neutral",
+        "displayName": "Shell Ground (dashboard --background)",
+        "canonical": "oklch(1 0 0)"
+      },
+      "shell-ink": {
+        "role": "neutral",
+        "displayName": "Shell Ink (dashboard --foreground)",
+        "canonical": "oklch(0.141 0.005 285.823)"
+      },
+      "shell-muted-ink": {
+        "role": "neutral",
+        "displayName": "Shell Muted Ink (dashboard --muted-foreground)",
+        "canonical": "oklch(0.552 0.016 285.938)"
+      },
+      "shell-hairline": {
+        "role": "neutral",
+        "displayName": "Shell Hairline (dashboard --border)",
+        "canonical": "oklch(0.92 0.004 286.32)"
+      }
+    },
+    "typographyMeta": {
+      "cover-display": {
+        "displayName": "Cover Display",
+        "purpose": "Storefront homepage and inside-page titles on the cover band; condensed uppercase."
+      },
+      "cover-headline": {
+        "displayName": "Cover Headline",
+        "purpose": "Storefront section heads on stock and the status/booking hero figure."
+      },
+      "cover-title": {
+        "displayName": "Cover Title",
+        "purpose": "Timetable 'From [city]' groups, service rail, wordmark."
+      },
+      "storefront-body": {
+        "displayName": "Storefront Body",
+        "purpose": "Fields, rows and running text, tabular."
+      },
+      "storefront-label": {
+        "displayName": "Storefront Label",
+        "purpose": "Field labels and column heads; sentence case, untracked."
+      },
+      "desk-title": {
+        "displayName": "Desk Title",
+        "purpose": "One per desk, with count/meta beneath."
+      },
+      "desk-section": {
+        "displayName": "Desk Section",
+        "purpose": "Titled regions with a trailing count."
+      },
+      "desk-body": {
+        "displayName": "Desk Body",
+        "purpose": "Table rows, facts, notices; tabular."
+      },
+      "desk-plate": {
+        "displayName": "Signage Plate",
+        "purpose": "IATA codes and flight numbers on graphite plates."
+      },
+      "desk-code": {
+        "displayName": "Desk Code",
+        "purpose": "Record locators and offer numbers inline."
+      }
+    },
+    "shadows": [
+      {
+        "name": "selection-bar",
+        "value": "inset 3px 0 0 var(--af-accent)",
+        "purpose": "Not elevation: a flat 3px leading bar marking the selected timetable row or current mobile nav item."
+      },
+      {
+        "name": "field-focus-ring",
+        "value": "0 0 0 1px var(--af-accent)",
+        "purpose": "Not elevation: 1px carrier-colour ring doubling the border on a focused storefront field."
+      }
+    ],
+    "motion": [
+      {
+        "name": "storefront-state",
+        "value": "140ms ease",
+        "purpose": "Background, colour and border changes on storefront buttons and fields; seats use 120ms. Removed under prefers-reduced-motion."
+      },
+      {
+        "name": "desk-state",
+        "value": "150ms (Tailwind transition-colors)",
+        "purpose": "Colour changes on desk buttons, tabs and row links."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ],
+    "runtimeBrandPalette": {
+      "source": "features/airline/lib/branding.ts",
+      "note": "cover-brand is set per carrier via --storefront-brand / -hover / -soft",
+      "options": {
+        "slate": [
+          "#334155",
+          "#1e293b",
+          "#f1f5f9"
+        ],
+        "blue": [
+          "#1d4ed8",
+          "#1e40af",
+          "#eff6ff"
+        ],
+        "indigo": [
+          "#4338ca",
+          "#3730a3",
+          "#eef2ff"
+        ],
+        "violet": [
+          "#6d28d9",
+          "#5b21b6",
+          "#f5f3ff"
+        ],
+        "rose": [
+          "#be123c",
+          "#9f1239",
+          "#fff1f2"
+        ],
+        "emerald": [
+          "#047857",
+          "#065f46",
+          "#ecfdf5"
+        ],
+        "amber": [
+          "#92400e",
+          "#78350f",
+          "#fffbeb"
+        ]
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Storefront Primary Button",
+      "kind": "button",
+      "refersTo": "storefront-button-primary",
+      "description": "The commit action on a storefront unit, in the carrier colour.",
+      "html": "<button class=\"ds-sf-btn-primary\">Search flights</button>",
+      "css": ".ds-sf-btn-primary{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:0 1.125rem;border:1px solid var(--af-accent,#334155);border-radius:3px;background:var(--af-accent,#334155);color:#fff;font:600 0.9375rem/1 Archivo,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:background-color 140ms ease,border-color 140ms ease}.ds-sf-btn-primary:hover{background:var(--af-accent-hover,#1e293b);border-color:var(--af-accent-hover,#1e293b)}.ds-sf-btn-primary:focus-visible{outline:2px solid var(--af-accent,#334155);outline-offset:2px}"
+    },
+    {
+      "name": "Storefront Button",
+      "kind": "button",
+      "refersTo": "storefront-button",
+      "description": "Secondary storefront action: white with a strong keyline.",
+      "html": "<button class=\"ds-sf-btn\">Retrieve</button>",
+      "css": ".ds-sf-btn{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:0 1.125rem;border:1px solid #b9bcb7;border-radius:3px;background:#fff;color:#14171a;font:600 0.9375rem/1 Archivo,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:border-color 140ms ease}.ds-sf-btn:hover{border-color:#14171a}.ds-sf-btn:focus-visible{outline:2px solid #334155;outline-offset:2px}"
+    },
+    {
+      "name": "Storefront Underline Tabs",
+      "kind": "nav",
+      "refersTo": "storefront-tab",
+      "description": "Mode switch (One way / Round trip) as underline tabs on a keyline.",
+      "html": "<div class=\"ds-sf-tabs\" role=\"group\"><button aria-pressed=\"true\">One way</button><button aria-pressed=\"false\">Round trip</button></div>",
+      "css": ".ds-sf-tabs{display:inline-flex;border-bottom:1px solid #d6d8d4;font-family:Archivo,ui-sans-serif,system-ui,sans-serif}.ds-sf-tabs button{min-height:2.5rem;margin-bottom:-1px;padding:0 0.875rem;border:0;border-bottom:2px solid transparent;background:transparent;color:#636a72;font-size:0.9375rem;font-weight:600;cursor:pointer}.ds-sf-tabs button:hover{color:#14171a}.ds-sf-tabs button[aria-pressed=true]{color:#14171a;border-bottom-color:#334155}.ds-sf-tabs button:focus-visible{outline:2px solid #334155;outline-offset:2px}"
+    },
+    {
+      "name": "Storefront Field",
+      "kind": "input",
+      "refersTo": "storefront-input",
+      "description": "Square keylined field with a sentence-case label above.",
+      "html": "<label class=\"ds-sf-field\"><span>Booking reference</span><input placeholder=\"ABC123\"></label>",
+      "css": ".ds-sf-field{display:flex;flex-direction:column;gap:0.3rem;font-family:Archivo,ui-sans-serif,system-ui,sans-serif}.ds-sf-field span{font-size:0.75rem;font-weight:600;color:#636a72}.ds-sf-field input{min-height:2.75rem;padding:0 0.75rem;border:1px solid #b9bcb7;border-radius:3px;background:#fff;color:#14171a;font-size:1rem;transition:border-color 140ms ease,box-shadow 140ms ease}.ds-sf-field input:focus{outline:none;border-color:#334155;box-shadow:0 0 0 1px #334155}"
+    },
+    {
+      "name": "Timetable Group",
+      "kind": "custom",
+      "refersTo": "storefront-day-on",
+      "description": "Signature: condensed 'From' title over a brand rule, ruled rows, days-of-operation grid.",
+      "html": "<section class=\"ds-tt\"><h3><span>From New York</span><em>JFK</em></h3><table><thead><tr><th>To</th><th>Flight</th><th>Dep</th><th>Arr</th><th>Days</th></tr></thead><tbody><tr><td><b>Boston</b> <small>BOS</small></td><td>AV 101</td><td><b>7:00 AM</b></td><td>8:20 AM</td><td><span class=\"ds-days\"><i data-on>M</i><i data-on>T</i><i>W</i><i data-on>T</i><i data-on>F</i><i>S</i><i>S</i></span></td></tr></tbody></table></section>",
+      "css": ".ds-tt{font-family:Archivo,ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#14171a;background:#f6f7f5;padding:1rem}.ds-tt h3{display:flex;align-items:baseline;gap:0.75rem;margin:0;padding-bottom:0.375rem;border-bottom:2px solid #334155}.ds-tt h3 span{font-stretch:72%;font-weight:700;font-size:1.875rem;line-height:0.92;text-transform:uppercase}.ds-tt h3 em{font-style:normal;font-size:0.875rem;font-weight:700;letter-spacing:0.06em;color:#334155}.ds-tt table{width:100%;border-collapse:collapse;font-size:0.875rem}.ds-tt th{text-align:left;font-size:0.75rem;font-weight:600;color:#636a72;padding:0.5rem 0.75rem 0.5rem 0}.ds-tt td{padding:0.625rem 0.75rem 0.625rem 0;border-top:1px solid #d6d8d4}.ds-tt small{font-size:0.75rem;font-weight:700;letter-spacing:0.06em;color:#636a72}.ds-days{display:inline-grid;grid-template-columns:repeat(7,1.375rem);gap:1px}.ds-days i{display:grid;place-items:center;height:1.375rem;font-style:normal;font-size:0.75rem;font-weight:700;color:#b9bcb7;border:1px solid #d6d8d4;border-radius:2px}.ds-days i[data-on]{color:#fff;background:#334155;border-color:#334155}"
+    },
+    {
+      "name": "Desk Primary Button",
+      "kind": "button",
+      "refersTo": "desk-button-primary",
+      "description": "Signage yellow: the one action a desk screen exists for.",
+      "html": "<button class=\"ds-desk-btn-primary\">New route</button>",
+      "css": ".ds-desk-btn-primary{display:inline-flex;align-items:center;height:2rem;padding:0 0.75rem;border:1px solid #d9ad00;border-radius:4px;background:#f5c400;color:#1f2328;font:500 0.875rem/1 Geist,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms}.ds-desk-btn-primary:hover{background:#e6b800}.ds-desk-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 2px oklch(0.705 0.015 286.067)}"
+    },
+    {
+      "name": "Desk Button",
+      "kind": "button",
+      "refersTo": "desk-button",
+      "description": "Default square desk button on a hairline.",
+      "html": "<button class=\"ds-desk-btn\">Search</button>",
+      "css": ".ds-desk-btn{display:inline-flex;align-items:center;height:2rem;padding:0 0.75rem;border:1px solid oklch(0.92 0.004 286.32);border-radius:4px;background:oklch(1 0 0);color:oklch(0.141 0.005 285.823);font:500 0.875rem/1 Geist,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms}.ds-desk-btn:hover{background:oklch(0.967 0.001 286.375)}.ds-desk-btn:focus-visible{outline:none;box-shadow:0 0 0 2px oklch(0.705 0.015 286.067)}"
+    },
+    {
+      "name": "Desk Underline Tabs",
+      "kind": "nav",
+      "refersTo": "desk-button",
+      "description": "View switch with counts and optional square state markers.",
+      "html": "<div class=\"ds-desk-tabs\" role=\"group\"><button aria-pressed=\"true\">All <small>8</small></button><button aria-pressed=\"false\"><i style=\"background:#f59e0b\"></i>Draft <small>0</small></button><button aria-pressed=\"false\"><i style=\"background:#059669\"></i>Active <small>8</small></button></div>",
+      "css": ".ds-desk-tabs{display:flex;border-bottom:1px solid oklch(0.92 0.004 286.32);font-family:Geist,ui-sans-serif,system-ui,sans-serif}.ds-desk-tabs button{display:inline-flex;align-items:center;gap:0.375rem;height:2.25rem;margin-bottom:-1px;padding:0 0.75rem;border:0;border-bottom:2px solid transparent;background:none;color:oklch(0.552 0.016 285.938);font-size:0.875rem;font-weight:500;cursor:pointer}.ds-desk-tabs button:hover{color:oklch(0.141 0.005 285.823)}.ds-desk-tabs button[aria-pressed=true]{color:oklch(0.141 0.005 285.823);border-bottom-color:oklch(0.141 0.005 285.823)}.ds-desk-tabs small{font-size:0.75rem;font-variant-numeric:tabular-nums;color:oklch(0.552 0.016 285.938)}.ds-desk-tabs i{width:0.375rem;height:0.375rem;border-radius:1px}"
+    },
+    {
+      "name": "Signage Plate Route",
+      "kind": "custom",
+      "refersTo": "desk-plate",
+      "description": "Signature: two graphite code plates joined by a hairline; yellow for attention.",
+      "html": "<span class=\"ds-route\"><span class=\"ds-plate\">BOS</span><span class=\"ds-route-line\"></span><span class=\"ds-plate ds-plate-attention\">JFK</span></span>",
+      "css": ".ds-route{display:inline-flex;align-items:center;gap:0.25rem}.ds-plate{display:inline-flex;align-items:center;justify-content:center;height:1.375rem;min-width:2.75rem;padding:0 0.375rem;border-radius:3px;background:#1f2328;color:#fff;font:600 12px/1 Geist,ui-sans-serif,system-ui,sans-serif;letter-spacing:0.06em;text-transform:uppercase;font-variant-numeric:tabular-nums}.ds-plate-attention{background:#f5c400;color:#1f2328}.ds-route-line{width:0.75rem;height:1px;background:rgb(20 23 26 / 0.4)}"
+    },
+    {
+      "name": "Readout Strip",
+      "kind": "custom",
+      "refersTo": "desk-body",
+      "description": "Summary figures inline between hairlines, never tiles.",
+      "html": "<div class=\"ds-readouts\"><div><span>Departures</span><b>42</b></div><div><span>Boarded</span><b>31</b></div><div><span>Delayed</span><b>3</b></div></div>",
+      "css": ".ds-readouts{display:flex;flex-wrap:wrap;border-top:1px solid oklch(0.92 0.004 286.32);border-bottom:1px solid oklch(0.92 0.004 286.32);font:0.875rem Geist,ui-sans-serif,system-ui,sans-serif}.ds-readouts div{display:flex;align-items:baseline;gap:0.5rem;padding:0.375rem 0.75rem}.ds-readouts div:first-child{padding-left:0}.ds-readouts div+div{border-left:1px solid oklch(0.92 0.004 286.32)}.ds-readouts span{color:oklch(0.552 0.016 285.938)}.ds-readouts b{font-weight:600;font-variant-numeric:tabular-nums;color:oklch(0.141 0.005 285.823)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Printed Airline",
+    "overview": "Openfront Airline is one carrier seen through two pieces of airline print. Staff work at **ops desks set like airport wayfinding signage** (Schiphol/Mijksenaar school): graphite ink on the shell's neutral ground, 1px hairlines, 4px corners at most, no shadows, airport and flight codes set as graphite signage plates, and signage yellow held back for the single action a screen exists for. Travellers meet **the carrier's pocket timetable**: a drenched cover printed in the carrier's own brand colour holding the working search, then cool white stock with graphite ink where the real schedule is set in timetable columns with day-of-operation grids.\n\nBoth worlds are flat, dense and ruled. Hierarchy comes from type weight, condensed width (storefront) and the placement of the one strong colour, never from lifted surfaces or tinted tiles. Both refuse their category defaults: the desks refuse stat-card rows over rounded record cards with pill button groups; the storefront refuses the wing-at-sunset hero over a floating rounded search card. Every table and figure uses tabular numerals.\n\nThe worlds share a grammar (underline tabs on a hairline, square state markers, square buttons, keylined units) but not a palette or a typeface. A new surface belongs to exactly one of them: anything under `/dashboard/platform/*` is a desk; anything a traveller sees is the timetable.",
+    "keyCharacteristics": [
+      "Flat everywhere: depth is a 1px keyline, never a shadow.",
+      "One strong colour per world: signage yellow on the desks, the carrier brand colour on the storefront.",
+      "Green, amber and red carry state only, as a small square marker or a tinted notice.",
+      "Tabular figures for every time, fare, count and code.",
+      "Underline tabs on a hairline for every view or mode switch; no pill or segmented-capsule tabs.",
+      "Corners stop at 4px (desks) and 3px (storefront)."
+    ],
+    "rules": [
+      {
+        "name": "The One Strong Colour Rule",
+        "body": "Each world has exactly one loud colour and it marks one thing: on a desk, signage yellow marks the single primary action (and an attention plate); on the storefront, the carrier colour is the cover and the commit action. A second yellow button on a desk screen is a bug.",
+        "section": "colors"
+      },
+      {
+        "name": "The State-Only Rule",
+        "body": "Green, amber and red appear only where a real lifecycle state is being shown, or on a destructive action in red. Never as decoration, category colour or section tint.",
+        "section": "colors"
+      },
+      {
+        "name": "The Identifier-Only Caps Rule",
+        "body": "Uppercase with tracking is how a sign sets a code: airport codes, flight numbers, locators. It is never used for a label, a column head or a line above a heading. Labels are sentence case, 0.75rem, untracked.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Kicker Rule",
+        "body": "A heading stands alone. No small line above a title naming its category, section or carrier; the title and its meta line carry the page.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every time, fare, count and code is set with tabular figures in both worlds. No monospace face stands in for this.",
+        "section": "typography"
+      },
+      {
+        "name": "The Keyline Rule",
+        "body": "Every unit (card, table, pass, notice, well, field) carries a 1px keyline. If a surface needs separating, add a rule, not a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do open every desk on its work queue: title with count, primary action at right, underline tabs, filter row, then rows.",
+      "Do set airport and flight codes on desks as graphite signage plates (`desk-plate`), with yellow-on-graphite only for the active or attention row.",
+      "Do keep one signage-yellow action per desk screen and one carrier-colour commit action per storefront unit.",
+      "Do carry the carrier colour through `--storefront-brand` so every carrier's storefront recolours without code changes.",
+      "Do put a 1px keyline around every storefront unit and rule desk rows with hairlines.",
+      "Do set every time, fare, count and code with tabular figures.",
+      "Do use condensed Archivo uppercase only for cover and section titles on the storefront."
+    ],
+    "donts": [
+      "Don't use pill or capsule tabs, chips, or corners above 4px (desks) and 3px (storefront).",
+      "Don't add shadows for depth; the only inset is the 3px selection bar.",
+      "Don't lay summary figures out as stat tiles or cards; use the readout strip.",
+      "Don't colour anything green, amber or red that is not a state or a destructive action.",
+      "Don't set labels, column heads or lines above headings in uppercase tracked type; caps with tracking belong to identifiers.",
+      "Don't put a kicker or eyebrow line above a heading.",
+      "Don't use a monospace face for figures or codes.",
+      "Don't put signage yellow on the storefront or the carrier colour on the desks."
+    ]
+  }
+}
