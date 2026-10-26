@@ -78,7 +78,6 @@ A sweep across 37 platform files removed mono numerals, tracked caps and rounded
 
 ## Open
 
-- No `impeccable-finish-reviewer` pass was run yet, and DESIGN.md has not been generated.
 - The meta line shows "Launch Setup In Progress" because of a capitalize class on the onboarding status. This is cosmetic.
 
 ## Finish review (impeccable-finish-reviewer, fresh context)
