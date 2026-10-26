@@ -80,3 +80,25 @@ A sweep across 37 platform files removed mono numerals, tracked caps and rounded
 
 - No `impeccable-finish-reviewer` pass was run yet, and DESIGN.md has not been generated.
 - The meta line shows "Launch Setup In Progress" because of a capitalize class on the onboarding status. This is cosmetic.
+
+## Finish review (impeccable-finish-reviewer, fresh context)
+
+- **Round 1 — fix (8 items), addressed in `94155cc`:**
+  - Removed the wing photo plate, which contradicted the contract.
+  - Square selects.
+  - The timetable prints "Daily" and leads with the hub.
+  - Yellow is limited to one action per screen, and the summary is an inline strip.
+  - Flight lists are one ruled table.
+  - Station duties are written as text.
+  - Departures opens on the next operating day.
+  - Raw enum values are replaced with product language.
+- **Verdict pass — 4 resolved, 4 partial, 3 regressions. Round 2 in `7c10b6b`:**
+  - Inventory uses a narrower grid, fixing the overflow and the empty seats column.
+  - Stations shows aligned columns.
+  - Disruptions keeps a single yellow action.
+  - Operations on phones keeps Status.
+  - Departures explains why it is empty: manifests are station-scoped, and the demo admin has no station assignment.
+- **The two-round budget is spent. Still open:**
+  - The Provision dated flight form remains at the bottom of Schedules.
+  - The demo needs a station assignment for Departures to list flights. That is a seed change, which the brief forbids.
+- **DESIGN.md and .impeccable/design.json:** `93d185f`.
