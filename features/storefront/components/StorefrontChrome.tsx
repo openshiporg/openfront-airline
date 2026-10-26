@@ -1,4 +1,4 @@
-import '@/features/storefront/styles/airline.css'
+import '@/features/storefront/styles/timetable.css'
 
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
@@ -21,23 +21,23 @@ const NEUTRAL_IDENTITY = { name: 'Flights', code: '', legalName: '' }
 
 export function StorefrontLogo({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code'> }) {
   return <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-2.5">
-    <span className="grid size-9 shrink-0 place-items-center rounded-[0.7rem] bg-[var(--af-accent)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_1px_2px_rgb(15_27_45/0.25)]"><CarrierMark className="h-6 w-auto" /></span>
-    <span className="af-display truncate text-[1.6rem] uppercase">{carrier.name}</span>
-    {carrier.code && <span className="af-mono hidden rounded-md bg-[var(--af-paper-2)] px-1.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--af-ink-2)] sm:inline">{carrier.code}</span>}
+    <span className="grid size-9 shrink-0 place-items-center rounded-[3px] bg-[var(--af-accent)] text-white"><CarrierMark className="h-6 w-auto" /></span>
+    <span className="af-display truncate text-[1.75rem] uppercase">{carrier.name}</span>
+    {carrier.code && <span className="hidden h-6 items-center rounded-[2px] border border-[var(--af-line-2)] px-1.5 text-xs font-bold tracking-[0.06em] text-[var(--af-ink-2)] sm:inline-flex">{carrier.code}</span>}
   </Link>
 }
 
 function StorefrontHeader({ carrier, current }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code'>; current?: StorefrontRoute }) {
-  return <header className="sticky top-0 z-30 border-b border-[var(--af-line)] bg-[color-mix(in_srgb,var(--af-paper)_88%,transparent)] backdrop-blur-md">
+  return <header className="sticky top-0 z-30 border-b border-[var(--af-line)] bg-[var(--af-card)]">
     <div className="af-container flex h-16 items-center justify-between gap-4">
       <StorefrontLogo carrier={carrier} />
-      <nav aria-label="Passenger services" className="hidden lg:block">
-        <div className="af-track">{publicNavigation.map(item => <Link key={item.href} href={item.href} aria-current={item.href === current ? 'page' : undefined} className="af-pill af-pill-sm">{item.label}</Link>)}</div>
+      <nav aria-label="Passenger services" className="hidden h-full lg:block">
+        <ul className="flex h-full items-stretch">{publicNavigation.map(item => <li key={item.href} className="flex"><Link href={item.href} aria-current={item.href === current ? 'page' : undefined} className="flex items-center border-b-2 border-transparent px-3 text-[0.9375rem] font-semibold text-[var(--af-ink-2)] transition-colors hover:text-[var(--af-ink)] aria-[current=page]:border-[var(--af-accent)] aria-[current=page]:text-[var(--af-ink)]">{item.label}</Link></li>)}</ul>
       </nav>
       <details className="group relative lg:hidden">
-        <summary className="af-track cursor-pointer list-none [&::-webkit-details-marker]:hidden"><span className="af-pill af-pill-raised af-pill-sm"><Menu aria-hidden="true" />Menu</span></summary>
-        <nav aria-label="Passenger services" className="af-card absolute right-0 top-[calc(100%+0.5rem)] z-40 grid w-[min(18rem,calc(100vw-2rem))] gap-1 p-2 shadow-xl">
-          {publicNavigation.map(item => <Link key={item.href} href={item.href} aria-current={item.href === current ? 'page' : undefined} className="flex min-h-11 items-center rounded-lg px-3 text-[0.9375rem] font-semibold hover:bg-[var(--af-paper-2)] aria-[current=page]:bg-[var(--af-paper-2)]">{item.label}</Link>)}
+        <summary className="af-pill af-pill-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden"><Menu aria-hidden="true" />Menu</summary>
+        <nav aria-label="Passenger services" className="af-card absolute right-0 top-[calc(100%+0.5rem)] z-40 grid w-[min(18rem,calc(100vw-2rem))] divide-y divide-[var(--af-line)] p-0">
+          {publicNavigation.map(item => <Link key={item.href} href={item.href} aria-current={item.href === current ? 'page' : undefined} className="flex min-h-12 items-center px-4 text-[0.9375rem] font-semibold hover:bg-[var(--af-paper)] aria-[current=page]:text-[var(--af-accent)] aria-[current=page]:shadow-[inset_3px_0_0_var(--af-accent)]">{item.label}</Link>)}
         </nav>
       </details>
     </div>
@@ -48,10 +48,10 @@ export function StorefrontFooter({ carrier }: { carrier: Pick<PublicCarrierIdent
   return <footer className="af-board mt-auto">
     <div className="af-container grid gap-8 py-10 sm:grid-cols-[1fr_auto]">
       <div>
-        <div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-[var(--af-accent)] text-white"><CarrierMark className="h-5 w-auto" /></span><span className="af-display text-2xl uppercase">{carrier.name}</span></div>
-        {carrier.code && <p className="af-mono mt-3 text-xs text-[var(--af-board-ink-2)]">{carrier.legalName} · {carrier.code}</p>}
+        <div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-[3px] bg-white text-[var(--af-accent)]"><CarrierMark className="h-5 w-auto" /></span><span className="af-display text-3xl uppercase">{carrier.name}</span></div>
+        {carrier.code && <p className="mt-3 text-sm text-[var(--af-board-ink-2)]">{carrier.legalName} · {carrier.code}</p>}
       </div>
-      <nav aria-label="Footer" className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">{publicNavigation.map(item => <Link key={item.href} href={item.href} className="text-[var(--af-board-ink-2)] hover:text-white">{item.label}</Link>)}</nav>
+      <nav aria-label="Footer" className="grid grid-cols-2 gap-x-10 gap-y-2 text-[0.9375rem]">{publicNavigation.map(item => <Link key={item.href} href={item.href} className="text-[var(--af-board-ink-2)] underline-offset-4 hover:text-white hover:underline">{item.label}</Link>)}</nav>
     </div>
   </footer>
 }

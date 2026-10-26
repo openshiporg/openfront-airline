@@ -83,16 +83,16 @@ export function AirportsPanel({ airports, total, canRegister }: { airports: Airp
                 <li key={airport.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3">
                   <div className="min-w-0 flex-1 basis-48">
                     <TitleLine tone={airport.isActive ? 'ok' : 'idle'} status={airport.isActive ? 'Active' : 'Inactive'} className="text-sm font-medium text-foreground">
-                      <span className="font-mono font-semibold tabular-nums tracking-wide">{airport.iataCode}</span>
+                      <span className="tabular-nums font-semibold  tracking-wide">{airport.iataCode}</span>
                       {airport.icaoCode && <Code className="ml-2">{airport.icaoCode}</Code>}
                       <span className="ml-2">{airport.name}</span>
                     </TitleLine>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {airport.city}{airport.subdivisionCode ? `, ${airport.subdivisionCode}` : ''} <span className="font-mono tabular-nums">{airport.countryCode}</span>
+                      {airport.city}{airport.subdivisionCode ? `, ${airport.subdivisionCode}` : ''} <span className="tabular-nums ">{airport.countryCode}</span>
                     </p>
                   </div>
                   <div className="flex shrink-0 items-baseline gap-3 text-xs text-muted-foreground">
-                    <span className="font-mono tabular-nums">{airport.timezone}</span>
+                    <span className="tabular-nums ">{airport.timezone}</span>
                     <span>{airport.isActive ? 'Active' : 'Inactive'}</span>
                   </div>
                 </li>
@@ -105,10 +105,10 @@ export function AirportsPanel({ airports, total, canRegister }: { airports: Airp
       <FormSheet open={open} onOpenChange={setOpen} title="Register airport" submitLabel="Register" pending={action.pending} error={action.error} onSubmit={submit}>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="IATA code" error={errors.iataCode} htmlFor="airport-iata">
-            <input id="airport-iata" value={values.iataCode} onChange={set('iataCode')} maxLength={3} autoComplete="off" className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.iataCode)} />
+            <input id="airport-iata" value={values.iataCode} onChange={set('iataCode')} maxLength={3} autoComplete="off" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.iataCode)} />
           </FormField>
           <FormField label="ICAO code" error={errors.icaoCode} htmlFor="airport-icao">
-            <input id="airport-icao" value={values.icaoCode} onChange={set('icaoCode')} maxLength={4} autoComplete="off" className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.icaoCode)} />
+            <input id="airport-icao" value={values.icaoCode} onChange={set('icaoCode')} maxLength={4} autoComplete="off" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.icaoCode)} />
           </FormField>
         </div>
         <FormField label="Name" error={errors.name} htmlFor="airport-name">
@@ -119,14 +119,14 @@ export function AirportsPanel({ airports, total, canRegister }: { airports: Airp
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Country" error={errors.countryCode} htmlFor="airport-country">
-            <input id="airport-country" value={values.countryCode} onChange={set('countryCode')} maxLength={2} autoComplete="off" className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.countryCode)} />
+            <input id="airport-country" value={values.countryCode} onChange={set('countryCode')} maxLength={2} autoComplete="off" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.countryCode)} />
           </FormField>
           <FormField label="Subdivision" htmlFor="airport-subdivision">
-            <input id="airport-subdivision" value={values.subdivisionCode} onChange={set('subdivisionCode')} maxLength={6} autoComplete="off" className={`${deskInput} font-mono uppercase`} />
+            <input id="airport-subdivision" value={values.subdivisionCode} onChange={set('subdivisionCode')} maxLength={6} autoComplete="off" className={`${deskInput} tabular-nums uppercase`} />
           </FormField>
         </div>
         <FormField label="Timezone" error={errors.timezone} htmlFor="airport-timezone">
-          <input id="airport-timezone" value={values.timezone} onChange={set('timezone')} maxLength={64} autoComplete="off" placeholder="Europe/London" className={`${deskInput} font-mono`} aria-invalid={Boolean(errors.timezone)} />
+          <input id="airport-timezone" value={values.timezone} onChange={set('timezone')} maxLength={64} autoComplete="off" placeholder="Europe/London" className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.timezone)} />
         </FormField>
       </FormSheet>
     </DeskSection>

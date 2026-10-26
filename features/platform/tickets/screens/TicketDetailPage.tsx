@@ -111,7 +111,7 @@ export async function TicketDetailPage({ params, searchParams }: { params: Param
       status={ticket.status ?? undefined}
       parent={parent}
       actions={nav(locator)}
-      meta={<span className="inline-flex flex-wrap items-baseline gap-3"><TicketStatusLabel status={ticket.status} /><span className="font-mono tabular-nums">{formatMinorUnits(ticket.totalAmount, ticket.currencyCode)}</span></span>}
+      meta={<span className="inline-flex flex-wrap items-baseline gap-3"><TicketStatusLabel status={ticket.status} /><span className="tabular-nums ">{formatMinorUnits(ticket.totalAmount, ticket.currencyCode)}</span></span>}
     >
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <DeskSection title="Ticket">
@@ -119,15 +119,15 @@ export async function TicketDetailPage({ params, searchParams }: { params: Param
             { label: 'Ticket number', value: ticket.ticketNumber ?? '--', mono: true },
             { label: 'Status', value: <TicketStatusLabel status={ticket.status} /> },
             { label: 'Passenger', value: passengerName || '--' },
-            { label: 'Booking', value: locator ? <Link href={`/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}`} className="font-mono font-medium underline underline-offset-4">{locator}</Link> : '--' },
+            { label: 'Booking', value: locator ? <Link href={`/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}`} className="tabular-nums font-medium underline underline-offset-4">{locator}</Link> : '--' },
             { label: 'Issuing carrier', value: ticket.issuingCarrierCode ?? '--', mono: true },
             { label: 'Validating carrier', value: ticket.validatingCarrierCode ?? '--', mono: true },
             { label: 'Total', value: formatMinorUnits(ticket.totalAmount, ticket.currencyCode), mono: true },
             { label: 'Issued', value: utc(ticket.issuedAt), mono: true },
             ticket.voidedAt ? { label: 'Voided', value: utc(ticket.voidedAt), mono: true } : null,
             ticket.refundedAt ? { label: 'Refunded', value: utc(ticket.refundedAt), mono: true } : null,
-            ticket.originalTicket ? { label: 'Reissued from', value: <Link href={`/dashboard/platform/tickets/${ticket.originalTicket.id}`} className="font-mono underline underline-offset-4">{ticket.originalTicket.ticketNumber ?? '--'}</Link> } : null,
-            reissued.length ? { label: 'Reissued as', value: <span className="inline-flex flex-col items-end gap-1">{reissued.map(next => <Link key={next.id} href={`/dashboard/platform/tickets/${next.id}`} className="font-mono underline underline-offset-4">{next.ticketNumber ?? '--'}</Link>)}</span> } : null,
+            ticket.originalTicket ? { label: 'Reissued from', value: <Link href={`/dashboard/platform/tickets/${ticket.originalTicket.id}`} className="tabular-nums underline underline-offset-4">{ticket.originalTicket.ticketNumber ?? '--'}</Link> } : null,
+            reissued.length ? { label: 'Reissued as', value: <span className="inline-flex flex-col items-end gap-1">{reissued.map(next => <Link key={next.id} href={`/dashboard/platform/tickets/${next.id}`} className="tabular-nums underline underline-offset-4">{next.ticketNumber ?? '--'}</Link>)}</span> } : null,
           ]} />
         </DeskSection>
         <DeskSection title="Coupons" count={ticket.couponsCount ?? coupons.length}>
@@ -141,9 +141,9 @@ export async function TicketDetailPage({ params, searchParams }: { params: Param
                       <div className="min-w-0 flex-1">
                         <TitleLine as="h3" tone={ticketTone(coupon.status)} status={coupon.status ?? undefined} className="text-sm font-medium">
                           <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                            <span className="font-mono tabular-nums text-muted-foreground">{coupon.couponNumber ?? '--'}</span>
+                            <span className="tabular-nums  text-muted-foreground">{coupon.couponNumber ?? '--'}</span>
                             <Route from={segment?.originCode} to={segment?.destinationCode} />
-                            <span className="font-mono tabular-nums">{segment ? `${segment.marketingCarrierCode ?? ''}${segment.marketingFlightNumber ?? ''}` : '--'}</span>
+                            <span className="tabular-nums ">{segment ? `${segment.marketingCarrierCode ?? ''}${segment.marketingFlightNumber ?? ''}` : '--'}</span>
                           </span>
                         </TitleLine>
                         <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-3 pl-4">
@@ -153,7 +153,7 @@ export async function TicketDetailPage({ params, searchParams }: { params: Param
                         </p>
                       </div>
                       <div className="flex items-baseline gap-4 pl-4 sm:pl-0">
-                        <span className="font-mono text-sm tabular-nums text-foreground">{formatMinorUnits(coupon.amount, coupon.currencyCode)}</span>
+                        <span className="tabular-nums text-sm  text-foreground">{formatMinorUnits(coupon.amount, coupon.currencyCode)}</span>
                         <TicketStatusLabel status={coupon.status} />
                       </div>
                     </li>

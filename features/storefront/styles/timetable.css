@@ -1,0 +1,208 @@
+/* Airline storefront: "Pocket timetable".
+   A cover printed in the carrier's own colour (--storefront-brand) holds the working search; inside pages are cool
+   white stock with graphite ink, 1px keylines on every unit, 3px corners, and one family (Archivo) whose condensed
+   width sets the display caps. Times and fares are tabular. State colours appear only on state. */
+
+.af {
+  --af-paper: #f6f7f5;
+  --af-paper-2: #ecedea;
+  --af-card: #ffffff;
+  --af-ink: #14171a;
+  --af-ink-2: #3b4148;
+  --af-ink-3: #636a72;
+  --af-line: #d6d8d4;
+  --af-line-2: #b9bcb7;
+  --af-accent: var(--storefront-brand, #334155);
+  --af-accent-hover: var(--storefront-brand-hover, #1e293b);
+  --af-accent-soft: var(--storefront-brand-soft, #f1f5f9);
+  /* The cover: brand ink at full strength, white type on it. */
+  --af-board: var(--af-accent);
+  --af-board-line: rgb(255 255 255 / 0.22);
+  --af-board-ink: #ffffff;
+  --af-board-ink-2: rgb(255 255 255 / 0.78);
+  --af-signal: #ffffff;
+  --af-ok: #17734b;
+  --af-warn: #9a5b00;
+  --af-bad: #b42318;
+  --af-idle: #7b828a;
+  --af-radius: 3px;
+  background: var(--af-paper);
+  color: var(--af-ink);
+  font-family: var(--af-font-body), ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.af ::selection { background: var(--af-accent); color: #fff; }
+.af :focus-visible { outline: 2px solid var(--af-accent); outline-offset: 2px; }
+
+.af-container { width: 100%; max-width: 76rem; margin-inline: auto; padding-inline: 1rem; }
+@media (min-width: 640px) { .af-container { padding-inline: 1.5rem; } }
+@media (min-width: 1024px) { .af-container { padding-inline: 2.5rem; } }
+
+/* Condensed display caps: timetable cover lettering. */
+.af-display {
+  font-family: var(--af-font-body), ui-sans-serif, system-ui, sans-serif;
+  font-stretch: 72%;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 0.92;
+  text-wrap: balance;
+}
+/* Former mono readouts: tabular Archivo, a touch narrower. */
+.af-mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+/* Small field and column labels: sentence case, no tracking. */
+.af-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--af-ink-3); }
+
+/* The cover band: home, page heads, coupon heads. Board-only colours are variables, so white stock placed on the
+   cover (cards, tables, passes, notices) resets them and reads as ink on paper again. */
+.af-board { background: var(--af-board); color: var(--af-board-ink); --af-board-ink-2: rgb(255 255 255 / 0.78); --af-board-line: rgb(255 255 255 / 0.22); --af-signal: #fff; --af-dot-ok: #7ee2b0; --af-dot-warn: #ffd166; --af-dot-accent: #fff; }
+.af-card, .af-table, .af-pass, .af-notice, .af-well { color: var(--af-ink); --af-board-ink-2: var(--af-ink-3); --af-signal: var(--af-accent); --af-dot-ok: var(--af-ok); --af-dot-warn: #c98300; --af-dot-accent: var(--af-accent); }
+.af-board .af-eyebrow { color: var(--af-board-ink-2); }
+.af-board-row { border-top: 1px solid var(--af-board-line); }
+.af-board-cell { font-variant-numeric: tabular-nums; }
+.af-signal { color: var(--af-signal); }
+
+/* Timetable table on white stock: flight results. */
+.af-table { background: var(--af-card); color: var(--af-ink); border: 1px solid var(--af-line); border-radius: var(--af-radius); --af-board-line: var(--af-line); --af-board-ink-2: var(--af-ink-3); --af-signal: var(--af-accent); }
+.af-table-head { display: none; background: var(--af-accent); color: #fff; font-size: 0.75rem; font-weight: 600; }
+@media (min-width: 768px) { .af-table-head { display: grid; } }
+.af-table-head .af-eyebrow { color: rgb(255 255 255 / 0.85); }
+.af-table .af-board-row:first-of-type { border-top: 0; }
+.af-table [data-selected="true"] { background: var(--af-accent-soft); box-shadow: inset 3px 0 0 var(--af-accent); }
+
+/* Surfaces: keylined units, square corners, no shadows. */
+.af-card { background: var(--af-card); border: 1px solid var(--af-line); border-radius: var(--af-radius); }
+.af-well { background: var(--af-paper-2); border: 1px solid var(--af-line); border-radius: var(--af-radius); }
+.af-rule { border-top: 1px solid var(--af-line); }
+
+/* Button rows. A track of tabs (aria-pressed / aria-current) reads as underline tabs on a keyline. */
+.af-track { display: inline-flex; max-width: 100%; align-items: center; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; }
+.af-track[data-block="true"] { display: flex; width: 100%; }
+.af-track[data-block="true"] > * { flex: 1 1 0; }
+.af-track[role="group"]:has(> [aria-pressed]), .af-track:has(> [aria-current]) { gap: 0; border-bottom: 1px solid var(--af-line); }
+
+.af-pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  padding: 0 1.125rem;
+  border: 1px solid var(--af-line-2);
+  border-radius: var(--af-radius);
+  background: var(--af-card);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--af-ink);
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+  cursor: pointer;
+}
+.af-pill:hover { border-color: var(--af-ink); }
+.af-pill:disabled, .af-pill[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+.af-pill svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+.af-pill-sm { min-height: 2.25rem; padding: 0 0.875rem; font-size: 0.875rem; }
+.af-pill-raised { background: var(--af-card); }
+/* Tabs: aria-pressed / aria-current / data-active pills become underline tabs. */
+[role="group"] > .af-pill[aria-pressed], .af-pill[aria-current] {
+  min-height: 2.5rem;
+  margin-bottom: -1px;
+  padding: 0 0.875rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--af-ink-3);
+}
+[role="group"] > .af-pill[aria-pressed]:hover, .af-pill[aria-current]:hover { color: var(--af-ink); }
+[role="group"] > .af-pill[aria-pressed="true"], .af-pill[aria-current="page"] { color: var(--af-ink); border-bottom-color: var(--af-accent); }
+.af-pill[aria-pressed="true"]:not([role="group"] > *) { background: var(--af-accent-soft); border-color: var(--af-accent); color: var(--af-accent); }
+.af-pill-primary { background: var(--af-accent); border-color: var(--af-accent); color: #fff; }
+.af-pill-primary:hover { background: var(--af-accent-hover); border-color: var(--af-accent-hover); color: #fff; }
+.af-pill-danger { color: var(--af-bad); border-color: rgb(180 35 24 / 0.45); }
+.af-pill-danger:hover { border-color: var(--af-bad); }
+/* Fields */
+.af-field { display: flex; min-width: 0; flex-direction: column; gap: 0.3rem; }
+.af-field-label { font-size: 0.75rem; font-weight: 600; color: var(--af-ink-3); }
+.af-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  border-radius: var(--af-radius);
+  border: 1px solid var(--af-line-2);
+  background: var(--af-card);
+  color: var(--af-ink);
+  font-size: 1rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.af-input:focus { outline: none; border-color: var(--af-accent); box-shadow: 0 0 0 1px var(--af-accent); }
+.af-input:disabled { opacity: 0.6; }
+.af-input-code { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+
+/* State marker: a small square, as printed timetable symbols. */
+.af-title-line { display: flex; min-width: 0; align-items: baseline; gap: 0.5rem; }
+.af-dot { display: inline-block; width: 0.5rem; height: 0.5rem; flex-shrink: 0; border-radius: 1px; background: var(--af-idle); transform: translateY(-0.1em); }
+.af-dot[data-tone="ok"] { background: var(--af-dot-ok, var(--af-ok)); }
+.af-dot[data-tone="warn"] { background: var(--af-dot-warn, #c98300); }
+.af-dot[data-tone="bad"] { background: var(--af-bad); }
+.af-dot[data-tone="accent"] { background: var(--af-dot-accent, var(--af-accent)); }
+
+/* Notices: results and errors */
+.af-notice { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.75rem 1rem; border-radius: var(--af-radius); font-size: 0.875rem; line-height: 1.5; background: var(--af-card); border: 1px solid var(--af-line); color: var(--af-ink); }
+.af-notice[data-tone="warn"] { background: #fff8e6; border-color: #e7c36a; color: #4d3200; }
+.af-notice[data-tone="bad"] { background: #fdf0ee; border-color: #e7a59d; color: #6b130b; }
+.af-notice[data-tone="ok"] { background: #eef7f2; border-color: #9ccdb3; color: #0b4129; }
+
+/* Boarding pass: a printed coupon with a brand-colour head, a perforation and a stub. */
+.af-pass { position: relative; display: grid; background: var(--af-card); border: 1px solid var(--af-line-2); border-radius: var(--af-radius); overflow: hidden; }
+@media (min-width: 768px) { .af-pass { grid-template-columns: minmax(0, 1fr) 15rem; } }
+.af-pass-head { background: var(--af-accent); color: #fff; }
+.af-pass-stub { position: relative; background: var(--af-card); }
+.af-pass-stub::before { content: ""; position: absolute; inset: 0 auto auto 0; width: 100%; height: 0; border-top: 1px dashed var(--af-line-2); }
+@media (min-width: 768px) { .af-pass-stub::before { width: 0; height: 100%; border-top: 0; border-left: 1px dashed var(--af-line-2); } }
+.af-pass-notch { display: none; }
+
+/* Seat map */
+.af-seat {
+  display: grid;
+  place-items: center;
+  min-height: 2.75rem;
+  border-radius: 3px 3px 2px 2px;
+  border: 1px solid var(--af-line-2);
+  background: var(--af-card);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--af-ink);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.af-seat:hover:not(:disabled) { border-color: var(--af-accent); }
+.af-seat[data-state="selected"] { background: var(--af-accent); border-color: var(--af-accent); color: #fff; }
+.af-seat[data-state="taken"] { background: var(--af-paper-2); color: var(--af-ink-3); text-decoration: line-through; }
+.af-seat[data-state="paid"] { background: repeating-linear-gradient(135deg, var(--af-paper-2) 0 4px, var(--af-card) 4px 8px); color: var(--af-ink-3); }
+.af-seat:disabled { cursor: not-allowed; }
+
+.af-link { color: var(--af-accent); font-weight: 600; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.af-link:hover { text-decoration-thickness: 2px; }
+
+/* Flight path line between two airport codes */
+.af-path { position: relative; flex: 1 1 auto; height: 1px; min-width: 2rem; background: currentColor; opacity: 0.35; }
+
+/* Timetable: route groups with day-of-operation columns. */
+.af-days { display: inline-grid; grid-template-columns: repeat(7, 1.375rem); gap: 1px; }
+.af-day { display: grid; place-items: center; height: 1.375rem; font-size: 0.75rem; font-weight: 700; color: var(--af-line-2); border: 1px solid var(--af-line); border-radius: 2px; }
+.af-day[data-on="true"] { color: #fff; background: var(--af-accent); border-color: var(--af-accent); }
+
+/* One-ink cover plate: a photograph printed in the carrier colour, as on a timetable cover. */
+.af-plate { position: relative; overflow: hidden; background: var(--af-accent); }
+.af-plate img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.15); mix-blend-mode: luminosity; opacity: 0.9; }
+.af-plate::after { content: ""; position: absolute; inset: 0; background: var(--af-accent); mix-blend-mode: multiply; opacity: 0.55; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .af * { transition: none !important; }
+}

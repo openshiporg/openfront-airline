@@ -141,9 +141,9 @@ export default async function NetworkPage({ searchParams }: { searchParams?: Sea
           />
         ) : (
           <>
-            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm">{response.error}</p>
+            <p className="rounded-[4px] bg-destructive/10 px-3 py-2 text-sm">{response.error}</p>
             {flightRetryHref && (
-              <Link href={flightRetryHref} className="mt-3 inline-flex rounded-lg border px-3 py-2 text-sm">
+              <Link href={flightRetryHref} className="mt-3 inline-flex rounded-[4px] border px-3 py-2 text-sm">
                 Return to first future-flight page
               </Link>
             )}

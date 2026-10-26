@@ -100,7 +100,7 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
           title="Refunds"
           tone={data ? (awaiting > 0 ? 'warn' : undefined) : undefined}
           status={awaiting > 0 ? 'Open refunds' : undefined}
-          meta={data ? <span className="font-mono tabular-nums">{awaiting} open</span> : undefined}
+          meta={data ? <span className="tabular-nums ">{awaiting} open</span> : undefined}
         />
       }
       breadcrumbs={[
@@ -115,7 +115,7 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
             <Pill key={tab.value || 'all'} asChild size="sm" active={status === tab.value}>
               <Link href={hrefWith(filters, { status: tab.value, page: 1 })} aria-current={status === tab.value ? 'page' : undefined}>
                 {tab.label}
-                {tab.count != null && <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{tab.count}</span>}
+                {tab.count != null && <span className="tabular-nums text-[11px]  text-muted-foreground">{tab.count}</span>}
               </Link>
             </Pill>
           ))}
@@ -126,7 +126,7 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
           <Field label="Record locator or refund key" className="sm:flex-1">
             <span className="relative">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input type="search" name="q" defaultValue={q} maxLength={80} className={`${deskInput} pl-9 font-mono`} />
+              <input type="search" name="q" defaultValue={q} maxLength={80} className={`${deskInput} pl-9 tabular-nums`} />
             </span>
           </Field>
           <Track>
@@ -157,22 +157,22 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
                   <div key={refund.id} className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3">
                     <div className="min-w-0 space-y-1">
                       <TitleLine as="h3" tone={refundTone(refund.status)} status={refundStatusLabel(refund.status)} className="text-sm font-medium">
-                        <Link href={`${PATH}/${refund.id}`} className="font-mono font-semibold tracking-tight text-foreground hover:underline hover:underline-offset-4">{refund.refundKey ?? refund.id}</Link>
+                        <Link href={`${PATH}/${refund.id}`} className="tabular-nums font-semibold tracking-tight text-foreground hover:underline hover:underline-offset-4">{refund.refundKey ?? refund.id}</Link>
                         <span className="ml-2 text-xs font-normal text-muted-foreground">{refundStatusLabel(refund.status)}</span>
                       </TitleLine>
                       <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
                         {refund.booking?.recordLocator ? (
-                          <Link href={bookingDeskHref(refund.booking.recordLocator)} className="font-mono font-semibold tracking-wider text-foreground underline-offset-4 hover:underline">{refund.booking.recordLocator}</Link>
+                          <Link href={bookingDeskHref(refund.booking.recordLocator)} className="tabular-nums font-semibold tracking-wider text-foreground underline-offset-4 hover:underline">{refund.booking.recordLocator}</Link>
                         ) : <span>Booking unavailable</span>}
                         <span>{REFUND_REASON_LABEL[refund.reason ?? ''] ?? refund.reason ?? 'No reason'}</span>
                       </p>
-                      <p className="pl-4 font-mono text-[12px] tabular-nums text-muted-foreground">
+                      <p className="pl-4 tabular-nums text-[12px]  text-muted-foreground">
                         <span className="font-sans">Requested</span> {requested ?? '---'}
                         {processed && <><span className="ml-2 font-sans">Processed</span> {processed}</>}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 pl-4 sm:pl-0">
-                      <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{formatMinorUnits(refund.amount, refund.currencyCode)}</span>
+                      <span className="tabular-nums text-sm font-semibold  text-foreground">{formatMinorUnits(refund.amount, refund.currencyCode)}</span>
                       <Link href={`${PATH}/${refund.id}`} aria-label={`Refund ${refund.refundKey ?? refund.id}`} className="text-muted-foreground hover:text-foreground">
                         <ChevronRight aria-hidden="true" className="size-4" />
                       </Link>

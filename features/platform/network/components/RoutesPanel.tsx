@@ -41,10 +41,10 @@ function RouteItem({ route, onEdit }: { route: RouteRow; onEdit: () => void }) {
       <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <StatusLabel status={route.status} />
         <Code>{route.routeKey}</Code>
-        <span className="font-mono tabular-nums">{route.distanceKilometers != null ? `${route.distanceKilometers.toLocaleString('en-US')} km` : 'No distance'}</span>
+        <span className="tabular-nums ">{route.distanceKilometers != null ? `${route.distanceKilometers.toLocaleString('en-US')} km` : 'No distance'}</span>
         <span>{route.isInternational ? 'International' : 'Domestic'}</span>
-        {route.minimumConnectionMinutes != null && <span className="font-mono tabular-nums">MCT {route.minimumConnectionMinutes} min</span>}
-        <span className="font-mono tabular-nums">{route.schedulesCount ?? 0} schedules</span>
+        {route.minimumConnectionMinutes != null && <span className="tabular-nums ">MCT {route.minimumConnectionMinutes} min</span>}
+        <span className="tabular-nums ">{route.schedulesCount ?? 0} schedules</span>
       </div>
     </DeskRow>
   )
@@ -156,13 +156,13 @@ export function RoutesPanel({
         onSubmit={submit}
       >
         <FormField label="Origin" error={errors.originId} htmlFor="route-origin">
-          <select id="route-origin" value={values.originId} disabled={locked} onChange={event => pickAirport('originId', event.target.value)} className={`${deskInput} font-mono`} aria-invalid={Boolean(errors.originId)}>
+          <select id="route-origin" value={values.originId} disabled={locked} onChange={event => pickAirport('originId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.originId)}>
             <option value="">Select airport</option>
             {options.map(airport => <option key={airport.id} value={airport.id}>{airportLabel(airport)}</option>)}
           </select>
         </FormField>
         <FormField label="Destination" error={errors.destinationId} htmlFor="route-destination">
-          <select id="route-destination" value={values.destinationId} disabled={locked} onChange={event => pickAirport('destinationId', event.target.value)} className={`${deskInput} font-mono`} aria-invalid={Boolean(errors.destinationId)}>
+          <select id="route-destination" value={values.destinationId} disabled={locked} onChange={event => pickAirport('destinationId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.destinationId)}>
             <option value="">Select airport</option>
             {options.map(airport => <option key={airport.id} value={airport.id}>{airportLabel(airport)}</option>)}
           </select>
@@ -173,10 +173,10 @@ export function RoutesPanel({
         {locked && <p className="text-xs text-muted-foreground">Airports locked: schedules use this route.</p>}
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Distance (km)" error={errors.distance} htmlFor="route-distance">
-            <input id="route-distance" inputMode="numeric" value={values.distance} onChange={event => setValues(current => ({ ...current, distance: event.target.value }))} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.distance)} />
+            <input id="route-distance" inputMode="numeric" value={values.distance} onChange={event => setValues(current => ({ ...current, distance: event.target.value }))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.distance)} />
           </FormField>
           <FormField label="Min. connection (min)" error={errors.connection} htmlFor="route-connection">
-            <input id="route-connection" inputMode="numeric" value={values.connection} onChange={event => setValues(current => ({ ...current, connection: event.target.value }))} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.connection)} />
+            <input id="route-connection" inputMode="numeric" value={values.connection} onChange={event => setValues(current => ({ ...current, connection: event.target.value }))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.connection)} />
           </FormField>
         </div>
         <CheckField label="International" checked={values.isInternational} onChange={checked => setValues(current => ({ ...current, isInternational: checked }))} />

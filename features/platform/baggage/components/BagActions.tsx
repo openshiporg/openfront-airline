@@ -43,7 +43,7 @@ export function BagActions({ bagId, actions, defaultStation }: { bagId: string; 
   return (
     <div className="min-w-0 space-y-3">
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[8rem_1fr]">
-        <Field label="Station"><input value={station} onChange={e => setStation(e.target.value)} maxLength={3} placeholder="JFK" className={`${deskInput} font-mono uppercase`} /></Field>
+        <Field label="Station"><input value={station} onChange={e => setStation(e.target.value)} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field>
         <Field label="Note"><input value={note} onChange={e => setNote(e.target.value)} maxLength={300} className={deskInput} /></Field>
       </div>
       <Track role="group" aria-label="Bag actions">

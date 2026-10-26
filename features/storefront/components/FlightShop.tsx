@@ -410,7 +410,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
   const passLabel = selected ? `${selected.passengerCount} traveler${selected.passengerCount === 1 ? '' : 's'}` : ''
 
   return <div className="space-y-6">
-    {shoppingEnabled && <form onSubmit={search} className="af-card relative z-10 p-4 shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)] sm:p-6">
+    {shoppingEnabled && <form onSubmit={search} className="af-card p-4 sm:p-6">
       <div role="group" aria-label="Trip type" className="af-track mb-5"><button type="button" aria-pressed={tripType === 'one-way'} onClick={() => setTripType('one-way')} className="af-pill af-pill-sm">One way</button><button type="button" aria-pressed={tripType === 'round-trip'} onClick={() => setTripType('round-trip')} className="af-pill af-pill-sm">Round trip</button></div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="af-field"><span className="af-field-label">From</span>{routes.length ? <select aria-label="Origin airport" name="originCode" value={origin} onChange={event => { const next = event.target.value; setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination(reachable[0] ?? '') }} required className="af-input">{[...new Set(routes.map(route => route.origin))].map(code => <option key={code} value={code}>{airportLabel(code)}</option>)}</select> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code text-lg" />}</label>
@@ -423,7 +423,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         {([['adults', 'Adults 12+', 1, 9], ['children', 'Children 2–11', 0, 8], ['infants', 'Infants under 2', 0, party.adults]] as const).map(([key, text, min, max]) => <label key={key} className="af-field"><span className="af-field-label">{text}</span><select aria-label={text} value={party[key]} onChange={event => setParty(current => { const next = { ...current, [key]: Number(event.target.value) }; return { ...next, infants: Math.min(next.infants, next.adults) } })} className="af-input">{Array.from({ length: max - min + 1 }, (_, index) => <option key={index + min} value={index + min}>{index + min}</option>)}</select></label>)}
         <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Searching…' : 'Search flights'}</button></div>
       </div>
-      <p className="af-mono mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
+      <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--af-line)] pt-3 text-xs text-[var(--af-ink-3)] [&>span+span]:before:mr-4 [&>span+span]:before:text-[var(--af-line-2)] [&>span+span]:before:content-['/']">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
     </form>}
     {status && <p role="status" className="af-notice" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'}><span className="af-dot" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'} />{status}</p>}
     {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-raised af-pill-sm">Next flight: {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextServiceDate}T00:00:00.000Z`))}</button></div>}
@@ -455,14 +455,14 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className="af-pill af-pill-primary">Book return flight</button></div>}
       </div>
     </section>}
-    {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-board overflow-hidden rounded-2xl">
+    {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-table overflow-hidden">
       {returnSearch && <p className="af-eyebrow px-5 pt-4"><span className="af-signal">{leg === 'return' ? 'Return' : 'Outbound'}</span> · {flights[0].originCode}–{flights[0].destinationCode}</p>}
-      <div className="hidden grid-cols-[1.1fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3 md:grid"><span className="af-eyebrow">Flight</span><span className="af-eyebrow">Departs</span><span className="af-eyebrow">Arrives</span><span className="af-eyebrow">Fare</span><span className="af-eyebrow w-36 text-right">Per traveler</span></div>
+      <div className="af-table-head grid-cols-[1.1fr_1fr_1fr_1fr_auto] gap-4 px-5 py-2.5"><span className="af-eyebrow">Flight</span><span className="af-eyebrow">Departs</span><span className="af-eyebrow">Arrives</span><span className="af-eyebrow">Fare</span><span className="af-eyebrow w-36 text-right">Per traveler</span></div>
       {flights.map(flight => {
         const duration = flightDuration(flight.scheduledDepartureAt, flight.scheduledArrivalAt)
         const isSelected = selected?.id === flight.id && selected?.inventoryBucketId === flight.inventoryBucketId
         const soldOut = flight.availability.available < flight.passengerCount
-        return <article key={`${flight.id}:${flight.inventoryBucketId}`} data-selected={isSelected ? 'true' : undefined} className="af-board-row grid gap-3 px-5 py-4 data-[selected=true]:bg-white/[0.06] md:grid-cols-[1.1fr_1fr_1fr_1fr_auto] md:items-center md:gap-4">
+        return <article key={`${flight.id}:${flight.inventoryBucketId}`} data-selected={isSelected ? 'true' : undefined} className="af-board-row grid gap-3 px-5 py-4 md:grid-cols-[1.1fr_1fr_1fr_1fr_auto] md:items-center md:gap-4">
           <div className="flex items-baseline justify-between gap-3 md:block"><p className="af-board-cell af-signal text-lg font-semibold">{carrier.code} {flight.flightNumber}</p><p className="af-board-cell text-sm text-[var(--af-board-ink-2)]">{flight.originCode}–{flight.destinationCode}</p></div>
           <div className="grid grid-cols-3 gap-3 md:contents">
             <div><p className="af-board-cell text-xl font-semibold">{arrivalTime.format(new Date(flight.scheduledDepartureAt))}</p><p className="text-xs text-[var(--af-board-ink-2)]">{departureDateTime.format(new Date(flight.scheduledDepartureAt)).replace(/,?\s*\d{1,2}:\d{2}\s*[AP]M$/, '')}</p></div>
@@ -480,7 +480,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
       <div className="min-w-0">
         <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">Travelers · {passLabel}</span><div className="af-track !bg-black/20"><button type="button" onClick={() => { setSelected(null); setHeldOffer(null); bookingAttempt.current = null }} className="af-pill af-pill-sm !text-white/85 hover:!text-white">Close</button></div></div>
         <div className="space-y-6 p-5 sm:p-6">{Array.from({ length: selected.passengerCount }, (_, passengerIndex) => <fieldset disabled={Boolean(heldOffer)} key={passengerIndex} className="grid gap-4 disabled:opacity-70 sm:grid-cols-2">
-          <legend className="af-title-line mb-3 text-sm font-semibold"><span className="af-mono grid size-6 place-items-center rounded-md bg-[var(--af-paper-2)] text-xs">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}<span className="af-mono text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-[var(--af-ink-3)]">{travelerBand(passengerIndex, searchParty)}</span></legend>
+          <legend className="af-title-line mb-3 text-sm font-semibold"><span className="af-mono grid size-6 place-items-center rounded-[3px] bg-[var(--af-accent)] text-xs text-white">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}<span className="text-xs font-medium text-[var(--af-ink-3)]">{travelerBand(passengerIndex, searchParty)}</span></legend>
           {travelerFields.map(field => <label key={field} className={`af-field ${field === 'email' ? 'sm:col-span-1' : ''}`}><span className="af-field-label">{fieldLabel(field, passengerIndex)}</span><input required={field !== 'phone' && (field !== 'email' || passengerIndex === 0)} type={field === 'email' ? 'email' : field === 'dateOfBirth' ? 'date' : 'text'} max={field === 'dateOfBirth' ? birthDateMax : undefined} name={`passenger.${passengerIndex}.${field}`} autoComplete={field === 'email' ? 'email' : field === 'phone' ? 'tel' : passengerIndex === 0 && field === 'givenName' ? 'given-name' : passengerIndex === 0 && field === 'familyName' ? 'family-name' : passengerIndex === 0 && field === 'dateOfBirth' ? 'bday' : 'off'} defaultValue={travelerValues[passengerIndex]?.[field] ?? ''} className="af-input" /></label>)}
         </fieldset>)}</div>
       </div>
@@ -494,31 +494,31 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         </div> : <div className="af-track mt-auto" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">Hold fare for {passLabel}</button></div>}
       </div>
     </form>}
-    <form ref={manageForm} onSubmit={manage} className={`af-card relative z-10 p-4 sm:p-6 ${shoppingEnabled ? '' : 'shadow-[0_24px_48px_-24px_rgb(15_27_45/0.45)]'}`}>
-      <h2 className="af-eyebrow">{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
+    <form ref={manageForm} onSubmit={manage} className="af-card p-4 sm:p-6">
+      <h2 className="text-lg font-bold">{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
         <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
         <label className="af-field"><span className="af-field-label">Access code</span><input ref={accessTokenInput} aria-label="Access code" name="accessToken" type="password" defaultValue="" autoComplete="off" className="af-input" /></label>
         <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
       </div>
     </form>
-    {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card relative z-10 px-4 py-3 sm:px-6">
+    {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card px-4 py-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-3"><h2 className="af-field-label">Your trips</h2><div className="af-track flex-wrap">{savedTrips.map(locator => <button key={locator} type="button" disabled={busy} onClick={() => openSavedTrip(locator)} aria-pressed={managedBooking?.recordLocator === locator} className="af-pill af-pill-sm af-mono tracking-[0.14em]">{locator}</button>)}</div></div>
     </section>}
-    {carrier.accessRecoveryEnabled ? <div className="af-card relative z-10 px-4 py-3 sm:px-6">
+    {carrier.accessRecoveryEnabled ? <div className="af-card px-4 py-3 sm:px-6">
       {recovering ? <form onSubmit={recoverAccess} className="grid gap-4 py-2 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
         <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
         <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
         <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
       </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Lost your access code?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a new one</button></div></div>}
-    </div> : <p className="af-mono relative z-10 px-1 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">Lost your access code? <a href="/contact" className="af-link normal-case tracking-normal">Contact the airline</a></p>}
+    </div> : <p className="px-1 text-sm">Lost your access code? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
     {managedBooking && <section aria-label={`Booking ${managedBooking.recordLocator}`} className="space-y-5">
       <div className="af-card overflow-hidden">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
           <div className="min-w-0">
             <p className="af-eyebrow">{managedBooking.carrier.name}</p>
             <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-mono text-3xl font-semibold tracking-[0.16em]">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
-            <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
+            <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
           {mode !== 'check-in' && <div className="af-track w-fit">{carrier.onlinePaymentEnabled && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button onClick={cancelBooking} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
         </div>
@@ -527,7 +527,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
             <div className="min-w-0 space-y-1"><p className="af-field-label">Booked fare · <span className="normal-case tracking-normal">{managedBooking.bookingReceipt.accepted.offerNumber}</span></p>{managedBooking.bookingReceipt.accepted.items.map((item, index) => <p key={index} className="text-sm">{item.description} · {item.quantity} travelers · {item.fareName ?? 'Accepted fare'}{item.includedBaggage ? ` · ${item.includedBaggage.pieces} bag(s), ${item.includedBaggage.maxWeightGrams / 1000} kg` : ''}</p>)}</div>
             <p className="af-mono text-xl font-semibold">{formatMinorUnits(managedBooking.bookingReceipt.accepted.totalAmount, managedBooking.bookingReceipt.accepted.currencyCode)}</p>
           </div> : <p role="status" className="text-sm text-[var(--af-ink-2)]">Original fare details unavailable.</p>}
-          <p className="af-mono mt-3 text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
+          <p className="af-mono mt-3 text-[0.6875rem] text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
         </div>
       </div>
       {managedBooking.segments.map(segment => {
@@ -547,7 +547,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="af-title-line font-semibold"><span className="af-dot" data-tone={checkIn ? checkInTone(checkIn.status) : undefined} />{passenger.passenger.givenName} {passenger.passenger.familyName}</h3>
-                  <p className="af-mono mt-1 pl-4 text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]">{checkIn ? label(checkInStatusLabels, checkIn.status) : 'Not checked in'}{currentSeat ? ` · Seat ${currentSeat.designator}` : ''}</p>
+                  <p className="af-mono mt-1 pl-4 text-xs text-[var(--af-ink-3)]">{checkIn ? label(checkInStatusLabels, checkIn.status) : 'Not checked in'}{currentSeat ? ` · Seat ${currentSeat.designator}` : ''}</p>
                   {passenger.acceptedName && (passenger.acceptedName.givenName !== passenger.passenger.givenName || passenger.acceptedName.familyName !== passenger.passenger.familyName) && <p className="mt-2 pl-4 text-xs text-[var(--af-warn)]">Booked as {passenger.acceptedName.givenName} {passenger.acceptedName.familyName}. Contact the airline to update.</p>}
                 </div>
                 {(!checkIn || checkIn.status === 'offloaded') && <div className="af-track"><button onClick={() => customerCheckIn(passenger.id, segment.id, checkIn?.offloadedAt ?? 'initial')} className="af-pill af-pill-primary af-pill-sm">{checkIn?.status === 'offloaded' ? 'Re-check in' : 'Check in'}</button></div>}
@@ -560,7 +560,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
                     {map.rows.map(([row, seatsByColumn]) => <div key={row} className="flex items-center gap-1.5"><span className="af-mono w-7 text-right text-[0.6875rem] font-semibold text-[var(--af-ink-3)]">{row || ''}</span>{map.columns.map((column, index) => { const seat = seatsByColumn.get(column); const spacing = index === map.aisleAfter ? 'mr-5' : ''; if (!seat) return <span key={column} aria-hidden="true" className={`w-10 sm:w-11 ${spacing}`} />; const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || lockedByCheckIn} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className={`af-seat w-10 text-xs sm:w-11 ${spacing}`}>{column}</button> })}</div>)}
                   </div>
                 </div> })()}
-              </div> : <p className="af-mono text-xs uppercase tracking-[0.1em] text-[var(--af-ink-3)]">Seats open once your ticket is issued</p>}
+              </div> : <p className="af-mono text-xs text-[var(--af-ink-3)]">Seats open once your ticket is issued</p>}
               {pass && <div className="af-pass" aria-label={`Boarding pass ${pass.passNumber}`}>
                 <div className="min-w-0">
                   <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-2.5"><span className="af-eyebrow !text-white/80">Boarding pass</span><span className="af-mono text-xs font-semibold capitalize">{pass.status.replaceAll('_', ' ')}</span></div>

@@ -54,14 +54,14 @@ export function NewManualProvider({ carrierCode }: { carrierCode: string }) {
               pattern="[A-Za-z0-9][A-Za-z0-9_\-]{1,31}"
               value={code}
               onChange={event => setCode(event.target.value)}
-              className={`${deskInput} font-mono lowercase`}
+              className={`${deskInput} tabular-nums lowercase`}
             />
           </Field>
         </div>
         <dl className="divide-y text-sm">
           <div className="flex min-w-0 items-baseline justify-between gap-4 py-2">
             <dt className="shrink-0 text-muted-foreground">Provider key</dt>
-            <dd className="min-w-0 break-all text-right font-mono text-[13px] tabular-nums text-foreground">{`${carrierCode}:manual:${normalizedCode || '...'}`.toLowerCase()}</dd>
+            <dd className="min-w-0 break-all text-right tabular-nums text-[13px]  text-foreground">{`${carrierCode}:manual:${normalizedCode || '...'}`.toLowerCase()}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-4 py-2">
             <dt className="shrink-0 text-muted-foreground">Adapter</dt>
@@ -122,7 +122,7 @@ export function NewStripeProvider() {
             <input required maxLength={120} value={name} onChange={event => setName(event.target.value)} className={deskInput} />
           </Field>
           <Field label="Secret key">
-            <input required type="password" autoComplete="off" placeholder="sk_test_…" value={secretKey} onChange={event => setSecretKey(event.target.value)} className={`${deskInput} font-mono`} />
+            <input required type="password" autoComplete="off" placeholder="sk_test_…" value={secretKey} onChange={event => setSecretKey(event.target.value)} className={`${deskInput} tabular-nums`} />
           </Field>
         </div>
         {error && <Notice tone="bad">{error}</Notice>}

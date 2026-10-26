@@ -67,10 +67,10 @@ function ValidityFields({ from, until, onFrom, onUntil }: { from: string; until:
   return (
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       <Field label="Valid from">
-        <input type="datetime-local" value={from} onChange={event => onFrom(event.target.value)} className={`${deskInput} font-mono tabular-nums`} />
+        <input type="datetime-local" value={from} onChange={event => onFrom(event.target.value)} className={`${deskInput} tabular-nums `} />
       </Field>
       <Field label="Valid until">
-        <input type="datetime-local" value={until} onChange={event => onUntil(event.target.value)} className={`${deskInput} font-mono tabular-nums`} />
+        <input type="datetime-local" value={until} onChange={event => onUntil(event.target.value)} className={`${deskInput} tabular-nums `} />
       </Field>
     </div>
   )
@@ -146,7 +146,7 @@ export function NewStationAssignment({
             </select>
           </Field>
           <Field label="Airport">
-            <select required value={airportId} onChange={event => setAirportId(event.target.value)} className={`${deskInput} font-mono`}>
+            <select required value={airportId} onChange={event => setAirportId(event.target.value)} className={`${deskInput} tabular-nums`}>
               <option value="">Select airport</option>
               {airports.map(airport => (
                 <option key={airport.id} value={airport.id}>{airport.iataCode} {airport.city || airport.name || ''}</option>
@@ -241,7 +241,7 @@ export function StationAssignmentActions({ assignment }: { assignment: StationAs
         </Track>
       )}
       {editing && (
-        <form onSubmit={save} className="space-y-3 rounded-lg border bg-background p-3">
+        <form onSubmit={save} className="space-y-3 rounded-[4px] border bg-background p-3">
           <CapabilityToggles value={capabilities} onChange={setCapabilities} />
           <ValidityFields from={from} until={until} onFrom={setFrom} onUntil={setUntil} />
           <Track>

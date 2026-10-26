@@ -46,7 +46,7 @@ export function StatusTabLinks({
     <Track aria-label="Status">
       <Pill asChild size="sm" active={!current} aria-current={!current ? 'page' : undefined}>
         <Link href={deskHref(base, { ...query, status: null, page: null })}>
-          All<span className="font-mono text-[11px] tabular-nums text-muted-foreground">{total}</span>
+          All<span className="tabular-nums text-[11px]  text-muted-foreground">{total}</span>
         </Link>
       </Pill>
       {statuses.map(status => (
@@ -54,7 +54,7 @@ export function StatusTabLinks({
           <Link href={deskHref(base, { ...query, status, page: null })} className="capitalize">
             <StatusDot tone={statusTone(status)} className="size-1.5 shadow-none" />
             {status}
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{counts[status] ?? 0}</span>
+            <span className="tabular-nums text-[11px]  text-muted-foreground">{counts[status] ?? 0}</span>
           </Link>
         </Pill>
       ))}
@@ -85,7 +85,7 @@ export function Pager({ base, query, page, pageSize, total }: { base: string; qu
   if (pages <= 1) return null
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <span className="font-mono text-xs tabular-nums text-muted-foreground">Page {page} of {pages}</span>
+      <span className="tabular-nums text-xs  text-muted-foreground">Page {page} of {pages}</span>
       <Track>
         {page > 1 ? (
           <Pill asChild size="sm"><Link href={deskHref(base, { ...query, page: page - 1 })}><ChevronLeft aria-hidden="true" />Previous</Link></Pill>

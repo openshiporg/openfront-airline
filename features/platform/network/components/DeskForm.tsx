@@ -108,7 +108,7 @@ export function useDeskAction() {
   return { pending, error, setError, run }
 }
 
-/** Explicit lifecycle actions for one row. */
+/** Explicit lifecycle actions for one row: text actions split by hairlines, destructive ones in red. */
 export function TransitionPills({
   transitions,
   onTransition,
@@ -124,7 +124,7 @@ export function TransitionPills({
 }) {
   if (!transitions.length && !onEdit && !children) return null
   return (
-    <Track aria-label="Actions">
+    <div role="group" aria-label="Actions" className="flex max-w-full flex-wrap items-center divide-x divide-border [&>*]:h-7 [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:px-2.5 [&>*]:text-xs [&>*:hover]:bg-transparent [&>*:hover]:underline [&>*]:underline-offset-4 [&>*:last-child]:pr-0">
       {onEdit && <Pill size="sm" onClick={onEdit} disabled={disabled}>Edit</Pill>}
       {transitions.map(transition => (
         <Pill
@@ -132,20 +132,20 @@ export function TransitionPills({
           size="sm"
           disabled={disabled}
           onClick={() => onTransition(transition.to)}
-          className={transition.variant === 'danger' ? 'text-red-600 dark:text-red-400' : undefined}
+          className={transition.variant === 'danger' ? 'text-red-700 dark:text-red-400' : undefined}
         >
           {transition.label}
         </Pill>
       ))}
       {children}
-    </Track>
+    </div>
   )
 }
 
 /** One list row: title line and figures on the left, actions on the right, error below. */
 export function DeskRow({ children, actions, error }: { children: React.ReactNode; actions?: React.ReactNode; error?: string | null }) {
   return (
-    <li className="min-w-0 px-4 py-3">
+    <li className="min-w-0 px-3 py-2.5 hover:bg-muted/30">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1 basis-56">{children}</div>
         {actions && <div className="flex min-w-0 max-w-full shrink-0">{actions}</div>}

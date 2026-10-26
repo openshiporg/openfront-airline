@@ -40,7 +40,7 @@ function RuleItem({ rule, onEdit }: { rule: FareRuleRow; onEdit: () => void }) {
       }
     >
       <TitleLine tone={statusTone(rule.status)} status={rule.status} className="text-sm font-medium text-foreground">
-        <span className="font-mono font-semibold tabular-nums">{rule.fareBasisPattern || 'Any basis'}</span>
+        <span className="tabular-nums font-semibold ">{rule.fareBasisPattern || 'Any basis'}</span>
         <span className="ml-2">{rule.fareBrand ? rule.fareBrand.name : 'No brand'}</span>
         {rule.route ? <Route from={rule.route.origin?.iataCode} to={rule.route.destination?.iataCode} className="ml-2" /> : <span className="ml-2 text-muted-foreground">All routes</span>}
       </TitleLine>
@@ -48,14 +48,14 @@ function RuleItem({ rule, onEdit }: { rule: FareRuleRow; onEdit: () => void }) {
         <StatusLabel status={rule.status} />
         <span>{rule.isRefundable ? 'Refundable' : 'Non-refundable'}</span>
         <span>{rule.isChangeable ? 'Changeable' : 'No changes'}</span>
-        <span className="font-mono tabular-nums">Change {formatMinor(rule.changeFeeAmount, rule.currencyCode)}</span>
-        <span className="font-mono tabular-nums">Cancel {formatMinor(rule.cancellationFeeAmount, rule.currencyCode)}</span>
-        <span className="font-mono tabular-nums">No-show {formatMinor(rule.noShowFeeAmount, rule.currencyCode)}</span>
-        {rule.minimumAdvancePurchaseHours != null && <span className="font-mono tabular-nums">AP {rule.minimumAdvancePurchaseHours} h</span>}
+        <span className="tabular-nums ">Change {formatMinor(rule.changeFeeAmount, rule.currencyCode)}</span>
+        <span className="tabular-nums ">Cancel {formatMinor(rule.cancellationFeeAmount, rule.currencyCode)}</span>
+        <span className="tabular-nums ">No-show {formatMinor(rule.noShowFeeAmount, rule.currencyCode)}</span>
+        {rule.minimumAdvancePurchaseHours != null && <span className="tabular-nums ">AP {rule.minimumAdvancePurchaseHours} h</span>}
         {(rule.minimumStayDays != null || rule.maximumStayDays != null) && (
-          <span className="font-mono tabular-nums">Stay {rule.minimumStayDays ?? 0}-{rule.maximumStayDays ?? 'any'} d</span>
+          <span className="tabular-nums ">Stay {rule.minimumStayDays ?? 0}-{rule.maximumStayDays ?? 'any'} d</span>
         )}
-        {(rule.effectiveFrom || rule.effectiveTo) && <span className="font-mono tabular-nums">{dateInput(rule.effectiveFrom) || 'Open'} / {dateInput(rule.effectiveTo) || 'Open'}</span>}
+        {(rule.effectiveFrom || rule.effectiveTo) && <span className="tabular-nums ">{dateInput(rule.effectiveFrom) || 'Open'} / {dateInput(rule.effectiveTo) || 'Open'}</span>}
         <Code>{rule.ruleKey}</Code>
       </div>
     </DeskRow>
@@ -189,13 +189,13 @@ export function FareRulesPanel({
               </select>
             </FormField>
             <FormField label="Route" htmlFor="rule-route">
-              <select id="rule-route" value={values.routeId} onChange={set('routeId')} className={`${deskInput} font-mono`}>
+              <select id="rule-route" value={values.routeId} onChange={set('routeId')} className={`${deskInput} tabular-nums`}>
                 <option value="">All routes</option>
                 {routeOptions.map(route => <option key={route.id} value={route.id}>{route.origin?.iataCode ?? '---'}-{route.destination?.iataCode ?? '---'} ({route.status})</option>)}
               </select>
             </FormField>
             <FormField label="Fare basis pattern" error={errors.fareBasisPattern} htmlFor="rule-basis">
-              <input id="rule-basis" value={values.fareBasisPattern} onChange={set('fareBasisPattern')} maxLength={32} autoComplete="off" placeholder="Y*" className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.fareBasisPattern)} />
+              <input id="rule-basis" value={values.fareBasisPattern} onChange={set('fareBasisPattern')} maxLength={32} autoComplete="off" placeholder="Y*" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.fareBasisPattern)} />
             </FormField>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               <CheckField label="Refundable" checked={values.isRefundable} onChange={checked => setValues(current => current ? { ...current, isRefundable: checked } : current)} />
@@ -203,32 +203,32 @@ export function FareRulesPanel({
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <FormField label={`Change fee (${formCurrency})`} error={errors.changeFee} htmlFor="rule-change">
-                <input id="rule-change" inputMode="decimal" value={values.changeFee} onChange={set('changeFee')} placeholder="0" className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.changeFee)} />
+                <input id="rule-change" inputMode="decimal" value={values.changeFee} onChange={set('changeFee')} placeholder="0" className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.changeFee)} />
               </FormField>
               <FormField label={`Cancel fee (${formCurrency})`} error={errors.cancellationFee} htmlFor="rule-cancel">
-                <input id="rule-cancel" inputMode="decimal" value={values.cancellationFee} onChange={set('cancellationFee')} placeholder="0" className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.cancellationFee)} />
+                <input id="rule-cancel" inputMode="decimal" value={values.cancellationFee} onChange={set('cancellationFee')} placeholder="0" className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.cancellationFee)} />
               </FormField>
               <FormField label={`No-show fee (${formCurrency})`} error={errors.noShowFee} htmlFor="rule-noshow">
-                <input id="rule-noshow" inputMode="decimal" value={values.noShowFee} onChange={set('noShowFee')} placeholder="0" className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.noShowFee)} />
+                <input id="rule-noshow" inputMode="decimal" value={values.noShowFee} onChange={set('noShowFee')} placeholder="0" className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.noShowFee)} />
               </FormField>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <FormField label="Advance (h)" error={errors.advance} htmlFor="rule-advance">
-                <input id="rule-advance" inputMode="numeric" value={values.advance} onChange={set('advance')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.advance)} />
+                <input id="rule-advance" inputMode="numeric" value={values.advance} onChange={set('advance')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.advance)} />
               </FormField>
               <FormField label="Min stay (d)" error={errors.minStay} htmlFor="rule-minstay">
-                <input id="rule-minstay" inputMode="numeric" value={values.minStay} onChange={set('minStay')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.minStay)} />
+                <input id="rule-minstay" inputMode="numeric" value={values.minStay} onChange={set('minStay')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.minStay)} />
               </FormField>
               <FormField label="Max stay (d)" error={errors.maxStay} htmlFor="rule-maxstay">
-                <input id="rule-maxstay" inputMode="numeric" value={values.maxStay} onChange={set('maxStay')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.maxStay)} />
+                <input id="rule-maxstay" inputMode="numeric" value={values.maxStay} onChange={set('maxStay')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.maxStay)} />
               </FormField>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Effective from" htmlFor="rule-from">
-                <input id="rule-from" type="date" value={values.effectiveFrom} onChange={set('effectiveFrom')} className={`${deskInput} font-mono tabular-nums`} />
+                <input id="rule-from" type="date" value={values.effectiveFrom} onChange={set('effectiveFrom')} className={`${deskInput} tabular-nums `} />
               </FormField>
               <FormField label="Effective to" error={errors.effectiveTo} htmlFor="rule-to">
-                <input id="rule-to" type="date" value={values.effectiveTo} onChange={set('effectiveTo')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.effectiveTo)} />
+                <input id="rule-to" type="date" value={values.effectiveTo} onChange={set('effectiveTo')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.effectiveTo)} />
               </FormField>
             </div>
           </>

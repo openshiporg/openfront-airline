@@ -151,7 +151,7 @@ export function FlightOpsControls({ flight, canManage }: { flight: FlightOpsFlig
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
           <SheetHeader className="pr-8 text-left">
             <SheetTitle className="flex flex-wrap items-baseline gap-2">
-              <span className="font-mono tabular-nums">{flight.flightNumber}</span>
+              <span className="tabular-nums ">{flight.flightNumber}</span>
               <Route from={flight.originCode} to={flight.destinationCode} />
             </SheetTitle>
             <SheetDescription asChild>
@@ -160,23 +160,23 @@ export function FlightOpsControls({ flight, canManage }: { flight: FlightOpsFlig
           </SheetHeader>
           <form onSubmit={save} className="mt-4 space-y-5">
             <fieldset className="space-y-3">
-              <legend className="mb-2 text-sm font-semibold text-foreground">Departure <span className="font-mono text-xs font-normal text-muted-foreground">{flight.originCode} {airportZoneLabel(flight.scheduledDepartureAt, flight.originTimezone)}</span></legend>
+              <legend className="mb-2 text-sm font-semibold text-foreground">Departure <span className="tabular-nums text-xs font-normal text-muted-foreground">{flight.originCode} {airportZoneLabel(flight.scheduledDepartureAt, flight.originTimezone)}</span></legend>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Terminal"><input value={draft.departureTerminal} maxLength={20} onChange={e => setDraft({ ...draft, departureTerminal: e.target.value })} className={`${deskInput} font-mono uppercase`} /></Field>
-                <Field label="Gate"><input value={draft.departureGate} maxLength={20} onChange={e => setDraft({ ...draft, departureGate: e.target.value })} className={`${deskInput} font-mono uppercase`} /></Field>
+                <Field label="Terminal"><input value={draft.departureTerminal} maxLength={20} onChange={e => setDraft({ ...draft, departureTerminal: e.target.value })} className={`${deskInput} tabular-nums uppercase`} /></Field>
+                <Field label="Gate"><input value={draft.departureGate} maxLength={20} onChange={e => setDraft({ ...draft, departureGate: e.target.value })} className={`${deskInput} tabular-nums uppercase`} /></Field>
               </div>
               {TIME_FIELDS.filter(entry => entry.side === 'origin').map(entry => (
-                <Field key={entry.field} label={entry.label}><input type="datetime-local" value={draft[entry.field]} onChange={e => setDraft({ ...draft, [entry.field]: e.target.value })} className={`${deskInput} font-mono tabular-nums`} /></Field>
+                <Field key={entry.field} label={entry.label}><input type="datetime-local" value={draft[entry.field]} onChange={e => setDraft({ ...draft, [entry.field]: e.target.value })} className={`${deskInput} tabular-nums `} /></Field>
               ))}
             </fieldset>
             <fieldset className="space-y-3">
-              <legend className="mb-2 text-sm font-semibold text-foreground">Arrival <span className="font-mono text-xs font-normal text-muted-foreground">{flight.destinationCode} {airportZoneLabel(flight.scheduledArrivalAt, flight.destinationTimezone)}</span></legend>
+              <legend className="mb-2 text-sm font-semibold text-foreground">Arrival <span className="tabular-nums text-xs font-normal text-muted-foreground">{flight.destinationCode} {airportZoneLabel(flight.scheduledArrivalAt, flight.destinationTimezone)}</span></legend>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Terminal"><input value={draft.arrivalTerminal} maxLength={20} onChange={e => setDraft({ ...draft, arrivalTerminal: e.target.value })} className={`${deskInput} font-mono uppercase`} /></Field>
-                <Field label="Gate"><input value={draft.arrivalGate} maxLength={20} onChange={e => setDraft({ ...draft, arrivalGate: e.target.value })} className={`${deskInput} font-mono uppercase`} /></Field>
+                <Field label="Terminal"><input value={draft.arrivalTerminal} maxLength={20} onChange={e => setDraft({ ...draft, arrivalTerminal: e.target.value })} className={`${deskInput} tabular-nums uppercase`} /></Field>
+                <Field label="Gate"><input value={draft.arrivalGate} maxLength={20} onChange={e => setDraft({ ...draft, arrivalGate: e.target.value })} className={`${deskInput} tabular-nums uppercase`} /></Field>
               </div>
               {TIME_FIELDS.filter(entry => entry.side === 'destination').map(entry => (
-                <Field key={entry.field} label={entry.label}><input type="datetime-local" value={draft[entry.field]} onChange={e => setDraft({ ...draft, [entry.field]: e.target.value })} className={`${deskInput} font-mono tabular-nums`} /></Field>
+                <Field key={entry.field} label={entry.label}><input type="datetime-local" value={draft[entry.field]} onChange={e => setDraft({ ...draft, [entry.field]: e.target.value })} className={`${deskInput} tabular-nums `} /></Field>
               ))}
             </fieldset>
             {message && <Notice tone={message.tone}>{message.text}</Notice>}

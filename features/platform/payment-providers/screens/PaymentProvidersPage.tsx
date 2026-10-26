@@ -69,7 +69,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
           title="Payment providers"
           tone={providers ? (activeCount > 0 ? 'ok' : 'warn') : undefined}
           status={providers ? (activeCount > 0 ? 'Active provider' : 'No active provider') : undefined}
-          meta={providers ? <span className="font-mono tabular-nums">{activeCount} active</span> : undefined}
+          meta={providers ? <span className="tabular-nums ">{activeCount} active</span> : undefined}
         />
       }
       breadcrumbs={[
@@ -93,7 +93,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
                 <Pill key={tab.value || 'all'} asChild size="sm" active={status === tab.value}>
                   <Link href={tab.value ? `${PATH}?status=${tab.value}` : PATH} aria-current={status === tab.value ? 'page' : undefined}>
                     {tab.label}
-                    {tab.count != null && <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{tab.count}</span>}
+                    {tab.count != null && <span className="tabular-nums text-[11px]  text-muted-foreground">{tab.count}</span>}
                   </Link>
                 </Pill>
               ))}
@@ -117,7 +117,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
                           <Code className="text-foreground">{provider.code}</Code>
                           <span>{adapter}</span>
                           <span>{evidenceOnly ? 'Evidence only' : provider.adapterType === 'manual' ? 'Configuration not evidence-only' : provider.adapterType === 'stripe' ? 'Card payments online' : 'Not installed'}</span>
-                          <span className="font-mono tabular-nums">{provider.paymentsCount ?? 0} payments</span>
+                          <span className="tabular-nums ">{provider.paymentsCount ?? 0} payments</span>
                         </p>
                         <p className="pl-4"><Code className="break-all">{provider.providerKey}</Code></p>
                       </div>

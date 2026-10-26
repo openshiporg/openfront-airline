@@ -71,7 +71,7 @@ function TimeTriple({ scheduled, estimated, actual, timezone, referenceDay }: { 
     { label: 'Act', value: formatAirportTime(actual, timezone, referenceDay) },
   ]
   return (
-    <dl className="grid grid-cols-3 gap-2 font-mono text-xs tabular-nums">
+    <dl className="grid grid-cols-3 gap-2 tabular-nums text-xs ">
       {cells.map(cell => (
         <div key={cell.label} className="min-w-0">
           <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{cell.label}</dt>
@@ -84,7 +84,7 @@ function TimeTriple({ scheduled, estimated, actual, timezone, referenceDay }: { 
 
 function Stand({ terminal, gate }: { terminal: string | null; gate: string | null }) {
   return (
-    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+    <span className="tabular-nums text-xs  text-muted-foreground">
       T <span className="text-foreground">{terminal || '--'}</span> Gate <span className="text-foreground">{gate || '--'}</span>
     </span>
   )
@@ -118,24 +118,24 @@ function FlightRowView({ flight, canManage }: { flight: FlightRow; canManage: bo
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <TitleLine as="h3" tone={statusTone(flight.status)} status={flight.status ?? undefined} className="font-medium">
           <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="font-mono tabular-nums">{flight.flightNumber ?? '--'}</span>
+            <span className="tabular-nums ">{flight.flightNumber ?? '--'}</span>
             <Route from={flight.origin?.iataCode} to={flight.destination?.iataCode} />
           </span>
         </TitleLine>
         <div className="flex items-baseline gap-3">
           <StatusLabel status={flight.status} />
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">Pax <span className="text-foreground">{flight.passengerCount ?? '--'}</span> Chk <span className="text-foreground">{flight.checkedInCount ?? '--'}</span></span>
+          <span className="tabular-nums text-xs  text-muted-foreground">Pax <span className="text-foreground">{flight.passengerCount ?? '--'}</span> Chk <span className="text-foreground">{flight.checkedInCount ?? '--'}</span></span>
         </div>
       </div>
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="min-w-0 space-y-1.5 rounded-lg bg-muted/40 px-3 py-2">
+        <div className="min-w-0 space-y-1.5 rounded-[4px] bg-muted/40 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-xs font-medium text-muted-foreground">Departure <Code>{flight.origin?.iataCode}</Code></span>
             <Stand terminal={flight.departureTerminal} gate={flight.departureGate} />
           </div>
           <TimeTriple scheduled={flight.scheduledDepartureAt} estimated={flight.estimatedDepartureAt} actual={flight.actualDepartureAt} timezone={originTz} referenceDay={referenceDay} />
         </div>
-        <div className="min-w-0 space-y-1.5 rounded-lg bg-muted/40 px-3 py-2">
+        <div className="min-w-0 space-y-1.5 rounded-[4px] bg-muted/40 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-xs font-medium text-muted-foreground">Arrival <Code>{flight.destination?.iataCode}</Code></span>
             <Stand terminal={flight.arrivalTerminal} gate={flight.arrivalGate} />
@@ -159,11 +159,11 @@ export async function FlightOpsPage({ searchParams }: { searchParams?: SearchPar
   const stationInvalid = Boolean(rawStation) && !station
 
   const disruptionsLink = <Track><Pill asChild size="sm"><Link href="/dashboard/platform/disruptions">Disruptions</Link></Pill></Track>
-  const meta = <span className="font-mono tabular-nums">{serviceDate}{station ? ` / ${station}` : ' / All stations'}</span>
+  const meta = <span className="tabular-nums ">{serviceDate}{station ? ` / ${station}` : ' / All stations'}</span>
   const filters = (
     <FilterBar action={BASE}>
-      <Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={`${deskInput} font-mono tabular-nums`} /></Field>
-      <Field label="Station" className="sm:w-32"><input name="station" defaultValue={rawStation} maxLength={3} placeholder="JFK" className={`${deskInput} font-mono uppercase`} /></Field>
+      <Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={`${deskInput} tabular-nums `} /></Field>
+      <Field label="Station" className="sm:w-32"><input name="station" defaultValue={rawStation} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field>
       <Track><Pill type="submit" variant="primary">Load</Pill><Pill asChild><Link href={BASE}>Today</Link></Pill></Track>
     </FilterBar>
   )

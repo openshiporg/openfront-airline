@@ -63,8 +63,8 @@ function Chip({ on, children }: { on: boolean; children: React.ReactNode }) {
     <span
       className={
         on
-          ? 'inline-flex items-center rounded-full border border-foreground/15 bg-background px-2 py-0.5 text-[11px] font-medium text-foreground'
-          : 'inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-[11px] font-medium text-muted-foreground line-through decoration-muted-foreground/60'
+          ? 'inline-flex items-center rounded-[4px] border border-foreground/15 bg-background px-2 py-0.5 text-[11px] font-medium text-foreground'
+          : 'inline-flex items-center rounded-[4px] border border-dashed px-2 py-0.5 text-[11px] font-medium text-muted-foreground line-through decoration-muted-foreground/60'
       }
     >
       <span className="sr-only">{on ? 'Allowed: ' : 'Not allowed: '}</span>
@@ -174,7 +174,7 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
         <DeskHeader
           eyebrow="Station control"
           title="Stations & access"
-          meta={counts ? <span className="font-mono tabular-nums">{counts.active ?? 0} active</span> : undefined}
+          meta={counts ? <span className="tabular-nums ">{counts.active ?? 0} active</span> : undefined}
         />
       }
       breadcrumbs={[
@@ -199,7 +199,7 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
             <Pill key={tab.value || 'all'} asChild size="sm" active={status === tab.value}>
               <Link href={hrefWith(filters, { status: tab.value })} aria-current={status === tab.value ? 'page' : undefined}>
                 {tab.label}
-                {tab.count != null && <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{tab.count}</span>}
+                {tab.count != null && <span className="tabular-nums text-[11px]  text-muted-foreground">{tab.count}</span>}
               </Link>
             </Pill>
           ))}
@@ -208,7 +208,7 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
         <FilterBar action={PATH}>
           {status && <input type="hidden" name="status" value={status} />}
           <Field label="Airport" className="sm:w-56">
-            <select name="airport" defaultValue={airport} className={`${deskInput} font-mono`}>
+            <select name="airport" defaultValue={airport} className={`${deskInput} tabular-nums`}>
               <option value="">All airports</option>
               {airportOptions.map(option => (
                 <option key={option.id} value={option.iataCode ?? ''}>{option.iataCode} {option.city || option.name || ''}</option>
@@ -239,12 +239,12 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
         ) : (
           <div className="space-y-8">
             {total > rows.length && (
-              <Notice tone="info"><span className="font-mono tabular-nums">Latest {rows.length} of {total}</span></Notice>
+              <Notice tone="info"><span className="tabular-nums ">Latest {rows.length} of {total}</span></Notice>
             )}
             {sortedGroups.map(group => (
               <DeskSection
                 key={group.label}
-                title={<span><span className="font-mono tracking-wider">{group.label}</span>{group.city && <span className="ml-2 font-normal text-muted-foreground">{group.city}</span>}</span>}
+                title={<span><span className="tabular-nums tracking-wider">{group.label}</span>{group.city && <span className="ml-2 font-normal text-muted-foreground">{group.city}</span>}</span>}
                 count={group.rows.length}
               >
                 <Panel className="divide-y">
@@ -266,7 +266,7 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
                             <Chip on={Boolean(row.canAcceptBags)}>Bags</Chip>
                             <Chip on={Boolean(row.canBoard)}>Boarding</Chip>
                           </div>
-                          <p className="pl-4 font-mono text-[12px] tabular-nums text-muted-foreground">
+                          <p className="pl-4 tabular-nums text-[12px]  text-muted-foreground">
                             {from ?? 'Immediately'} <span className="font-sans">to</span> {until ?? 'Open-ended'}
                           </p>
                           {row.user?.email && row.user.name && <p className="pl-4 text-xs text-muted-foreground">{row.user.email}</p>}

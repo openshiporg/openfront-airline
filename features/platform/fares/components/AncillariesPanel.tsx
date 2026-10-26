@@ -28,14 +28,14 @@ function AncillaryItem({ product, onEdit }: { product: AncillaryRow; onEdit: () 
       }
     >
       <TitleLine tone={statusTone(product.status)} status={product.status} className="text-sm font-medium text-foreground">
-        <span className="font-mono font-semibold tabular-nums">{product.code}</span>
+        <span className="tabular-nums font-semibold ">{product.code}</span>
         <span className="ml-2">{product.name}</span>
       </TitleLine>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <StatusLabel status={product.status} />
         <span>{typeLabel(product.type)}</span>
-        <span className="font-mono tabular-nums text-foreground">{formatMinor(product.defaultPriceAmount, product.currencyCode)}</span>
-        <span className="font-mono tabular-nums">Tax {formatMinor(product.taxAmount, product.currencyCode)}</span>
+        <span className="tabular-nums  text-foreground">{formatMinor(product.defaultPriceAmount, product.currencyCode)}</span>
+        <span className="tabular-nums ">Tax {formatMinor(product.taxAmount, product.currencyCode)}</span>
         <span>{product.fulfillmentType === 'standalone' ? 'Standalone' : 'Per flight'}</span>
         {product.requiresInventory && <span>Inventory controlled</span>}
         <Code>{product.productKey}</Code>
@@ -135,7 +135,7 @@ export function AncillariesPanel({
       >
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Code" error={errors.code} htmlFor="product-code">
-            <input id="product-code" value={values.code} onChange={set('code')} maxLength={32} autoComplete="off" disabled={editing !== null && editing !== 'new'} className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.code)} />
+            <input id="product-code" value={values.code} onChange={set('code')} maxLength={32} autoComplete="off" disabled={editing !== null && editing !== 'new'} className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.code)} />
           </FormField>
           <FormField label="Type" htmlFor="product-type">
             <select id="product-type" value={values.type} onChange={set('type')} className={deskInput}>
@@ -148,10 +148,10 @@ export function AncillariesPanel({
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label={`Price (${formCurrency})`} error={errors.price} htmlFor="product-price">
-            <input id="product-price" inputMode="decimal" value={values.price} onChange={set('price')} placeholder="0" className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.price)} />
+            <input id="product-price" inputMode="decimal" value={values.price} onChange={set('price')} placeholder="0" className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.price)} />
           </FormField>
           <FormField label={`Tax (${formCurrency})`} error={errors.tax} htmlFor="product-tax">
-            <input id="product-tax" inputMode="decimal" value={values.tax} onChange={set('tax')} placeholder="0" className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.tax)} />
+            <input id="product-tax" inputMode="decimal" value={values.tax} onChange={set('tax')} placeholder="0" className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.tax)} />
           </FormField>
         </div>
         <FormField label="Fulfillment" htmlFor="product-fulfillment">

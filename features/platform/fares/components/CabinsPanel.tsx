@@ -50,13 +50,13 @@ export function CabinsPanel({ cabins, total, pager }: { cabins: CabinRow[]; tota
               {cabins.map(cabin => (
                 <DeskRow key={cabin.id} actions={<TransitionPills transitions={[]} onTransition={() => undefined} onEdit={() => open(cabin)} />}>
                   <TitleLine className="text-sm font-medium text-foreground">
-                    <span className="font-mono font-semibold tabular-nums">{cabin.code}</span>
+                    <span className="tabular-nums font-semibold ">{cabin.code}</span>
                     <span className="ml-2">{cabin.name}</span>
                   </TitleLine>
                   <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span>{classLabel(cabin.cabinClass)}</span>
                     <Code>Order {cabin.displayOrder ?? 0}</Code>
-                    <span className="font-mono tabular-nums">{cabin.fareBrandsCount ?? 0} fare brands</span>
+                    <span className="tabular-nums ">{cabin.fareBrandsCount ?? 0} fare brands</span>
                   </div>
                 </DeskRow>
               ))}
@@ -77,10 +77,10 @@ export function CabinsPanel({ cabins, total, pager }: { cabins: CabinRow[]; tota
       >
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Code" error={errors.code} htmlFor="cabin-code">
-            <input id="cabin-code" value={values.code} onChange={event => setValues(current => ({ ...current, code: event.target.value }))} maxLength={32} autoComplete="off" className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.code)} />
+            <input id="cabin-code" value={values.code} onChange={event => setValues(current => ({ ...current, code: event.target.value }))} maxLength={32} autoComplete="off" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.code)} />
           </FormField>
           <FormField label="Display order" error={errors.displayOrder} htmlFor="cabin-order">
-            <input id="cabin-order" inputMode="numeric" value={values.displayOrder} onChange={event => setValues(current => ({ ...current, displayOrder: event.target.value }))} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.displayOrder)} />
+            <input id="cabin-order" inputMode="numeric" value={values.displayOrder} onChange={event => setValues(current => ({ ...current, displayOrder: event.target.value }))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.displayOrder)} />
           </FormField>
         </div>
         <FormField label="Name" error={errors.name} htmlFor="cabin-name">

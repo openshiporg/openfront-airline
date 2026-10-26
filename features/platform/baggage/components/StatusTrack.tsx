@@ -12,7 +12,7 @@ export function StatusTrack({ label, current, options, hrefFor }: { label: strin
           <Link href={hrefFor(option.value)} role="tab" aria-selected={option.value === current} scroll={false}>
             {option.value && <StatusDot tone={bagTone(option.value)} className="size-1.5 shadow-none" />}
             {option.label}
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{option.count ?? '--'}</span>
+            <span className="tabular-nums text-[11px]  text-muted-foreground">{option.count ?? '--'}</span>
           </Link>
         </Pill>
       ))}

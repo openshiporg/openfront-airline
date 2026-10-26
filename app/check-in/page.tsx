@@ -15,6 +15,6 @@ export default async function CheckInPage() {
   const carrier = await getStorefrontCarrierIdentity()
   const initialDate = carrierCalendarDate(new Date(Date.now() + 14 * 86_400_000), carrier?.defaultTimezone ?? 'UTC')
   return <PublicPageShell carrier={carrier} current="/check-in" eyebrow="Passenger service" title="Check in">
-    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="check-in" /> : <p role="status" className="af-notice relative z-10 shadow-lg" data-tone="warn"><span className="af-dot" data-tone="warn" />Online check-in isn&apos;t available right now.</p>}
+    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="check-in" /> : <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />Online check-in isn&apos;t available right now.</p>}
   </PublicPageShell>
 }

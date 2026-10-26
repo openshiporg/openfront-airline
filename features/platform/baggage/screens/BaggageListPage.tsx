@@ -80,8 +80,8 @@ export async function BaggageListPage({ searchParams }: { searchParams?: SearchP
   const filters = (
     <FilterBar action={BASE}>
       {status && <input type="hidden" name="status" value={status} />}
-      <Field label="Tag number or record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input type="search" name="q" defaultValue={q} maxLength={60} className={`${deskInput} pl-9 font-mono uppercase`} /></span></Field>
-      <Field label="Flight date" className="sm:w-48"><input type="date" name="date" defaultValue={date} className={`${deskInput} font-mono tabular-nums`} /></Field>
+      <Field label="Tag number or record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input type="search" name="q" defaultValue={q} maxLength={60} className={`${deskInput} pl-9 tabular-nums uppercase`} /></span></Field>
+      <Field label="Flight date" className="sm:w-48"><input type="date" name="date" defaultValue={date} className={`${deskInput} tabular-nums `} /></Field>
       <Track><Pill type="submit" variant="primary">Search</Pill><Pill asChild><Link href={BASE}>Clear</Link></Pill></Track>
     </FilterBar>
   )
@@ -116,7 +116,7 @@ export async function BaggageListPage({ searchParams }: { searchParams?: SearchP
   const mishandled = (response.data.mishandled ?? 0) + (response.data.delayed ?? 0)
 
   return (
-    <Shell title="Baggage" eyebrow="Airport service" tone={mishandled > 0 ? 'warn' : undefined} meta={<span className="font-mono tabular-nums">{response.data.all ?? 0} bags{date ? ` / ${date}` : ''}</span>}>
+    <Shell title="Baggage" eyebrow="Airport service" tone={mishandled > 0 ? 'warn' : undefined} meta={<span className="tabular-nums ">{response.data.all ?? 0} bags{date ? ` / ${date}` : ''}</span>}>
       {filters}
       <StatusTrack label="Bag status" current={status} options={tabs} hrefFor={value => hrefWith({ status: value })} />
       {cursor && <Track><Pill asChild size="sm"><Link href={hrefWith({})}>First page</Link></Pill></Track>}
@@ -126,7 +126,7 @@ export async function BaggageListPage({ searchParams }: { searchParams?: SearchP
             {items.map(bag => (
               <RowLink key={bag.id} href={detailWithReturn(`${BASE}/${bag.id}`, returnParams)}>
                 <div className="min-w-0 flex-1">
-                  <TitleLine as="h3" tone={bagTone(bag.status)} status={bag.status ?? undefined} className="font-mono text-sm font-semibold tabular-nums tracking-wide">{bag.tagNumber ?? '--'}</TitleLine>
+                  <TitleLine as="h3" tone={bagTone(bag.status)} status={bag.status ?? undefined} className="tabular-nums text-sm font-semibold  tracking-wide">{bag.tagNumber ?? '--'}</TitleLine>
                   <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 pl-4 text-sm text-muted-foreground">
                     <span className="text-foreground">{[bag.passenger?.givenName, bag.passenger?.familyName].filter(Boolean).join(' ') || 'Passenger unavailable'}</span>
                     {bag.booking?.recordLocator && <Code>{bag.booking.recordLocator}</Code>}
@@ -135,7 +135,7 @@ export async function BaggageListPage({ searchParams }: { searchParams?: SearchP
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1 pl-4 sm:pl-0">
                   <Route from={bag.origin?.iataCode} to={bag.destination?.iataCode} />
                   <Code>{bag.flightInstance?.flightNumber ?? '--'} {bag.flightInstance?.serviceDate?.slice(0, 10) ?? ''}</Code>
-                  <span className="font-mono text-xs tabular-nums text-foreground">{formatKg(bag.weightGrams)}</span>
+                  <span className="tabular-nums text-xs  text-foreground">{formatKg(bag.weightGrams)}</span>
                   <BagStatusLabel status={bag.status} />
                 </div>
               </RowLink>

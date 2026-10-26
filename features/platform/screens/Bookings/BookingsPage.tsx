@@ -32,7 +32,7 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
   return <PageContainer title="Booking desk" header={<DeskHeader eyebrow="Servicing" title="Offers and bookings" />} breadcrumbs={[{ type: 'link' as const, label: 'Operations', href: '/dashboard/operations' }, { type: 'page' as const, label: 'Booking desk' }]}>
     <div className="min-w-0 space-y-5 px-4 pb-6 md:px-6">
       <FilterBar action="/dashboard/bookings">
-        <Field label="Record locator" className="sm:flex-1"><input name="locator" defaultValue={locator} placeholder="Exact or partial" className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></Field>
+        <Field label="Record locator" className="sm:flex-1"><input name="locator" defaultValue={locator} placeholder="Exact or partial" className={cn(deskInput, 'tabular-nums uppercase ')} /></Field>
         <Track><Pill type="submit" variant="primary">Find booking</Pill>{locator && <Pill asChild><Link href="/dashboard/bookings">Clear</Link></Pill>}</Track>
       </FilterBar>
       {response.success ? <BookingDesk offers={response.data.offers} bookings={bookingPage?.items ?? []} bookingCount={bookingPage?.totalCount ?? 0} bookingHasNextPage={bookingPage?.hasNextPage ?? false} bookingNextHref={bookingNextHref} refundCleanupBookings={response.data.refundCleanupBookings.slice(0, 100)} refundCleanupTruncated={response.data.refundCleanupBookingsCount > 100} evidences={response.data.manualPaymentEvidences} sectionErrors={response.sectionErrors} /> : <Notice tone="bad">Bookings could not be loaded</Notice>}

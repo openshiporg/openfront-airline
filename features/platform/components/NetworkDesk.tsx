@@ -116,7 +116,7 @@ function StateNotice({ tone = 'warn', role, children, action }: { tone?: DeskTon
 /** Sold / held / blocked / capacity figures for one bucket. */
 function BucketFigures({ sold, held, blocked, capacity }: { sold: number; held: number; blocked: number; capacity: number }) {
   const committed = sold + held + blocked
-  return <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs tabular-nums text-muted-foreground">
+  return <span className="flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums text-xs  text-muted-foreground">
     <Meter value={capacity ? committed / capacity : 0} segments={10} label={`${committed} of ${capacity} committed`} />
     <span><span className="text-foreground">{sold}</span> sold</span>
     <span><span className="text-foreground">{held}</span> held</span>
@@ -610,7 +610,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
     title={mode === 'schedules' ? 'Dated flights' : 'Dated inventory'}
     count={flightWorklist ? (flightWorklist.totalCount ?? undefined) : flights.length}
     actions={flightWorklist?.state === 'ready' ? <div className="flex flex-wrap items-center gap-2">
-      <span className="font-mono text-xs tabular-nums text-muted-foreground">{flightWorklist.pageItemCount} on page</span>
+      <span className="tabular-nums text-xs  text-muted-foreground">{flightWorklist.pageItemCount} on page</span>
       <PageLinks firstHref={flightFirstHref} nextHref={flightNextHref} nextLabel="Next 50" />
     </div> : undefined}
   >
@@ -634,12 +634,12 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
               <div className="min-w-0">
                 <TitleLine tone={flightTone(flight.status)} status={flight.status.replaceAll('_', ' ')} className="text-sm">
                   <Link href={mode === 'inventory' ? `/dashboard/platform/schedules/${flight.id}` : `${detailBase}/${flight.id}`} className={cn('inline-flex flex-wrap items-center gap-x-3 gap-y-1', linkFocus)}>
-                    <span className="font-mono font-semibold tabular-nums text-foreground">{flight.flightNumber}</span>
+                    <span className="tabular-nums font-semibold  text-foreground">{flight.flightNumber}</span>
                     <Route from={flight.origin.iataCode} to={flight.destination.iataCode} />
                   </Link>
                 </TitleLine>
                 <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
-                  <span className="font-mono tabular-nums">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}</span>
+                  <span className="tabular-nums ">{departureDateTime.format(new Date(flight.scheduledDepartureAt))}</span>
                   <span className="capitalize"> · {flight.status.replaceAll('_', ' ')}</span>
                 </p>
                 {inventoryFlightBinding?.state === 'stale' && <p role="status" className="mt-1 pl-4 text-xs text-muted-foreground">Outside carrier inventory scope.</p>}
@@ -660,13 +660,13 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
                 return <div key={bucket.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
                   <div className="min-w-0 space-y-1">
                     <TitleLine as="p" tone={statusTone(bucket.status)} status={bucket.status} className="text-sm">
-                      <Link href={`${detailBase}/${flight.id}`} className={cn('font-mono font-medium tabular-nums text-foreground', linkFocus)}>Class {bucket.bookingClassCode}</Link>
+                      <Link href={`${detailBase}/${flight.id}`} className={cn('tabular-nums font-medium  text-foreground', linkFocus)}>Class {bucket.bookingClassCode}</Link>
                       <span className="ml-2 text-xs capitalize text-muted-foreground">{bucket.status.replaceAll('_', ' ')}</span>
                     </TitleLine>
                     <div className="pl-4"><BucketFigures sold={bucket.sold} held={bucket.held} blocked={bucket.blocked} capacity={bucket.capacity} /></div>
                   </div>
                   {mode !== 'schedules' && <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={flight.inventoryBucketsOverflow} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className={cn(deskInput, 'h-8 w-20 font-mono tabular-nums')} /></label>
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={flight.inventoryBucketsOverflow} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className={cn(deskInput, 'h-8 w-20 tabular-nums ')} /></label>
                     <Track><Pill disabled={flight.inventoryBucketsOverflow || working === bucket.id || Number(value) === bucket.authorized} onClick={() => run(bucket.id, () => mutate(`mutation($bucket:ID!,$authorized:Int!,$key:String!){setInventoryAuthorization(inventoryBucketId:$bucket,authorized:$authorized,idempotencyKey:$key){status}}`, { bucket: bucket.id, authorized: Number(value), key: `authorize-${bucket.id}-${crypto.randomUUID()}` }), 'Inventory authorization updated.')}>Save</Pill></Track>
                   </div>}
                 </div>
@@ -691,7 +691,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
             : <>
               {selectedInventoryFlightRecord && <TitleLine as="p" tone={flightTone(selectedInventoryFlightRecord.status)} status={selectedInventoryFlightRecord.status.replaceAll('_', ' ')} className="text-sm">
                 <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="font-mono font-semibold tabular-nums text-foreground">{selectedInventoryFlightRecord.flightNumber}</span>
+                  <span className="tabular-nums font-semibold  text-foreground">{selectedInventoryFlightRecord.flightNumber}</span>
                   <Route from={selectedInventoryFlightRecord.origin.iataCode} to={selectedInventoryFlightRecord.destination.iataCode} />
                 </span>
               </TitleLine>}
@@ -702,7 +702,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
                       : inventoryBucketPage.state === 'inconsistent' ? <StateNotice role="status" action={<Pill onClick={restartInventoryBucketList}><RotateCcw />Reload first page</Pill>}>Bucket rows and count disagree.</StateNotice>
                         : inventoryBucketPage.state === 'empty' ? <Well role="status">No buckets for this flight.</Well>
                           : <>
-                            <p role="status" className="font-mono text-xs tabular-nums text-muted-foreground">{inventoryBucketPage.items.length} of {inventoryBucketPage.totalCount}{inventoryBucketPage.state === 'overflow' ? ` · over ${INVENTORY_BUCKET_WORKLIST_PAGE_SIZE}, more on later pages` : ''}</p>
+                            <p role="status" className="tabular-nums text-xs  text-muted-foreground">{inventoryBucketPage.items.length} of {inventoryBucketPage.totalCount}{inventoryBucketPage.state === 'overflow' ? ` · over ${INVENTORY_BUCKET_WORKLIST_PAGE_SIZE}, more on later pages` : ''}</p>
                             {!inventoryBucketPage.canManageInventory && <Notice role="status">Read-only</Notice>}
                             <Panel className="divide-y">{inventoryBucketPage.items.map(bucket => {
                               const minimum = bucket.sold + bucket.held + bucket.blocked
@@ -711,13 +711,13 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
                               return <div key={bucket.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
                                 <div className="min-w-0 space-y-1">
                                   <TitleLine as="p" tone={statusTone(bucket.status)} status={bucket.status} className="text-sm">
-                                    <Link href={`${detailBase}/${bucket.id}`} className={cn('font-mono font-medium tabular-nums text-foreground', linkFocus)}>Class {bucket.bookingClassCode}</Link>
+                                    <Link href={`${detailBase}/${bucket.id}`} className={cn('tabular-nums font-medium  text-foreground', linkFocus)}>Class {bucket.bookingClassCode}</Link>
                                     <span className="ml-2 text-xs capitalize text-muted-foreground">{bucket.status.replaceAll('_', ' ')}</span>
                                   </TitleLine>
                                   <div className="pl-4"><BucketFigures sold={bucket.sold} held={bucket.held} blocked={bucket.blocked} capacity={bucket.capacity} /></div>
                                 </div>
                                 {inventoryBucketPage.canManageInventory && <div className="flex items-center gap-2">
-                                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={!canEdit} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className={cn(deskInput, 'h-8 w-20 font-mono tabular-nums')} /></label>
+                                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">Authorized<input type="number" min={minimum} max={bucket.capacity} value={value} disabled={!canEdit} onChange={event => setAuthorizations(values => ({ ...values, [bucket.id]: event.target.value }))} className={cn(deskInput, 'h-8 w-20 tabular-nums ')} /></label>
                                   <Track><Pill variant="primary" disabled={!canEdit || working === bucket.id || Number(value) === bucket.authorized} onClick={() => saveSelectedBucketAuthorization(bucket.id, Number(value))}>Save</Pill></Track>
                                 </div>}
                               </div>
@@ -735,7 +735,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
     title="Provision dated flight"
     count={scheduleWorklist?.state === 'ready' ? (scheduleWorklist.totalCount ?? undefined) : undefined}
     actions={scheduleWorklist?.state === 'ready' ? <div className="flex flex-wrap items-center gap-2">
-      <span className="font-mono text-xs tabular-nums text-muted-foreground">{scheduleWorklist.pageItemCount} schedules on page</span>
+      <span className="tabular-nums text-xs  text-muted-foreground">{scheduleWorklist.pageItemCount} schedules on page</span>
       <PageLinks firstHref={scheduleFirstHref} nextHref={scheduleNextHref} nextLabel="Next 100" />
     </div> : undefined}
   >
@@ -767,7 +767,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
       <Panel>
         <form onSubmit={provision} className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
           <label className={cn(fieldLabel, 'sm:col-span-2')}>Published schedule
-            <select value={scheduleId} onChange={event => selectSchedule(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')}>
+            <select value={scheduleId} onChange={event => selectSchedule(event.target.value)} required className={cn(deskInput, 'tabular-nums ')}>
               <option value="">Select a schedule</option>
               {schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.flightNumber} · {schedule.route.origin.iataCode}–{schedule.route.destination.iataCode}</option>)}
             </select>
@@ -781,7 +781,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
           </div>
           <div className={fieldLabel}>
             <label htmlFor="provisioning-cabin-select" className="flex items-baseline justify-between gap-2">Cabin
-              {cabinPage.state === 'ready' && <span className="font-mono font-normal tabular-nums">{cabinPage.items.length} of {cabinPage.totalCount}</span>}
+              {cabinPage.state === 'ready' && <span className="tabular-nums font-normal ">{cabinPage.items.length} of {cabinPage.totalCount}</span>}
             </label>
             <select id="provisioning-cabin-select" value={selectedCabinId} onChange={event => selectCabin(event.target.value)} disabled={cabinPage.state !== 'ready' && cabinPage.state !== 'overflow'} required className={deskInput}>
               <option value="">Select a cabin</option>
@@ -801,7 +801,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
           </div>
           <div className={fieldLabel}>
             <label htmlFor="fare-brand-select" className="flex items-baseline justify-between gap-2">Fare brand
-              {selectedCabinId && fareBrandPage.state === 'ready' && <span className="font-mono font-normal tabular-nums">{fareBrandPage.items.length} of {fareBrandPage.totalCount}</span>}
+              {selectedCabinId && fareBrandPage.state === 'ready' && <span className="tabular-nums font-normal ">{fareBrandPage.items.length} of {fareBrandPage.totalCount}</span>}
             </label>
             <select id="fare-brand-select" value={selectedFareBrandId} onChange={event => setFareBrandId(event.target.value)} disabled={!selectedCabinId || (fareBrandPage.state !== 'ready' && fareBrandPage.state !== 'overflow')} required className={deskInput}>
               <option value="">{!selectedCabinId && (cabinPage.state === 'ready' || cabinPage.state === 'overflow') ? 'Select a cabin first' : 'Select a fare brand'}</option>
@@ -813,13 +813,13 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
               {fareBrandPage.hasNextPage && <Pill size="sm" onClick={nextFareBrandPage} disabled={fareBrandPage.state === 'loading'}>Next {FARE_BRAND_WORKLIST_PAGE_SIZE}<ChevronRight /></Pill>}
             </Track>}
           </div>
-          <label className={fieldLabel}>Service date<input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(`${next}T09:00`); setArrival(`${next}T10:20`) }} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
-          <label className={fieldLabel}>Departure ({defaultTimezone})<input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
-          <label className={fieldLabel}>Arrival ({defaultTimezone})<input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
-          <label className={fieldLabel}>Capacity<input type="number" min={1} max={300} value={capacity} onChange={event => setCapacity(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
-          <label className={fieldLabel}>Currency<input value={currencyCode} onChange={event => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></label>
-          <label className={fieldLabel}>Base (minor units)<input type="number" min={0} value={baseAmount} onChange={event => setBaseAmount(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
-          <label className={fieldLabel}>Tax (minor units)<input type="number" min={0} value={taxAmount} onChange={event => setTaxAmount(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></label>
+          <label className={fieldLabel}>Service date<input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(`${next}T09:00`); setArrival(`${next}T10:20`) }} required className={cn(deskInput, 'tabular-nums ')} /></label>
+          <label className={fieldLabel}>Departure ({defaultTimezone})<input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
+          <label className={fieldLabel}>Arrival ({defaultTimezone})<input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
+          <label className={fieldLabel}>Capacity<input type="number" min={1} max={300} value={capacity} onChange={event => setCapacity(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
+          <label className={fieldLabel}>Currency<input value={currencyCode} onChange={event => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required className={cn(deskInput, 'tabular-nums uppercase ')} /></label>
+          <label className={fieldLabel}>Base (minor units)<input type="number" min={0} value={baseAmount} onChange={event => setBaseAmount(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
+          <label className={fieldLabel}>Tax (minor units)<input type="number" min={0} value={taxAmount} onChange={event => setTaxAmount(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
           <div className="flex items-end sm:col-span-2 sm:justify-end xl:col-span-1">
             <Track>
               <Pill type="submit" variant="primary" disabled={working === 'provision' || !scheduleId || scheduleSelectionInvalid || !schedules.length || !fareBrandBinding}>Provision dated flight</Pill>
@@ -834,10 +834,10 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
     {message && <Notice tone={messageFailed ? 'bad' : 'ok'} role={messageFailed ? 'alert' : 'status'}>{message}</Notice>}
     {mode === 'inventory' && !inventoryActorCarrierId && <Notice tone="warn" role="alert">Carrier scope unavailable. Inventory reads and authorization blocked.</Notice>}
     {showReadouts && <ReadoutStrip>
-      {mode !== 'inventory' && scheduleWorklist?.state === 'ready' && <Readout label="Schedules" value={<span className="font-mono">{scheduleWorklist.totalCount}</span>} />}
-      {flightWorklist?.state === 'ready' && <Readout label="Future flights" value={<span className="font-mono">{flightWorklist.totalCount}</span>} />}
-      <Readout label="Open for sale" tone="ok" value={<span className="font-mono">{openOnPage}</span>} sub="This page" />
-      <Readout label="Closed for sale" tone="idle" value={<span className="font-mono">{closedOnPage}</span>} sub="This page" />
+      {mode !== 'inventory' && scheduleWorklist?.state === 'ready' && <Readout label="Schedules" value={<span className="tabular-nums">{scheduleWorklist.totalCount}</span>} />}
+      {flightWorklist?.state === 'ready' && <Readout label="Future flights" value={<span className="tabular-nums">{flightWorklist.totalCount}</span>} />}
+      <Readout label="Open for sale" tone="ok" value={<span className="tabular-nums">{openOnPage}</span>} sub="This page" />
+      <Readout label="Closed for sale" tone="idle" value={<span className="tabular-nums">{closedOnPage}</span>} sub="This page" />
     </ReadoutStrip>}
     {mode === 'inventory'
       ? <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">{flightsSection}{bucketsSection}</div>

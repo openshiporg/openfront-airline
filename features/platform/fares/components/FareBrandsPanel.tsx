@@ -31,16 +31,16 @@ function BrandItem({ brand, onEdit }: { brand: FareBrandRow; onEdit: () => void 
       }
     >
       <TitleLine tone={statusTone(brand.status)} status={brand.status} className="text-sm font-medium text-foreground">
-        <span className="font-mono font-semibold tabular-nums">{brand.code}</span>
+        <span className="tabular-nums font-semibold ">{brand.code}</span>
         <span className="ml-2">{brand.name}</span>
       </TitleLine>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <StatusLabel status={brand.status} />
         <span>{brand.cabin ? `${brand.cabin.name} (${brand.cabin.code})` : 'No cabin'}</span>
-        <span className="font-mono tabular-nums">
+        <span className="tabular-nums ">
           {baggage.pieces === 0 ? 'No checked bags' : `${baggage.pieces} x ${baggage.maxWeightGrams ? formatKg(baggage.maxWeightGrams) : 'bag'}`}
         </span>
-        <span className="font-mono tabular-nums">{brand.rulesCount ?? 0} rules</span>
+        <span className="tabular-nums ">{brand.rulesCount ?? 0} rules</span>
         <Code>Order {brand.displayOrder ?? 0}</Code>
       </div>
       {brand.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{brand.description}</p>}
@@ -142,10 +142,10 @@ export function FareBrandsPanel({
       >
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Code" error={errors.code} htmlFor="brand-code">
-            <input id="brand-code" value={values.code} onChange={set('code')} maxLength={32} autoComplete="off" className={`${deskInput} font-mono uppercase`} aria-invalid={Boolean(errors.code)} />
+            <input id="brand-code" value={values.code} onChange={set('code')} maxLength={32} autoComplete="off" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.code)} />
           </FormField>
           <FormField label="Display order" error={errors.displayOrder} htmlFor="brand-order">
-            <input id="brand-order" inputMode="numeric" value={values.displayOrder} onChange={set('displayOrder')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.displayOrder)} />
+            <input id="brand-order" inputMode="numeric" value={values.displayOrder} onChange={set('displayOrder')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.displayOrder)} />
           </FormField>
         </div>
         <FormField label="Name" error={errors.name} htmlFor="brand-name">
@@ -159,10 +159,10 @@ export function FareBrandsPanel({
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Included bags" error={errors.pieces} htmlFor="brand-pieces">
-            <input id="brand-pieces" inputMode="numeric" value={values.pieces} onChange={set('pieces')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.pieces)} />
+            <input id="brand-pieces" inputMode="numeric" value={values.pieces} onChange={set('pieces')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.pieces)} />
           </FormField>
           <FormField label="Max weight per bag (kg)" error={errors.weightKg} htmlFor="brand-weight">
-            <input id="brand-weight" inputMode="decimal" value={values.weightKg} onChange={set('weightKg')} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.weightKg)} />
+            <input id="brand-weight" inputMode="decimal" value={values.weightKg} onChange={set('weightKg')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.weightKg)} />
           </FormField>
         </div>
         <FormField label="Description" htmlFor="brand-description">

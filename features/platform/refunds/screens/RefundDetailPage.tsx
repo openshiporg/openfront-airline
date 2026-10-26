@@ -65,10 +65,10 @@ export async function RefundDetailPage({ params }: { params: Promise<{ id: strin
       header={
         <DeskHeader
           eyebrow="Refund"
-          title={<span className="font-mono tracking-tight">{title}</span>}
+          title={<span className="tabular-nums tracking-tight">{title}</span>}
           tone={refund ? refundTone(refund.status) : undefined}
           status={refund ? refundStatusLabel(refund.status) : undefined}
-          meta={refund ? <span><span className="font-mono tabular-nums">{formatMinorUnits(refund.amount, refund.currencyCode)}</span> <span className="ml-1">{refundStatusLabel(refund.status)}</span></span> : undefined}
+          meta={refund ? <span><span className="tabular-nums ">{formatMinorUnits(refund.amount, refund.currencyCode)}</span> <span className="ml-1">{refundStatusLabel(refund.status)}</span></span> : undefined}
           actions={refund ? (
             <Track>
               <Pill asChild variant="primary"><Link href={bookingDeskHref(locator)}>Open booking</Link></Pill>

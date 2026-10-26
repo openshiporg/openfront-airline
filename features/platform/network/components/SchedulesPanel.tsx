@@ -37,7 +37,7 @@ function DayChips({ days }: { days: number[] }) {
           key={day.value}
           aria-hidden="true"
           className={cn(
-            'inline-flex h-5 w-8 items-center justify-center rounded-md font-mono text-[10px] font-medium tabular-nums',
+            'inline-flex h-5 w-8 items-center justify-center rounded-md tabular-nums text-[10px] font-medium ',
             days.includes(day.value) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground/60',
           )}
         >
@@ -64,17 +64,17 @@ function ScheduleItem({ schedule, onEdit }: { schedule: ScheduleRow; onEdit: () 
       }
     >
       <TitleLine tone={statusTone(schedule.status)} status={schedule.status} className="text-sm font-medium text-foreground">
-        <span className="font-mono font-semibold tabular-nums tracking-wide">{schedule.flightNumber}</span>
+        <span className="tabular-nums font-semibold  tracking-wide">{schedule.flightNumber}</span>
         <Route from={schedule.route?.origin?.iataCode} to={schedule.route?.destination?.iataCode} className="ml-2" />
       </TitleLine>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
         <StatusLabel status={schedule.status} />
-        <span className="font-mono tabular-nums text-foreground">
+        <span className="tabular-nums  text-foreground">
           {schedule.departureLocalTime} - {schedule.arrivalLocalTime}{offset !== 0 ? ` ${offset > 0 ? '+' : ''}${offset}` : ''}
         </span>
         <DayChips days={scheduleDays(schedule.daysOfWeek)} />
-        <span className="font-mono tabular-nums">{dateInput(schedule.effectiveFrom) || 'Open'} / {dateInput(schedule.effectiveTo) || 'Open'}</span>
-        <span className="font-mono tabular-nums">{schedule.instancesCount ?? 0} flights</span>
+        <span className="tabular-nums ">{dateInput(schedule.effectiveFrom) || 'Open'} / {dateInput(schedule.effectiveTo) || 'Open'}</span>
+        <span className="tabular-nums ">{schedule.instancesCount ?? 0} flights</span>
         <Code>{schedule.scheduleKey}</Code>
       </div>
     </DeskRow>
@@ -171,7 +171,7 @@ export function SchedulesPanel({
         {routeFilter && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">Route</span>
-            <span className="font-mono font-semibold tabular-nums">{routeFilter.label}</span>
+            <span className="tabular-nums font-semibold ">{routeFilter.label}</span>
             <Track><Pill asChild size="sm"><Link href={routeFilter.clearHref}>All routes</Link></Pill></Track>
           </div>
         )}
@@ -200,7 +200,7 @@ export function SchedulesPanel({
         {values && (
           <>
             <FormField label="Route" error={errors.routeId} htmlFor="schedule-route">
-              <select id="schedule-route" value={values.routeId} onChange={event => update('routeId', event.target.value)} className={`${deskInput} font-mono`} aria-invalid={Boolean(errors.routeId)}>
+              <select id="schedule-route" value={values.routeId} onChange={event => update('routeId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.routeId)}>
                 <option value="">Select route</option>
                 {routeOptions.map(route => (
                   <option key={route.id} value={route.id}>{route.origin?.iataCode ?? '---'}-{route.destination?.iataCode ?? '---'} ({route.status})</option>
@@ -208,20 +208,20 @@ export function SchedulesPanel({
               </select>
             </FormField>
             <FormField label="Flight number" error={errors.flightNumber} htmlFor="schedule-flight">
-              <input id="schedule-flight" value={values.flightNumber} onChange={event => update('flightNumber', event.target.value)} maxLength={9} autoComplete="off" className={`${deskInput} font-mono uppercase tabular-nums`} aria-invalid={Boolean(errors.flightNumber)} />
+              <input id="schedule-flight" value={values.flightNumber} onChange={event => update('flightNumber', event.target.value)} maxLength={9} autoComplete="off" className={`${deskInput} tabular-nums uppercase `} aria-invalid={Boolean(errors.flightNumber)} />
             </FormField>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Departure (local)" error={errors.departureLocalTime} htmlFor="schedule-departure">
-                <input id="schedule-departure" type="time" value={values.departureLocalTime} onChange={event => update('departureLocalTime', event.target.value.slice(0, 5))} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.departureLocalTime)} />
+                <input id="schedule-departure" type="time" value={values.departureLocalTime} onChange={event => update('departureLocalTime', event.target.value.slice(0, 5))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.departureLocalTime)} />
               </FormField>
               <FormField label="Arrival (local)" error={errors.arrivalLocalTime} htmlFor="schedule-arrival">
-                <input id="schedule-arrival" type="time" value={values.arrivalLocalTime} onChange={event => update('arrivalLocalTime', event.target.value.slice(0, 5))} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.arrivalLocalTime)} />
+                <input id="schedule-arrival" type="time" value={values.arrivalLocalTime} onChange={event => update('arrivalLocalTime', event.target.value.slice(0, 5))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.arrivalLocalTime)} />
               </FormField>
             </div>
             <FormField label="Arrival day">
               <Track aria-label="Arrival day offset" block>
                 {['-1', '0', '1', '2'].map(offset => (
-                  <Pill key={offset} size="sm" active={values.arrivalDayOffset === offset} aria-pressed={values.arrivalDayOffset === offset} onClick={() => update('arrivalDayOffset', offset)} className="font-mono tabular-nums">
+                  <Pill key={offset} size="sm" active={values.arrivalDayOffset === offset} aria-pressed={values.arrivalDayOffset === offset} onClick={() => update('arrivalDayOffset', offset)} className="tabular-nums ">
                     {offset === '0' ? 'Same day' : offset === '-1' ? '-1' : `+${offset}`}
                   </Pill>
                 ))}
@@ -230,7 +230,7 @@ export function SchedulesPanel({
             <FormField label="Days of week" error={errors.daysOfWeek}>
               <Track aria-label="Days of week" block>
                 {WEEKDAYS.map(day => (
-                  <Pill key={day.value} size="sm" active={values.daysOfWeek.includes(day.value)} aria-pressed={values.daysOfWeek.includes(day.value)} onClick={() => toggleDay(day.value)} className="px-1.5 font-mono">
+                  <Pill key={day.value} size="sm" active={values.daysOfWeek.includes(day.value)} aria-pressed={values.daysOfWeek.includes(day.value)} onClick={() => toggleDay(day.value)} className="px-1.5 tabular-nums">
                     {day.short}
                   </Pill>
                 ))}
@@ -238,10 +238,10 @@ export function SchedulesPanel({
             </FormField>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Effective from" htmlFor="schedule-from">
-                <input id="schedule-from" type="date" value={values.effectiveFrom} onChange={event => update('effectiveFrom', event.target.value)} className={`${deskInput} font-mono tabular-nums`} />
+                <input id="schedule-from" type="date" value={values.effectiveFrom} onChange={event => update('effectiveFrom', event.target.value)} className={`${deskInput} tabular-nums `} />
               </FormField>
               <FormField label="Effective to" error={errors.effectiveTo} htmlFor="schedule-to">
-                <input id="schedule-to" type="date" value={values.effectiveTo} onChange={event => update('effectiveTo', event.target.value)} className={`${deskInput} font-mono tabular-nums`} aria-invalid={Boolean(errors.effectiveTo)} />
+                <input id="schedule-to" type="date" value={values.effectiveTo} onChange={event => update('effectiveTo', event.target.value)} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.effectiveTo)} />
               </FormField>
             </div>
           </>

@@ -1,8 +1,7 @@
-import { Barlow_Condensed, Hanken_Grotesk, IBM_Plex_Mono } from 'next/font/google'
+import { Archivo } from 'next/font/google'
 
-// Display: condensed signage type, as on airport wayfinding. Body: Hanken Grotesk. Readouts: IBM Plex Mono.
-const display = Barlow_Condensed({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--af-font-display', display: 'swap' })
-const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--af-font-body', display: 'swap' })
-const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--af-font-mono', display: 'swap' })
+// One family, as on a printed pocket timetable: Archivo's width axis sets the condensed display caps and the
+// normal-width text; tabular figures carry times and fares.
+const archivo = Archivo({ subsets: ['latin'], axes: ['wdth'], variable: '--af-font-body', display: 'swap' })
 
-export const storefrontFontVariables = `${display.variable} ${body.variable} ${mono.variable}`
+export const storefrontFontVariables = archivo.variable

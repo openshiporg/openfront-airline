@@ -120,8 +120,8 @@ export async function BagDetailPage({ params, searchParams }: { params: Params; 
               { label: 'Type', value: <span className="capitalize">{(bag.bagType ?? '--').replaceAll('_', ' ')}</span> },
               { label: 'Weight', value: formatKg(bag.weightGrams), mono: true },
               { label: 'Passenger', value: passengerName || '--' },
-              { label: 'Booking', value: locator ? <Link href={`/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}`} className="font-mono font-medium underline underline-offset-4">{locator}</Link> : '--' },
-              { label: 'Flight', value: flight ? <span className="font-mono tabular-nums">{flight.flightNumber ?? '--'} {flight.serviceDate?.slice(0, 10) ?? ''}</span> : '--' },
+              { label: 'Booking', value: locator ? <Link href={`/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}`} className="tabular-nums font-medium underline underline-offset-4">{locator}</Link> : '--' },
+              { label: 'Flight', value: flight ? <span className="tabular-nums ">{flight.flightNumber ?? '--'} {flight.serviceDate?.slice(0, 10) ?? ''}</span> : '--' },
               { label: 'Route', value: <Route from={bag.origin?.iataCode} to={bag.destination?.iataCode} /> },
               { label: 'Accepted', value: <StationTime iso={bag.acceptedAt} airport={bag.origin} />, mono: true },
               bag.deliveredAt ? { label: 'Delivered', value: <StationTime iso={bag.deliveredAt} airport={bag.destination} />, mono: true } : null,
@@ -146,7 +146,7 @@ export async function BagDetailPage({ params, searchParams }: { params: Params; 
                         <TitleLine as="h3" tone={bagTone(event.statusSnapshot)} status={event.statusSnapshot ?? undefined} className="text-sm font-medium capitalize">
                           {(event.eventType ?? 'event').replaceAll('_', ' ')}
                         </TitleLine>
-                        <span className="font-mono text-xs tabular-nums text-foreground"><StationTime iso={event.occurredAt} airport={event.airport} /></span>
+                        <span className="tabular-nums text-xs  text-foreground"><StationTime iso={event.occurredAt} airport={event.airport} /></span>
                       </div>
                       <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 pl-4">
                         <BagStatusLabel status={event.statusSnapshot} />

@@ -101,7 +101,7 @@ export async function TicketListPage({ searchParams }: { searchParams?: SearchPa
   const returnParams = { q, status }
 
   return (
-    <Shell title="Tickets" eyebrow="Ticketing" actions={bookingsLink} meta={<span className="font-mono tabular-nums">{response.data.all ?? 0} tickets</span>}>
+    <Shell title="Tickets" eyebrow="Ticketing" actions={bookingsLink} meta={<span className="tabular-nums ">{response.data.all ?? 0} tickets</span>}>
       {filters}
       <StatusTrack label="Ticket status" current={status} options={tabs} hrefFor={value => hrefWith({ status: value })} />
       {cursor && <Track><Pill asChild size="sm"><Link href={hrefWith({})}>First page</Link></Pill></Track>}
@@ -115,17 +115,17 @@ export async function TicketListPage({ searchParams }: { searchParams?: SearchPa
                   <li key={ticket.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <TitleLine as="h3" tone={ticketTone(ticket.status)} status={ticket.status ?? undefined} className="text-sm font-semibold">
-                        <Link href={detailWithReturn(`${BASE}/${ticket.id}`, returnParams)} className="font-mono tabular-nums tracking-wide underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{ticket.ticketNumber ?? '--'}</Link>
+                        <Link href={detailWithReturn(`${BASE}/${ticket.id}`, returnParams)} className="tabular-nums  tracking-wide underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{ticket.ticketNumber ?? '--'}</Link>
                       </TitleLine>
                       <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 pl-4 text-sm">
                         <span className="text-foreground">{[ticket.passenger?.givenName, ticket.passenger?.familyName].filter(Boolean).join(' ') || 'Passenger unavailable'}</span>
-                        {locator && <Link href={`/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}`} className="font-mono text-[12px] tabular-nums text-muted-foreground underline underline-offset-4 hover:text-foreground">{locator}</Link>}
+                        {locator && <Link href={`/dashboard/platform/bookings?locator=${encodeURIComponent(locator)}`} className="tabular-nums text-[12px]  text-muted-foreground underline underline-offset-4 hover:text-foreground">{locator}</Link>}
                       </p>
                     </div>
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1 pl-4 sm:pl-0">
                       <Code>{ticket.issuedAt ? ticket.issuedAt.slice(0, 10) : 'Not issued'}</Code>
-                      <span className="font-mono text-xs tabular-nums text-muted-foreground">Cpn <span className="text-foreground">{ticket.couponsCount ?? '--'}</span></span>
-                      <span className="font-mono text-sm tabular-nums text-foreground">{formatMinorUnits(ticket.totalAmount, ticket.currencyCode)}</span>
+                      <span className="tabular-nums text-xs  text-muted-foreground">Cpn <span className="text-foreground">{ticket.couponsCount ?? '--'}</span></span>
+                      <span className="tabular-nums text-sm  text-foreground">{formatMinorUnits(ticket.totalAmount, ticket.currencyCode)}</span>
                       <TicketStatusLabel status={ticket.status} />
                     </div>
                   </li>

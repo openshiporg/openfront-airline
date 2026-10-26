@@ -79,19 +79,19 @@ export function ShoppingResults({ flights, passengers, defaultTimezone }: { flig
           <div className="min-w-0">
             <TitleLine tone={available ? 'ok' : 'bad'} status={available ? 'Available' : 'Sold out'} className="text-sm">
               <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-mono font-semibold tabular-nums text-foreground">{flight.flightNumber}</span>
+                <span className="tabular-nums font-semibold  text-foreground">{flight.flightNumber}</span>
                 <Route from={flight.originCode} to={flight.destinationCode} />
               </span>
             </TitleLine>
             <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
-              <span className="font-mono tabular-nums">{flightTime.format(new Date(flight.scheduledDepartureAt))}–{flightTime.format(new Date(flight.scheduledArrivalAt))}</span>
+              <span className="tabular-nums ">{flightTime.format(new Date(flight.scheduledDepartureAt))}–{flightTime.format(new Date(flight.scheduledArrivalAt))}</span>
               <span> · {flight.fareBrand.name}</span>
             </p>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">{formatMinorUnits(flight.totalAmount, flight.currencyCode)}</p>
-              <p className="font-mono text-xs tabular-nums text-muted-foreground">{available} left</p>
+              <p className="tabular-nums text-sm font-semibold  text-foreground">{formatMinorUnits(flight.totalAmount, flight.currencyCode)}</p>
+              <p className="tabular-nums text-xs  text-muted-foreground">{available} left</p>
             </div>
             <Track>
               <Pill variant="primary" disabled={!available || working === flight.id} onClick={() => holdFlight(flight)}>{working === flight.id ? 'Holding…' : 'Hold fare'}</Pill>

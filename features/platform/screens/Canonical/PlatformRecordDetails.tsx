@@ -177,13 +177,13 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
       <DeskSection title="Travelers" count={data.passengersCount ?? undefined}>
         {data.passengers?.length ? <Panel className="divide-y overflow-hidden">{data.passengers.map(entry => <div key={entry.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
           {entry.passenger?.id ? <Link href={`/dashboard/platform/passengers/${encodeURIComponent(entry.passenger.id)}`} className="min-w-0 break-words font-medium hover:underline">{entry.passenger.givenName} {entry.passenger.familyName}</Link> : <span className="text-muted-foreground">Traveler restricted</span>}
-          <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{readable(entry.passengerType ?? 'adult')}{entry.isPrimaryContact ? ' · lead' : ''}</span>
+          <span className="tabular-nums text-xs uppercase tracking-wide text-muted-foreground">{readable(entry.passengerType ?? 'adult')}{entry.isPrimaryContact ? ' · lead' : ''}</span>
         </div>)}</Panel> : <Well>Travelers unavailable</Well>}
       </DeskSection>
       <DeskSection title="Flights" count={data.segmentsCount ?? undefined}>
         {data.segments?.length ? <Panel className="divide-y overflow-hidden">{data.segments.map(segment => <div key={segment.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
-          <TitleLine as="span" tone={statusTone(segment.status)} status={readable(segment.status)} className="font-mono font-semibold">{segment.marketingFlightNumber} {segment.originCode}–{segment.destinationCode}</TitleLine>
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">{formatAirportTime(segment.scheduledDepartureAt, segment.flightInstance?.origin?.timezone)} · {segment.cabinCode ?? ''} {segment.fareBrandCode ?? ''}</span>
+          <TitleLine as="span" tone={statusTone(segment.status)} status={readable(segment.status)} className="tabular-nums font-semibold">{segment.marketingFlightNumber} {segment.originCode}–{segment.destinationCode}</TitleLine>
+          <span className="tabular-nums text-xs  text-muted-foreground">{formatAirportTime(segment.scheduledDepartureAt, segment.flightInstance?.origin?.timezone)} · {segment.cabinCode ?? ''} {segment.fareBrandCode ?? ''}</span>
         </div>)}</Panel> : <Well>Flights unavailable</Well>}
       </DeskSection>
     </div>}
@@ -195,9 +195,9 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
             <span className="min-w-0 break-words font-medium">{item.description}</span>
             <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-muted-foreground">
               <span>{item.fareName ?? 'Fare unavailable'}</span>
-              <span className="font-mono tabular-nums">{item.quantity} travelers</span>
-              {item.includedBaggage && <span className="font-mono tabular-nums">{item.includedBaggage.pieces} bag(s) · {item.includedBaggage.maxWeightGrams / 1000} kg</span>}
-              <span className="font-mono tabular-nums text-foreground">{formatMinorUnits(item.totalAmount,item.currencyCode)}</span>
+              <span className="tabular-nums ">{item.quantity} travelers</span>
+              {item.includedBaggage && <span className="tabular-nums ">{item.includedBaggage.pieces} bag(s) · {item.includedBaggage.maxWeightGrams / 1000} kg</span>}
+              <span className="tabular-nums  text-foreground">{formatMinorUnits(item.totalAmount,item.currencyCode)}</span>
             </span>
           </div>)}
         </Panel>
@@ -206,8 +206,8 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
     {desk === 'schedules' && <DeskSection title="Inventory" count={data.inventoryBucketsCount ?? undefined}>
       {data.inventoryBuckets?.length ? <Panel className="divide-y overflow-hidden">
         {data.inventoryBuckets.slice(0,50).map(bucket => <RowLink key={bucket.id} href={`/dashboard/platform/inventory/${encodeURIComponent(bucket.id)}`}>
-          <TitleLine as="span" tone={statusTone(bucket.status)} status={readable(bucket.status)} className="font-mono text-sm font-semibold">{bucket.bookingClassCode ?? 'Class unavailable'}</TitleLine>
-          <span className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs tabular-nums text-muted-foreground"><span>auth {readable(bucket.authorized)}</span><span>sold {readable(bucket.sold)}</span><span>held {readable(bucket.held)}</span><span>blocked {readable(bucket.blocked)}</span></span>
+          <TitleLine as="span" tone={statusTone(bucket.status)} status={readable(bucket.status)} className="tabular-nums text-sm font-semibold">{bucket.bookingClassCode ?? 'Class unavailable'}</TitleLine>
+          <span className="flex flex-wrap gap-x-3 gap-y-1 tabular-nums text-xs  text-muted-foreground"><span>auth {readable(bucket.authorized)}</span><span>sold {readable(bucket.sold)}</span><span>held {readable(bucket.held)}</span><span>blocked {readable(bucket.blocked)}</span></span>
         </RowLink>)}
         {data.inventoryBuckets.length > 50 && <RowLink href="/dashboard/platform/inventory"><span className="text-sm text-muted-foreground">Showing the first 50 buckets</span><span className="text-sm font-medium">Inventory & fares</span></RowLink>}
       </Panel> : <Well>{data.inventoryBucketsCount === undefined || data.inventoryBucketsCount === null ? 'Count unavailable' : 'No inventory buckets'}</Well>}
@@ -216,7 +216,7 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
       {data.bookingPassengers?.length ? <Panel className="divide-y overflow-hidden">
         {data.bookingPassengers.slice(0,20).map(link => <div key={link.id} className="min-w-0">
           {link.booking?.recordLocator
-            ? <RowLink href={bookingHref(link.booking.recordLocator)}><Code className="text-sm font-semibold text-foreground">{link.booking.recordLocator}</Code><span className="font-mono text-xs tabular-nums text-muted-foreground">{link.booking.segments?.length ?? 0} segments</span></RowLink>
+            ? <RowLink href={bookingHref(link.booking.recordLocator)}><Code className="text-sm font-semibold text-foreground">{link.booking.recordLocator}</Code><span className="tabular-nums text-xs  text-muted-foreground">{link.booking.segments?.length ?? 0} segments</span></RowLink>
             : <div className="px-4 py-3 text-sm text-muted-foreground">Booking unavailable</div>}
           {link.booking?.segments?.slice(0,20).map(segment => segment.flightInstance?.serviceDate
             ? <RowLink key={segment.id} className="py-2 pl-8" href={`/dashboard/platform/departures?date=${encodeURIComponent(segment.flightInstance.serviceDate.slice(0,10))}&origin=${encodeURIComponent(segment.originCode)}`}><span className="flex items-center gap-3"><Route from={segment.originCode} to={segment.destinationCode} /><Code>{segment.flightInstance.serviceDate.slice(0,10)}</Code></span><span className="text-xs font-medium">Station manifest</span></RowLink>

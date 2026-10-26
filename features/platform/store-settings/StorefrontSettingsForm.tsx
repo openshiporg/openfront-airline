@@ -85,13 +85,13 @@ export function StorefrontSettingsForm({ initialSettings }: { initialSettings: S
       <DeskSection title="Customer service">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Email"><input type="email" className={deskInput} maxLength={254} value={form.storefrontContactEmail} onChange={event => setForm(current => ({ ...current, storefrontContactEmail: event.target.value }))} /></Field>
-          <Field label="Phone"><input type="tel" className={cn(deskInput, 'font-mono')} maxLength={40} value={form.storefrontContactPhone} onChange={event => setForm(current => ({ ...current, storefrontContactPhone: event.target.value }))} /></Field>
+          <Field label="Phone"><input type="tel" className={cn(deskInput, 'tabular-nums')} maxLength={40} value={form.storefrontContactPhone} onChange={event => setForm(current => ({ ...current, storefrontContactPhone: event.target.value }))} /></Field>
           <Field label="Hours" className="sm:col-span-2"><input className={deskInput} maxLength={200} placeholder="Daily 06:00–22:00 ET" value={form.storefrontServiceHours} onChange={event => setForm(current => ({ ...current, storefrontServiceHours: event.target.value }))} /></Field>
         </div>
       </DeskSection>
 
       <DeskSection title="Brand colour">
-        <Track role="radiogroup" aria-label="Brand colour" className="flex-wrap rounded-2xl">
+        <Track role="radiogroup" aria-label="Brand colour" className="flex-wrap rounded-[4px]">
           {STOREFRONT_BRAND_COLORS.map(option => {
             const selected = form.storefrontBrandColor === option.value
             return <Pill key={option.value} asChild active={selected} className="cursor-pointer focus-within:ring-2 focus-within:ring-ring">
@@ -116,11 +116,11 @@ export function StorefrontSettingsForm({ initialSettings }: { initialSettings: S
     </form>
 
     <aside aria-label="Storefront preview" className="min-w-0 lg:sticky lg:top-4">
-      <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Preview</p>
+      <p className="mb-2 tabular-nums text-xs font-medium text-muted-foreground">Preview</p>
       <Panel className="overflow-hidden">
         <div className="flex min-w-0 items-center justify-between gap-3 border-b bg-background px-4 py-3">
           <span className="min-w-0 truncate text-sm font-semibold text-foreground">{form.name || 'Carrier name'}</span>
-          <span className="shrink-0 rounded-full px-3 py-1 text-xs font-medium text-white" style={{ backgroundColor: (brand ?? STOREFRONT_BRAND_COLORS[0]).hex }}>Book</span>
+          <span className="shrink-0 rounded-[4px] px-3 py-1 text-xs font-medium text-white" style={{ backgroundColor: (brand ?? STOREFRONT_BRAND_COLORS[0]).hex }}>Book</span>
         </div>
         <div className="px-4 py-8 text-white" style={{ backgroundColor: (brand ?? STOREFRONT_BRAND_COLORS[0]).hex }}>
           <p className="break-words text-xl font-semibold tracking-tight">{form.storefrontHomepageTitle || 'Homepage title'}</p>
