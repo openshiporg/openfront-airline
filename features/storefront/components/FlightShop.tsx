@@ -489,7 +489,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         <div className="af-rule pt-4"><p className="af-field-label">Total</p><p className="af-mono mt-1 text-2xl font-semibold">{heldOffer ? formatMinorUnits(heldOffer.totalAmount, heldOffer.currencyCode) : money(selected.partyTotalAmount)}</p><p className="af-mono text-xs text-[var(--af-ink-3)]">{money(selected.perTravelerTotalAmount)} × {selected.passengerCount}</p></div>
         {heldOffer ? <div className="space-y-3">
           <p className="af-title-line text-sm font-medium"><span className="af-dot" data-tone="ok" />Fare held · <span className="af-mono">{heldOffer.offerNumber}</span></p>
-          <p className="af-mono text-xs text-[var(--af-ink-3)]">Held until {formatAirportClock(heldOffer.expiresAt, carrier.defaultTimezone)} · No online payment</p>
+          <p className="af-mono text-xs text-[var(--af-ink-3)]">Held until {formatAirportClock(heldOffer.expiresAt, carrier.defaultTimezone)} · {carrier.onlinePaymentEnabled ? 'Pay by card after you confirm' : 'No online payment'}</p>
           <div className="af-track" data-block="true"><button type="button" disabled={busy} onClick={() => void confirmBooking()} className="af-pill af-pill-primary">Confirm reservation</button></div>
         </div> : <div className="af-track mt-auto" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">Hold fare for {passLabel}</button></div>}
       </div>
