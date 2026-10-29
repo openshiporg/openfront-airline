@@ -107,6 +107,8 @@
 .af-pill:disabled, .af-pill[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
 .af-pill svg { width: 1rem; height: 1rem; flex-shrink: 0; }
 .af-pill-sm { min-height: 2.25rem; padding: 0 0.875rem; font-size: 0.875rem; }
+/* Phone menu toggle: a full 40px tap target. */
+.af-menu-toggle { min-height: 2.5rem; }
 .af-pill-raised { background: var(--af-card); }
 /* Tabs: aria-pressed / aria-current / data-active pills become underline tabs. */
 [role="group"] > .af-pill[aria-pressed], .af-pill[aria-current] {
@@ -206,6 +208,10 @@ select.af-input {
 .af-days { display: inline-grid; grid-template-columns: repeat(7, 1.375rem); gap: 1px; }
 .af-day { display: grid; place-items: center; height: 1.375rem; font-size: 0.75rem; font-weight: 700; color: var(--af-line-2); border: 1px solid var(--af-line); border-radius: 2px; }
 .af-day[data-on="true"] { color: #fff; background: var(--af-accent); border-color: var(--af-accent); }
+.af-timetable td:nth-child(n+2), .af-timetable th:nth-child(n+2) { font-variant-numeric: tabular-nums; }
+/* Footer links: 40px rows on phones, the printed 0.5rem rhythm from sm up. */
+.af-footer-nav a { display: inline-flex; align-items: center; min-height: 2.5rem; }
+@media (min-width: 640px) { .af-footer-nav { row-gap: 0.5rem; } .af-footer-nav a { min-height: 0; } }
 .af-daily { font-size: 0.8125rem; font-weight: 700; color: var(--af-accent); }
 
 @media (prefers-reduced-motion: reduce) {

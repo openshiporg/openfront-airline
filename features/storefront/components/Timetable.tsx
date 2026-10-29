@@ -27,7 +27,8 @@ export function Timetable({ network, carrierCode }: { network: StorefrontNetwork
   return <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
     {origins.map(origin => <section key={origin} aria-label={`From ${city(origin)}`} className="min-w-0">
       <h3 className="flex items-baseline gap-3 border-b-2 border-[var(--af-accent)] pb-1.5"><span className="af-display text-3xl uppercase">From {city(origin)}</span><span className="text-sm font-bold tracking-[0.06em] text-[var(--af-accent)]">{origin}</span></h3>
-      <table className="w-full text-sm">
+      <table className="af-timetable w-full text-sm">
+        <colgroup><col className="w-[34%]" /><col className="w-[17%]" /><col className="w-[17%]" /><col className="w-[17%]" /><col /></colgroup>
         <thead><tr className="text-left text-xs text-[var(--af-ink-3)] [&>th]:py-2 [&>th]:font-semibold"><th scope="col">To</th><th scope="col">Flight</th><th scope="col">Dep</th><th scope="col">Arr</th><th scope="col"><span className="sr-only">Days of operation</span><span aria-hidden="true">Days</span></th></tr></thead>
         <tbody className="divide-y divide-[var(--af-line)] border-t border-[var(--af-line)]">
           {network.routes.filter(route => route.origin === origin).map(route => {

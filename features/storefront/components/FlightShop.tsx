@@ -193,6 +193,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
   const money = useMemo(() => (amount: number) => formatMinorUnits(amount, selected?.currencyCode ?? carrier.defaultCurrencyCode), [selected?.currencyCode, carrier.defaultCurrencyCode])
   const departureDateTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium', timeStyle: 'short' }), [carrier.defaultTimezone])
   const arrivalTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, timeStyle: 'short' }), [carrier.defaultTimezone])
+  const departureDate = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium' }), [carrier.defaultTimezone])
   const flightDuration = (departure: string, arrival: string) => {
     const minutes = Math.round((Date.parse(arrival) - Date.parse(departure)) / 60_000)
     return Number.isFinite(minutes) && minutes > 0 ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m` : null
@@ -465,11 +466,11 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         return <article key={`${flight.id}:${flight.inventoryBucketId}`} data-selected={isSelected ? 'true' : undefined} className="af-board-row grid gap-3 px-5 py-4 md:grid-cols-[1.1fr_1fr_1fr_1fr_auto] md:items-center md:gap-4">
           <div className="flex items-baseline justify-between gap-3 md:block"><p className="af-board-cell af-signal text-lg font-semibold">{carrier.code} {flight.flightNumber}</p><p className="af-board-cell text-sm text-[var(--af-board-ink-2)]">{flight.originCode}–{flight.destinationCode}</p></div>
           <div className="grid grid-cols-3 gap-3 md:contents">
-            <div><p className="af-board-cell text-xl font-semibold">{arrivalTime.format(new Date(flight.scheduledDepartureAt))}</p><p className="text-xs text-[var(--af-board-ink-2)]">{departureDateTime.format(new Date(flight.scheduledDepartureAt)).replace(/,?\s*\d{1,2}:\d{2}\s*[AP]M$/, '')}</p></div>
+            <div><p className="af-board-cell text-xl font-semibold">{arrivalTime.format(new Date(flight.scheduledDepartureAt))}</p><p className="text-xs text-[var(--af-board-ink-2)]">{departureDate.format(new Date(flight.scheduledDepartureAt))}</p></div>
             <div><p className="af-board-cell text-xl font-semibold">{arrivalTime.format(new Date(flight.scheduledArrivalAt))}</p><p className="text-xs text-[var(--af-board-ink-2)]">{duration ?? '—'}</p></div>
             <div><p className="text-sm font-semibold">{flight.fareBrand.name}</p><p className="af-board-cell text-xs text-[var(--af-board-ink-2)]">{[flight.cabinName, flight.fareBrand.baggagePieces ? `${flight.fareBrand.baggagePieces} bag${flight.fareBrand.baggagePieces === 1 ? '' : 's'}${flight.fareBrand.baggageWeightGrams ? ` ${Math.round(flight.fareBrand.baggageWeightGrams / 1000)} kg` : ''}` : 'No checked bag', `${flight.availability.available} seats`].filter(Boolean).join(' · ')}</p>{flight.fareBrand.description && <p className="mt-1 hidden text-xs text-[var(--af-board-ink-2)] md:block">{flight.fareBrand.description}</p>}</div>
           </div>
-          <div className="flex items-center justify-between gap-4 md:w-auto md:flex-col md:items-end md:gap-2">
+          <div className="flex items-center justify-between gap-4 md:w-36 md:flex-col md:items-end md:gap-2">
             <div className="md:text-right"><p className="af-board-cell text-xl font-semibold">{formatMinorUnits(flight.perTravelerTotalAmount, flight.currencyCode)}</p><p className="af-board-cell text-xs text-[var(--af-board-ink-2)]">{formatMinorUnits(flight.partyTotalAmount, flight.currencyCode)} · {flight.passengerCount} pax</p></div>
             <div className="af-track"><button onClick={() => { setSelected(flight); setHeldOffer(null); bookingAttempt.current = null }} disabled={busy || Boolean(pendingBooking) || intentUnavailable || soldOut} aria-pressed={isSelected} className={`af-pill af-pill-sm ${isSelected ? '' : 'af-pill-primary'}`}>{soldOut ? 'Sold out' : isSelected ? 'Selected' : 'Select'}</button></div>
           </div>
@@ -511,7 +512,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
         <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
       </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Lost your access code?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a new one</button></div></div>}
-    </div> : <p className="px-1 text-sm">Lost your access code? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
+    </div> : <p className="text-sm">Lost your access code? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
     {managedBooking && <section aria-label={`Booking ${managedBooking.recordLocator}`} className="space-y-5">
       <div className="af-card overflow-hidden">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
