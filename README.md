@@ -1,6 +1,10 @@
+<!-- logo -->
+
 # Openfront Airline
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fopenshiporg%2Fopenfront-airline&env=DATABASE_URL%2CSESSION_SECRET%2CS3_BUCKET_NAME%2CS3_REGION%2CS3_ACCESS_KEY_ID%2CS3_SECRET_ACCESS_KEY)
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/openfront-airline)
 
 Openfront Airline is a self-hostable airline retailing and passenger-service application. Customers can explore flight options and manage bookings, while airline teams manage network schedules, dated flights, inventory, offers, passengers, departures, payments, and disruption recovery.
 
@@ -8,12 +12,10 @@ Openfront Airline is a self-hostable airline retailing and passenger-service app
 
 ## Demo
 
-Explore the application locally using the setup instructions below.
-
 | | |
 |---|---|
-| **Public application** | `/` on your development URL |
-| **Dashboard** | `/dashboard` on your development URL |
+| **Storefront** | [airline.openship.org](https://airline.openship.org) |
+| **Dashboard** | [airline.openship.org/dashboard](https://airline.openship.org/dashboard) |
 
 [Learn more →](https://openship.org/products/openfront-airline)
 
