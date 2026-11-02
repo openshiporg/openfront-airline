@@ -165,7 +165,7 @@ ${uniqueViews.map(view => `  "${view}"`).join(',\n')}
 }
 
 function extractUniqueViews(jsonData: any) {
-  let viewsArray: string[] = [];
+  const viewsArray: string[] = [];
   
   for (const key in jsonData) {
     if (jsonData.hasOwnProperty(key)) {

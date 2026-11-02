@@ -138,11 +138,11 @@ function useBlockPopover(
   props: AriaPopoverProps,
   state: OverlayTriggerState
 ): PopoverAria & { updatePosition: () => void } {
-  let { triggerRef, popoverRef, isNonModal, isKeyboardDismissDisabled, ...otherProps } = props
+  const { triggerRef, popoverRef, isNonModal, isKeyboardDismissDisabled, ...otherProps } = props
 
-  let [isSticky, setSticky] = useState(false)
+  const [isSticky, setSticky] = useState(false)
 
-  let { overlayProps, underlayProps } = useOverlay(
+  const { overlayProps, underlayProps } = useOverlay(
     {
       isOpen: state.isOpen,
       onClose: state.close,
@@ -159,8 +159,8 @@ function useBlockPopover(
     if (state.isOpen) {
       const checkForStickiness = () => {
         const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0)
-        let popoverRect = popoverRef.current?.getBoundingClientRect()
-        let triggerRect = triggerRef.current?.getBoundingClientRect()
+        const popoverRect = popoverRef.current?.getBoundingClientRect()
+        const triggerRect = triggerRef.current?.getBoundingClientRect()
         if (popoverRect && triggerRect) {
           setSticky(
             triggerRect.bottom + popoverRect.height + containerPadding * 2 > vh &&
@@ -177,7 +177,7 @@ function useBlockPopover(
     }
   }, [popoverRef, triggerRef, state.isOpen])
 
-  let {
+  const {
     overlayProps: positionProps,
     arrowProps,
     placement,
@@ -193,7 +193,7 @@ function useBlockPopover(
   })
 
   // force update position when the trigger changes
-  let previousBoundingRect = usePrevious(triggerRef.current?.getBoundingClientRect())
+  const previousBoundingRect = usePrevious(triggerRef.current?.getBoundingClientRect())
   useLayoutEffect(() => {
     if (previousBoundingRect) {
       const currentBoundingRect = triggerRef.current?.getBoundingClientRect()

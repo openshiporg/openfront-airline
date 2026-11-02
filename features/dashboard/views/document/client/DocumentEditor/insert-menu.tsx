@@ -156,6 +156,10 @@ export function InsertMenu({ children, text }: { children: ReactNode; text: Text
     return <span>{text.text}</span>
   }
 
+  return <InsertMenuContent text={text}>{children}</InsertMenuContent>
+}
+
+function InsertMenuContent({ children, text }: { children: ReactNode; text: Text }) {
   const editor = useSlate()
   const componentBlocks = useContext(ComponentBlockContext)
   const relationships = useDocumentFieldRelationships()
@@ -248,7 +252,7 @@ export function InsertMenu({ children, text }: { children: ReactNode; text: Text
 
   useEffect(() => {
     const domNode = ReactEditor.toDOMNode(editor, editor)
-    let listener = (event: KeyboardEvent) => listenerRef.current(event)
+    const listener = (event: KeyboardEvent) => listenerRef.current(event)
     domNode.addEventListener('keydown', listener)
     return () => {
       domNode.removeEventListener('keydown', listener)

@@ -116,7 +116,7 @@ function sortRelationships(left, right) {
             )
           }
   
-          let [leftRel, rightRel] = sortRelationships(
+          const [leftRel, rightRel] = sortRelationships(
             { listKey, fieldPath, field },
             { listKey: field.list, fieldPath: field.field, field: foreignField }
           )

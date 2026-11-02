@@ -144,17 +144,9 @@ function useRelationshipFilterValues({
   const foreignIds = getForeignIds(value);
   const where = { id: { in: foreignIds } };
 
-  // If prefetched values are provided, use them
-  if (prefetchedValues) {
-    return {
-      filterValues: prefetchedValues,
-      loading: false,
-    };
-  }
-
-  // Otherwise use SWR to fetch the data
+  // Otherwise use SWR to fetch the data (hook always runs; key is null when prefetched values are provided)
   const { data, error } = useSWR(
-    foreignIds.length && list
+    !prefetchedValues && foreignIds.length && list
       ? [`relationship-filter-${list.key}`, foreignIds.join(",")] // Ensure key is stable string
       : null,
     async () => {
@@ -194,6 +186,14 @@ function useRelationshipFilterValues({
       }
     }
   );
+
+  // If prefetched values are provided, use them
+  if (prefetchedValues) {
+    return {
+      filterValues: prefetchedValues,
+      loading: false,
+    };
+  }
 
   const loading = !data && !error;
   const labelField = list.labelField || "name";
@@ -358,7 +358,7 @@ export const controller = (config: {
         };
       }
       if (config.fieldMeta.many) {
-        let value = (data[config.path] || []).map((x: any) => ({
+        const value = (data[config.path] || []).map((x: any) => ({
           id: x.id,
           label: x.label || x.id,
         }));
@@ -393,14 +393,14 @@ export const controller = (config: {
       if (state.kind === "many") {
         const newAllIds = new Set(state.value.map((x: any) => x.id));
         const initialIds = new Set(state.initialValue.map((x: any) => x.id));
-        let disconnect = state.initialValue
+        const disconnect = state.initialValue
           .filter((x: any) => !newAllIds.has(x.id))
           .map((x: any) => ({ id: x.id }));
-        let connect = state.value
+        const connect = state.value
           .filter((x: any) => !initialIds.has(x.id))
           .map((x: any) => ({ id: x.id }));
         if (disconnect.length || connect.length) {
-          let output: Record<string, any> = {};
+          const output: Record<string, any> = {};
 
           if (disconnect.length) {
             output.disconnect = disconnect;
@@ -429,10 +429,10 @@ export const controller = (config: {
       } else if (state.kind === "cards-view") {
         const currentIdsSet = new Set(state.currentIds);
         const initialIdsSet = new Set(state.initialIds);
-        let disconnect = [...state.initialIds]
+        const disconnect = [...state.initialIds]
           .filter((id: string) => !currentIdsSet.has(id))
           .map((id: string) => ({ id }));
-        let connect = [...state.currentIds]
+        const connect = [...state.currentIds]
           .filter((id: string) => !initialIdsSet.has(id))
           .map((id: string) => ({ id }));
 
