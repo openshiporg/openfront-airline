@@ -190,15 +190,15 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
     setWorking(booking.id); setMessageFailed(false); setMessage('')
     try {
       const amountText = refundAmountValue(booking).trim()
-      const providerReference = refundReferences[booking.id]?.trim()
+      const providerReference = refundReferences[booking.id]?.trim() || `staff-${booking.recordLocator}-${Date.now()}`
       const reason = refundReasons[booking.id]?.trim()
-      if (!amountText || !providerReference || !reason) throw new Error('Refund amount, settlement reference, and reason are required.')
+      if (!amountText || !providerReference || !reason) throw new Error('Refund amount and reason are required.')
       const amount = decimalToMinorUnits(amountText, booking.currencyCode)
       const remaining = remainingRefund(booking)
       if (amount <= 0 || remaining === null || amount > remaining) throw new Error('Enter a positive amount within the currently refundable balance. Reload if the balance is unavailable.')
-      if (!window.confirm(`Record an externally evidenced refund of ${formatMinorUnits(amount, booking.currencyCode)} for ${booking.recordLocator}? Remaining balance: ${formatMinorUnits(remaining, booking.currencyCode)}.`)) return
+      if (!window.confirm(`Refund ${formatMinorUnits(amount, booking.currencyCode)} to the original payment for ${booking.recordLocator}? Card payments are refunded to the card. Remaining balance: ${formatMinorUnits(remaining, booking.currencyCode)}.`)) return
       await mutate(`mutation($id: ID!, $amount: Int!, $reason: String!, $reference: String!, $key: String!) { processBookingRefund(bookingId: $id, amount: $amount, reason: $reason, providerReference: $reference, idempotencyKey: $key) { status } }`, { id: booking.id, amount, reason, reference: providerReference, key: `refund-${crypto.randomUUID()}` })
-      setMessage(`Externally evidenced refund recorded for ${booking.recordLocator}; no provider-side refund was initiated here.`); router.refresh()
+      setMessage(`Refund of ${formatMinorUnits(amount, booking.currencyCode)} issued for ${booking.recordLocator}.`); router.refresh()
     } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Refund failed.') }
     finally { endTask(aggregate) }
   }
@@ -281,9 +281,9 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
           </CommandRow>}
           {['paid', 'partially_refunded'].includes(booking.paymentStatus) && <CommandRow label="Refund">
             <input aria-label={`Refund amount in ${booking.currencyCode} for ${booking.recordLocator}`} placeholder={`${booking.currencyCode} amount`} inputMode="decimal" value={refundAmountValue(booking)} onChange={event => setRefundAmounts(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'tabular-nums  sm:w-32')} />
-            <input aria-label={`Approved refund reference for ${booking.recordLocator}`} value={refundReferences[booking.id] ?? ''} onChange={event => setRefundReferences(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Refund reference" className={cn(rowInput, 'tabular-nums')} />
+            <input aria-label={`Approved refund reference for ${booking.recordLocator}`} value={refundReferences[booking.id] ?? ''} onChange={event => setRefundReferences(values => ({ ...values, [booking.id]: event.target.value }))} placeholder="Reference (manual payments only)" className={cn(rowInput, 'tabular-nums')} />
             <OptionSelect aria-label={`Refund reason for ${booking.recordLocator}`} value={refundReasons[booking.id] ?? ''} onChange={event => setRefundReasons(values => ({ ...values, [booking.id]: event.target.value }))} className={cn(deskInput, 'sm:w-auto')}><option value="">Refund reason</option><option value="customer_request">Customer request</option><option value="disruption">Disruption</option><option value="schedule_change">Schedule change</option><option value="duplicate">Duplicate</option><option value="fraud">Fraud</option><option value="other">Other</option></OptionSelect>
-            <Track><Pill disabled={pending.includes(booking.id) || !refundReasons[booking.id]?.trim()} onClick={() => refund(booking)}>Record refund</Pill></Track>
+            <Track><Pill disabled={pending.includes(booking.id) || !refundReasons[booking.id]?.trim()} onClick={() => refund(booking)}>Refund</Pill></Track>
             <span className="text-xs text-muted-foreground">Remaining <span className="tabular-nums  text-foreground">{formatMinorUnits(remainingRefund(booking), booking.currencyCode)}</span></span>
           </CommandRow>}
           {!['cancelled', 'completed'].includes(booking.status) && <CommandRow label="Access"><Track><Pill size="sm" disabled={pending.includes(booking.id)} onClick={() => reissueAccess(booking)}>New access code</Pill></Track></CommandRow>}
