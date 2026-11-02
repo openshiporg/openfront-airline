@@ -7,6 +7,7 @@ import { keystoneContext } from '../../features/keystone/context'
 import { sensitiveAuthenticationAccounts } from '../../features/keystone/lib/graphql-auth-rate-limit'
 import { maskGraphqlError } from '../../features/keystone/lib/graphql-error-mask'
 import { graphqlDepthLimitRule } from '../../features/keystone/lib/graphql-security'
+import { useDemoGuardErrors } from '../../features/keystone/lib/demo-guard'
 import { durableRequestFingerprint } from '../../features/keystone/lib/request-identity'
 import { consumeDurableRateLimit } from '../../features/keystone/lib/rate-limit'
 import { requestsIntrospection } from '../../features/keystone/lib/anonymous-introspection'
@@ -55,7 +56,7 @@ const yoga = createYoga({
   // hidden behind a logged correlation ID.
   maskedErrors: { maskError: maskGraphqlError },
   multipart: false,
-  plugins: [depthLimitPlugin, anonymousIntrospectionPlugin, authRateLimitPlugin],
+  plugins: [depthLimitPlugin, anonymousIntrospectionPlugin, authRateLimitPlugin, useDemoGuardErrors()],
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
