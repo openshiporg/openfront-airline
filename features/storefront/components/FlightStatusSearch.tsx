@@ -2,6 +2,8 @@
 
 import { FormEvent, useState } from 'react'
 
+import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
+
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { customerSafeMessage } from '@/features/storefront/lib/request-errors'
 import { formatAirportTime } from '@/features/airline/lib/time'
@@ -76,7 +78,7 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
   return <div className="space-y-6">
     <form onSubmit={submit} className="af-card grid gap-4 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-6">
       <label className="af-field"><span className="af-field-label">{carrier.code} flight number</span><input aria-label="Flight number" name="flightNumber" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{1,6}" maxLength={6} required placeholder="101" className="af-input af-input-code text-lg" /></label>
-      <label className="af-field"><span className="af-field-label">Departure date (local)</span><input aria-label="Departure date" name="serviceDate" type="date" defaultValue={initialDate} required className="af-input" /></label>
+      <div className="af-field relative"><span className="af-field-label">Departure date (local)</span><PlatformDateInput aria-label="Departure date" name="serviceDate" defaultValue={initialDate} required className="af-input af-trigger" /></div>
       <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Checking…' : 'Check status'}</button></div>
     </form>
     {message && <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />{message}</p>}

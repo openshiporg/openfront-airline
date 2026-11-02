@@ -154,6 +154,9 @@ select.af-input {
   background-size: 0.3rem 0.3rem, 0.3rem 0.3rem;
   background-repeat: no-repeat;
 }
+.af-input.af-trigger { height: auto; min-height: 2.75rem; border-radius: var(--af-radius); border: 1px solid var(--af-line-2); background: var(--af-card); color: var(--af-ink); font-size: 1rem; padding: 0 0.75rem; }
+.af-input.af-trigger:hover { background: var(--af-card); }
+.af-input.af-trigger:focus-visible { border-color: var(--af-accent); box-shadow: 0 0 0 1px var(--af-accent); }
 .af-input-code { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
 
 /* State marker: a small square, as printed timetable symbols. */
