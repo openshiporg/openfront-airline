@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -207,7 +208,7 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
             {settlementCredential && <div className="space-y-3 border-b px-4 py-3">
               <code className="block overflow-x-auto rounded-lg bg-muted px-3 py-2 font-mono text-xs text-foreground">{settlementCredential.token}</code>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">Expires {new Date(settlementCredential.expiresAt).toLocaleString()}</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">Expires <ViewerTime value={settlementCredential.expiresAt} style="datetime" /></span>
                 <Track>
                   <Pill size="sm" onClick={() => navigator.clipboard.writeText(settlementCredential.token).then(() => setMessage('Settlement credential copied.')).catch(() => setMessage('Copy failed. Select and copy the token below.'))}>Copy once</Pill>
                   <Pill size="sm" variant="danger" disabled={credentialBusy} onClick={() => void revokeSettlementCredential(settlementCredential.credentialId)}>Revoke</Pill>
@@ -219,7 +220,7 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
                 <span className="font-medium text-foreground">{credential.name}</span>
                 <Code>{credential.tokenPreview}</Code>
                 <StatusLabel status={credential.status} />
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">expires {new Date(credential.expiresAt).toLocaleDateString()}</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">expires <ViewerTime value={credential.expiresAt} style="date" /></span>
               </span>
               {credential.status === 'active' && <Track><Pill size="sm" variant="danger" disabled={credentialBusy} onClick={() => void revokeSettlementCredential(credential.id)}>Revoke</Pill></Track>}
             </li>)}</ul>}

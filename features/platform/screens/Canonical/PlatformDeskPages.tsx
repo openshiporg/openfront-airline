@@ -1,3 +1,4 @@
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 import { readBookingWorkspace } from '@/features/platform/lib/booking-workspace'
 import { NO_RECORD_ID } from '@/features/platform/lib/no-cursor'
 import { detailWithReturn } from '@/features/platform/lib/desk-return'
@@ -121,7 +122,7 @@ function SearchFilters({ action, filters, label, statuses = [], hidden = {} }: {
 
 function Failure({ error: _error }: { error: string }) { return <Notice tone="bad">This section could not be loaded. Check your access and try again.</Notice> }
 function Empty({ children }: { children: React.ReactNode }) { return <Well>{children}</Well> }
-function DateText({ value }: { value?: string | null }) { return <>{value ? new Date(value).toLocaleString() : '—'}</> }
+function DateText({ value }: { value?: string | null }) { return <>{value ? formatInZone(value, undefined, "datetime") : '—'}</> }
 function Money({ amount, currency }: { amount?: number | null; currency?: string | null }) { return <>{formatMinorUnits(amount, currency)}</> }
 // Worklist states that are not plain rows: denied, stale, or inconsistent reads, each with a way back.
 function StateNotice({ tone = 'warn', role = 'status', children, href, label }: { tone?: DeskTone; role?: 'alert' | 'status'; children: React.ReactNode; href?: string | null; label?: string }) {
