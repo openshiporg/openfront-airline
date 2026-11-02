@@ -84,6 +84,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         defaultTimezone: String!
         salesEnabled: Boolean!
         storefrontBrandColor: String
+        logoIcon: String
+        logoColor: String
         storefrontHomepageTitle: String
         storefrontHomepageDescription: String
         storefrontConfigured: Boolean!
@@ -254,6 +256,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           storefrontContactEmail: String
           storefrontContactPhone: String
           storefrontServiceHours: String
+          logoIcon: String
+          logoColor: String
         ): Carrier!
         completeCarrierOnboarding(
           name: String!

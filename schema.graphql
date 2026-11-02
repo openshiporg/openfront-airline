@@ -619,6 +619,8 @@ type Carrier {
   status: CarrierStatusType
   directSalesEnabled: Boolean
   storefrontBrandColor: String
+  logoIcon: String
+  logoColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
   storefrontContactEmail: String
@@ -689,6 +691,8 @@ input CarrierWhereInput {
   status: CarrierStatusTypeNullableFilter
   directSalesEnabled: BooleanFilter
   storefrontBrandColor: StringNullableFilter
+  logoIcon: StringFilter
+  logoColor: StringFilter
   storefrontHomepageTitle: StringNullableFilter
   storefrontHomepageDescription: StringNullableFilter
   storefrontContactEmail: StringFilter
@@ -815,6 +819,8 @@ input CarrierOrderByInput {
   status: OrderDirection
   directSalesEnabled: OrderDirection
   storefrontBrandColor: OrderDirection
+  logoIcon: OrderDirection
+  logoColor: OrderDirection
   storefrontHomepageTitle: OrderDirection
   storefrontHomepageDescription: OrderDirection
   storefrontContactEmail: OrderDirection
@@ -835,6 +841,8 @@ input CarrierUpdateInput {
   status: CarrierStatusType
   directSalesEnabled: Boolean
   storefrontBrandColor: String
+  logoIcon: String
+  logoColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
   storefrontContactEmail: String
@@ -947,6 +955,8 @@ input CarrierCreateInput {
   status: CarrierStatusType
   directSalesEnabled: Boolean
   storefrontBrandColor: String
+  logoIcon: String
+  logoColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
   storefrontContactEmail: String
@@ -7156,7 +7166,7 @@ type Mutation {
   createInitialUser(data: CreateInitialUserInput!): UserAuthenticationWithPasswordSuccess!
   sendUserPasswordResetLink(email: String!): Boolean!
   redeemUserPasswordResetToken(email: String!, token: String!, password: String!): RedeemUserPasswordResetTokenResult
-  updateCarrierStorefrontSettings(name: String!, legalName: String!, storefrontBrandColor: String!, storefrontHomepageTitle: String!, storefrontHomepageDescription: String!, storefrontContactEmail: String, storefrontContactPhone: String, storefrontServiceHours: String): Carrier!
+  updateCarrierStorefrontSettings(name: String!, legalName: String!, storefrontBrandColor: String!, storefrontHomepageTitle: String!, storefrontHomepageDescription: String!, storefrontContactEmail: String, storefrontContactPhone: String, storefrontServiceHours: String, logoIcon: String, logoColor: String): Carrier!
   completeCarrierOnboarding(name: String!, legalName: String!, code: String!, currencyCode: String!, timezone: String!, originCode: String!, destinationCode: String!, flightNumber: String!, serviceDate: String!, scheduledDepartureAt: String!, scheduledArrivalAt: String!, capacity: Int!, baseAmount: Int!, taxAmount: Int!): OnboardingProgress!
   dismissCarrierOnboarding: OnboardingStatusResult!
   issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
@@ -7602,14 +7612,16 @@ type PublicCarrierIdentity {
   defaultTimezone: String!
   salesEnabled: Boolean!
   storefrontBrandColor: String
+  logoIcon: String
+  logoColor: String
   storefrontHomepageTitle: String
   storefrontHomepageDescription: String
   storefrontConfigured: Boolean!
   accessRecoveryEnabled: Boolean!
+  onlinePaymentEnabled: Boolean!
   storefrontContactEmail: String
   storefrontContactPhone: String
   storefrontServiceHours: String
-  onlinePaymentEnabled: Boolean!
 }
 
 type AirlineFlightOption {

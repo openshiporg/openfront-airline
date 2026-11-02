@@ -15,6 +15,8 @@ export type PublicCarrierIdentity = {
   defaultCurrencyCode: string
   defaultTimezone: string
   salesEnabled: boolean
+  logoIcon?: string | null
+  logoColor?: string | null
   storefrontBrandColor: string | null
   storefrontHomepageTitle: string | null
   storefrontHomepageDescription: string | null
@@ -33,7 +35,7 @@ export const getStorefrontCarrierIdentity = cache(async (): Promise<PublicCarrie
   const response = await keystoneClient<{ publicCarrierIdentity: PublicCarrierIdentity | null }>(
     `query StorefrontCarrierIdentity($carrierCode: String!) {
       publicCarrierIdentity(carrierCode: $carrierCode) {
-        id code name legalName defaultCurrencyCode defaultTimezone salesEnabled
+        id code name legalName defaultCurrencyCode defaultTimezone salesEnabled logoIcon logoColor
         storefrontBrandColor storefrontHomepageTitle storefrontHomepageDescription storefrontConfigured accessRecoveryEnabled onlinePaymentEnabled storefrontContactEmail storefrontContactPhone storefrontServiceHours
       }
     }`,

@@ -3,6 +3,8 @@ import { checkbox, relationship, select, text } from '@keystone-6/core/fields'
 
 import { freshCarrierFilter, hasFreshPermission, isFreshSignedIn } from '../access'
 import { ONBOARDING_CURRENCIES } from '../lib/currency-policy'
+import { sanitizeStoreLogoSvg } from '../utils/storeLogo'
+import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '../../platform/store-settings/lib/store-logo'
 import { trackingFields } from './trackingFields'
 
 const ownCarrierFilter = (args: any) => freshCarrierFilter(args, '')
@@ -70,6 +72,33 @@ export const Carrier = list({
       ],
       db: { isNullable: true },
       ui: { description: 'Allowlisted public storefront accent color' },
+    }),
+    logoIcon: text({
+      defaultValue: DEFAULT_STORE_LOGO_ICON,
+      hooks: {
+        resolveInput: ({ resolvedData, fieldKey }: any) => {
+          const value = resolvedData[fieldKey]
+          if (value === undefined || value === null || value === '') return value
+          return typeof value === 'string' ? sanitizeStoreLogoSvg(value) : ''
+        },
+        validate: ({ inputData, resolvedData, fieldKey, addValidationError }: any) => {
+          const submitted = inputData?.[fieldKey]
+          if (typeof submitted === 'string' && submitted.trim() && !resolvedData?.[fieldKey]) {
+            addValidationError('Logo must be a valid, safe SVG document')
+          }
+        },
+      },
+      ui: { description: 'Public storefront logo icon (sanitized SVG)' },
+    }),
+    logoColor: text({
+      defaultValue: DEFAULT_STORE_LOGO_COLOR,
+      hooks: {
+        resolveInput: ({ resolvedData, fieldKey }: any) => {
+          const value = resolvedData[fieldKey]
+          return value === undefined ? value : normalizeStoreLogoColor(value)
+        },
+      },
+      ui: { description: 'Logo hue rotation in degrees, 0 to 359' },
     }),
     storefrontHomepageTitle: text({
       db: { isNullable: true },

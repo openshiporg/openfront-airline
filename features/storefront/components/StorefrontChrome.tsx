@@ -8,26 +8,29 @@ import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { storefrontFontVariables } from '@/features/storefront/lib/fonts'
 import { publicNavigation } from '@/features/storefront/lib/public-navigation'
 import { storefrontBrandPalette } from '@/features/storefront/lib/theme'
+import { DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '@/features/platform/store-settings/lib/store-logo'
 
 export type StorefrontRoute = (typeof publicNavigation)[number]['href']
 
-// Untitled UI logo registry mark "45 Degrees", drawn in the carrier's brand colour.
-export function CarrierMark({ className }: { className?: string }) {
-  return <svg aria-hidden="true" viewBox="0 0 24 48" fill="none" className={className}><path d="m0 15.8981h17.3455l-17.061314 17.0613 2.756374 2.7564 17.06134-17.0613v17.3455h.1104l3.7877-3.7877v-15.9638l-4.2485-4.2485h-15.96596l-3.78553995 3.7855z" fill="currentColor" /></svg>
+// The carrier's saved logo icon, always shown beside its name with the saved hue. An empty icon renders the default icon.
+type CarrierLogo = { logoIcon?: string | null; logoColor?: string | null }
+
+export function CarrierMark({ carrier, className }: { carrier: CarrierLogo; className?: string }) {
+  return <span aria-hidden="true" data-testid="carrier-logo" style={{ filter: `hue-rotate(${normalizeStoreLogoColor(carrier.logoColor)}deg)` }} className={`${className ?? ''} [&>svg]:block [&>svg]:h-full [&>svg]:w-full`} dangerouslySetInnerHTML={{ __html: carrier.logoIcon?.trim() || DEFAULT_STORE_LOGO_ICON }} />
 }
 
 // Shown before any carrier exists, so the storefront always has a working header and footer.
 const NEUTRAL_IDENTITY = { name: 'Flights', code: '', legalName: '' }
 
-export function StorefrontLogo({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code'> }) {
+export function StorefrontLogo({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'logoIcon' | 'logoColor'> }) {
   return <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-2.5">
-    <span className="grid size-9 shrink-0 place-items-center rounded-[3px] bg-[var(--af-accent)] text-white"><CarrierMark className="h-6 w-auto" /></span>
+    <CarrierMark carrier={carrier} className="block h-9 w-8 shrink-0" />
     <span className="af-display truncate text-[1.75rem] uppercase">{carrier.name}</span>
     {carrier.code && <span className="hidden h-6 items-center rounded-[2px] border border-[var(--af-line-2)] px-1.5 text-xs font-bold tracking-[0.06em] text-[var(--af-ink-2)] sm:inline-flex">{carrier.code}</span>}
   </Link>
 }
 
-function StorefrontHeader({ carrier, current }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code'>; current?: StorefrontRoute }) {
+function StorefrontHeader({ carrier, current }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'logoIcon' | 'logoColor'>; current?: StorefrontRoute }) {
   return <header className="sticky top-0 z-30 border-b border-[var(--af-line)] bg-[var(--af-card)]">
     <div className="af-container flex h-16 items-center justify-between gap-4">
       <StorefrontLogo carrier={carrier} />
@@ -44,11 +47,11 @@ function StorefrontHeader({ carrier, current }: { carrier: Pick<PublicCarrierIde
   </header>
 }
 
-export function StorefrontFooter({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'legalName'> }) {
+export function StorefrontFooter({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'legalName' | 'logoIcon' | 'logoColor'> }) {
   return <footer className="af-board mt-auto">
     <div className="af-container grid gap-8 py-10 sm:grid-cols-[1fr_auto]">
       <div>
-        <div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-[3px] bg-white text-[var(--af-accent)]"><CarrierMark className="h-5 w-auto" /></span><span className="af-display text-3xl uppercase">{carrier.name}</span></div>
+        <div className="flex items-center gap-2.5"><CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0" /><span className="af-display text-3xl uppercase">{carrier.name}</span></div>
         {carrier.code && <p className="mt-3 text-sm text-[var(--af-board-ink-2)]">{carrier.legalName} · {carrier.code}</p>}
       </div>
       <nav aria-label="Footer" className="af-footer-nav grid grid-cols-2 gap-x-10 text-[0.9375rem]">{publicNavigation.map(item => <Link key={item.href} href={item.href} className="text-[var(--af-board-ink-2)] underline-offset-4 hover:text-white hover:underline">{item.label}</Link>)}</nav>

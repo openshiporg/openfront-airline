@@ -66,7 +66,7 @@ export async function lookupDirectCarrier(prisma: any, carrierCode: string) {
 export async function lookupCarrierIdentity(prisma: any, carrierCode: string) {
   const carrier = await prisma.carrier.findUnique({
     where: { code: carrierCode.trim().toUpperCase() },
-    select: { id: true, code: true, name: true, legalName: true, defaultCurrencyCode: true, defaultTimezone: true, status: true, directSalesEnabled: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true },
+    select: { id: true, code: true, name: true, legalName: true, defaultCurrencyCode: true, defaultTimezone: true, status: true, directSalesEnabled: true, logoIcon: true, logoColor: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true },
   })
   if (!carrier) throw new DomainError('Carrier identity is not configured.')
   const storefrontBrandColor = normalizeStorefrontBrandColor(carrier.storefrontBrandColor)

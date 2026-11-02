@@ -3,6 +3,8 @@ import type { Context } from '.keystone/types'
 import { requireFreshPermission } from '../access'
 import { normalizeStorefrontBrandColor } from '../../airline/lib/branding'
 import { DomainError } from '../lib/domain-error'
+import { normalizeStoreLogoColor } from '../../platform/store-settings/lib/store-logo'
+import { sanitizeStoreLogoSvg } from '../utils/storeLogo'
 
 export type StorefrontSettingsInput = {
   name: string
@@ -13,6 +15,8 @@ export type StorefrontSettingsInput = {
   storefrontContactEmail?: string | null
   storefrontContactPhone?: string | null
   storefrontServiceHours?: string | null
+  logoIcon?: string | null
+  logoColor?: string | null
 }
 
 function optionalText(value: unknown, label: string, max: number) {
@@ -36,6 +40,18 @@ function contactDetails(input: StorefrontSettingsInput) {
   return { storefrontContactEmail, storefrontContactPhone, storefrontServiceHours: optionalText(input.storefrontServiceHours, 'Service hours', 200) }
 }
 
+// Partial saves keep stored fields: a logo field that was not sent is left out of the update.
+function logoDetails(input: StorefrontSettingsInput) {
+  const logo: { logoIcon?: string; logoColor?: string } = {}
+  if (input.logoIcon) {
+    const logoIcon = sanitizeStoreLogoSvg(input.logoIcon)
+    if (!logoIcon) throw new DomainError('Logo must be a valid, safe SVG document.')
+    logo.logoIcon = logoIcon
+  }
+  if (input.logoColor !== undefined && input.logoColor !== null) logo.logoColor = normalizeStoreLogoColor(input.logoColor)
+  return logo
+}
+
 export function normalizeStorefrontSettingsInput(input: StorefrontSettingsInput) {
   const storefrontBrandColor = normalizeStorefrontBrandColor(input.storefrontBrandColor)
   if (!storefrontBrandColor) throw new DomainError('Choose one of the approved storefront colors.')
@@ -46,6 +62,7 @@ export function normalizeStorefrontSettingsInput(input: StorefrontSettingsInput)
     storefrontHomepageTitle: boundedText(input.storefrontHomepageTitle, 'Homepage title', 120),
     storefrontHomepageDescription: boundedText(input.storefrontHomepageDescription, 'Homepage description', 320),
     ...contactDetails(input),
+    ...logoDetails(input),
   }
 }
 
@@ -58,7 +75,7 @@ export async function updateCarrierStorefrontSettings(
   const data = normalizeStorefrontSettingsInput(args)
   // Public identity changes are audited with before/after values, like other privileged carrier changes.
   return (context.prisma as any).$transaction(async (tx: any) => {
-    const before = await tx.carrier.findUniqueOrThrow({ where: { id: actor.carrierId }, select: { name: true, legalName: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true } })
+    const before = await tx.carrier.findUniqueOrThrow({ where: { id: actor.carrierId }, select: { name: true, legalName: true, logoIcon: true, logoColor: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true } })
     const updated = await tx.carrier.update({ where: { id: actor.carrierId }, data })
     const now = new Date()
     await tx.auditEvent.create({ data: {

@@ -14,7 +14,7 @@ export async function getStorefrontCarrierIdentityDirect(): Promise<PublicCarrie
     return {
       id: identity.id, code: identity.code, name: identity.name, legalName: identity.legalName,
       defaultCurrencyCode: identity.defaultCurrencyCode, defaultTimezone: identity.defaultTimezone,
-      salesEnabled: identity.salesEnabled, storefrontBrandColor: identity.storefrontBrandColor,
+      salesEnabled: identity.salesEnabled, logoIcon: (identity as any).logoIcon || null, logoColor: (identity as any).logoColor || null, storefrontBrandColor: identity.storefrontBrandColor,
       storefrontHomepageTitle: identity.storefrontHomepageTitle, storefrontHomepageDescription: identity.storefrontHomepageDescription,
       storefrontConfigured: identity.storefrontConfigured, accessRecoveryEnabled: accessRecoveryEnabled(),
       storefrontContactEmail: (identity as any).storefrontContactEmail || null, storefrontContactPhone: (identity as any).storefrontContactPhone || null, storefrontServiceHours: (identity as any).storefrontServiceHours || null,
