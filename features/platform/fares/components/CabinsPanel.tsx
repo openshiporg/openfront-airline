@@ -7,6 +7,7 @@ import { createCabinAction, updateCabinAction } from '@/features/platform/fares/
 import { CABIN_CLASSES, type CabinRow } from '@/features/platform/fares/lib/types'
 import { DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from '@/features/platform/network/components/DeskForm'
 import { wholeNumber } from '@/features/platform/network/lib/desk-shared'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
 
 type Values = { code: string; name: string; cabinClass: string; displayOrder: string }
 type Errors = Partial<Record<keyof Values, string>>
@@ -87,9 +88,9 @@ export function CabinsPanel({ cabins, total, pager }: { cabins: CabinRow[]; tota
           <input id="cabin-name" value={values.name} onChange={event => setValues(current => ({ ...current, name: event.target.value }))} maxLength={80} className={deskInput} aria-invalid={Boolean(errors.name)} />
         </FormField>
         <FormField label="Cabin class" htmlFor="cabin-class">
-          <select id="cabin-class" value={values.cabinClass} onChange={event => setValues(current => ({ ...current, cabinClass: event.target.value }))} className={deskInput}>
+          <OptionSelect id="cabin-class" value={values.cabinClass} onChange={event => setValues(current => ({ ...current, cabinClass: event.target.value }))} className={deskInput}>
             {CABIN_CLASSES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          </OptionSelect>
         </FormField>
       </FormSheet>
     </DeskSection>

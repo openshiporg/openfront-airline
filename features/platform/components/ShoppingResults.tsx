@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
 import { Notice, Panel, Pill, Route, TitleLine, Track, Well, deskInput } from '@/features/platform/components/desk'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
 
 type Flight = {
   id: string
@@ -66,9 +67,9 @@ export function ShoppingResults({ flights, passengers, defaultTimezone }: { flig
   if (!flights.length) return <Well>No sellable flights match this search.</Well>
   return <div className="min-w-0 space-y-4">
     <label className="flex min-w-0 max-w-sm flex-col gap-1.5 text-xs font-medium text-muted-foreground">Passenger
-      <select className={deskInput} value={passengerId} onChange={event => setPassengerId(event.target.value)}>
+      <OptionSelect className={deskInput} value={passengerId} onChange={event => setPassengerId(event.target.value)}>
         {passengers.map(passenger => <option key={passenger.id} value={passenger.id}>{passenger.givenName} {passenger.familyName}</option>)}
-      </select>
+      </OptionSelect>
     </label>
     {!passengers.length && <Notice tone="warn">No passengers. <Link href="/dashboard/passengers/create" className="font-medium underline underline-offset-2">Create a passenger</Link></Notice>}
     {message && <Notice tone={messageFailed ? 'bad' : 'ok'} role={messageFailed ? 'alert' : 'status'}>{message}</Notice>}

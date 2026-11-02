@@ -7,6 +7,7 @@ import { createAncillaryAction, setAncillaryStatusAction, updateAncillaryAction 
 import { ANCILLARY_TYPES, FULFILLMENT_TYPES, type AncillaryRow } from '@/features/platform/fares/lib/types'
 import { CheckField, DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from '@/features/platform/network/components/DeskForm'
 import { formatMinor, majorToMinor, minorToInput, PRODUCT_TRANSITIONS } from '@/features/platform/network/lib/desk-shared'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
 
 type Values = { code: string; name: string; description: string; type: string; fulfillmentType: string; price: string; tax: string; requiresInventory: boolean }
 type Errors = Partial<Record<keyof Values, string>>
@@ -138,9 +139,9 @@ export function AncillariesPanel({
             <input id="product-code" value={values.code} onChange={set('code')} maxLength={32} autoComplete="off" disabled={editing !== null && editing !== 'new'} className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.code)} />
           </FormField>
           <FormField label="Type" htmlFor="product-type">
-            <select id="product-type" value={values.type} onChange={set('type')} className={deskInput}>
+            <OptionSelect id="product-type" value={values.type} onChange={set('type')} className={deskInput}>
               {ANCILLARY_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </OptionSelect>
           </FormField>
         </div>
         <FormField label="Name" error={errors.name} htmlFor="product-name">
@@ -155,9 +156,9 @@ export function AncillariesPanel({
           </FormField>
         </div>
         <FormField label="Fulfillment" htmlFor="product-fulfillment">
-          <select id="product-fulfillment" value={values.fulfillmentType} onChange={set('fulfillmentType')} className={deskInput}>
+          <OptionSelect id="product-fulfillment" value={values.fulfillmentType} onChange={set('fulfillmentType')} className={deskInput}>
             {FULFILLMENT_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          </OptionSelect>
         </FormField>
         <CheckField label="Requires inventory" checked={values.requiresInventory} onChange={checked => setValues(current => ({ ...current, requiresInventory: checked }))} />
         <FormField label="Description" htmlFor="product-description">

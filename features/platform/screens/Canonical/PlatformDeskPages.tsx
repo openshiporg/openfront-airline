@@ -100,6 +100,9 @@ import {
 } from '@/features/platform/lib/audit-event-worklist'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
 import { Code, DeskSection, DeskTone, Field, FilterBar, Notice, Panel, Pill, Readout, ReadoutStrip, RowLink, StatusLabel, TitleLine, Track, Well, deskInput, statusTone, DeskHeader } from '@/features/platform/components/desk'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
+import { plural } from '@/features/platform/lib/plural'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -111,7 +114,7 @@ function SearchFilters({ action, filters, label, statuses = [], hidden = {} }: {
   return <FilterBar action={action}>
     {Object.entries(hidden).map(([name,value]) => <input type="hidden" key={name} name={name} value={value} />)}
     <Field label={label} className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input type="search" name="q" defaultValue={filters.q} maxLength={120} className={`${deskInput} pl-9`} /></span></Field>
-    {statuses.length > 0 && <Field label="Status" className="sm:w-44"><select name="status" defaultValue={filters.status} className={`${deskInput} capitalize`}><option value="">All</option>{statuses.map(status => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></Field>}
+    {statuses.length > 0 && <Field label="Status" className="sm:w-44"><OptionSelect name="status" defaultValue={filters.status} className={`${deskInput} capitalize`}><option value="">All</option>{statuses.map(status => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</OptionSelect></Field>}
     <Track><Pill type="submit">Search</Pill><Pill asChild><Link href={action}>Clear</Link></Pill></Track>
   </FilterBar>
 }
@@ -158,7 +161,7 @@ export async function PlatformDeparturesPage({ searchParams }: { searchParams?: 
   if (nextCleanupParams && originCode) nextCleanupParams.set('origin', originCode)
   const cleanupNextHref = nextCleanupParams ? `/dashboard/platform/departures?${nextCleanupParams.toString()}` : null
   return <Shell title="Departures" eyebrow="Station" meta={<span className="tabular-nums">{today && serviceDate !== today ? `Next operating day ${serviceDate} (none today)` : serviceDate}{originCode ? ` · ${originCode}` : ' · All stations'}</span>}>
-    <FilterBar><Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={deskInput} /></Field><Field label="Station" className="sm:w-32"><input name="origin" defaultValue={originCode ?? ''} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field><Track><Pill type="submit">Load manifest</Pill></Track></FilterBar>
+    <FilterBar><Field label="Service date" className="sm:w-48"><PlatformDateInput name="date" defaultValue={serviceDate} required /></Field><Field label="Station" className="sm:w-32"><input name="origin" defaultValue={originCode ?? ''} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field><Track><Pill type="submit">Load manifest</Pill></Track></FilterBar>
     {response.success ? <DepartureDesk manifest={response.data.departureManifest} detailBase="/dashboard/platform/departures" cleanupNextHref={cleanupNextHref} /> : <Failure error={response.error} />}
   </Shell>
 }
@@ -188,7 +191,7 @@ export async function PlatformBookingsPage({ searchParams }: { searchParams?: Se
   const bookingNextHref = bookingPage?.nextCursor
     ? bookingWorklistNextHref('/dashboard/platform/bookings', locator, bookingPage.nextCursor)
     : null
-  return <Shell title="Bookings" eyebrow="Reservations" meta={bookingPage ? <span className="tabular-nums ">{bookingPage.totalCount} bookings</span> : undefined}>
+  return <Shell title="Bookings" eyebrow="Reservations" meta={bookingPage ? <span className="tabular-nums ">{plural(bookingPage.totalCount, 'booking')}</span> : undefined}>
     <FilterBar action="/dashboard/platform/bookings"><Field label="Record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input name="locator" defaultValue={locator} placeholder="ABC123" className={`${deskInput} pl-9 tabular-nums uppercase tracking-wider`} /></span></Field><Track><Pill type="submit">Find booking</Pill>{locator && <Pill asChild><Link href="/dashboard/platform/bookings">Clear</Link></Pill>}</Track></FilterBar>
     {response.success ? <BookingDesk offers={response.data.offers} bookings={bookingPage?.items ?? []} bookingCount={bookingPage?.totalCount ?? 0} bookingHasNextPage={bookingPage?.hasNextPage ?? false} bookingNextHref={bookingNextHref} refundCleanupBookings={response.data.refundCleanupBookings.slice(0, 100)} refundCleanupTruncated={response.data.refundCleanupBookingsCount > 100} evidences={response.data.manualPaymentEvidences} sectionErrors={response.sectionErrors} detailBase="/dashboard/platform/bookings" /> : <Failure error="Bookings could not be loaded" />}
   </Shell>
@@ -208,15 +211,15 @@ export async function PlatformPassengersPage({ searchParams }: { searchParams?: 
   const nextPageHref = page?.state === 'ready' && page.nextCursor
     ? withWorklistSearch(passengerServiceHref('/dashboard/platform/passengers', page.nextCursor), filters)
     : null
-  return <Shell title="Passengers & service" eyebrow="Customers" meta={page?.state === 'ready' ? <span className="tabular-nums ">{page.totalCount} passengers</span> : undefined}>
+  return <Shell title="Passengers & service" eyebrow="Customers" meta={page?.state === 'ready' ? <span className="tabular-nums ">{plural(page.totalCount ?? 0, 'passenger')}</span> : undefined}>
     <SearchFilters action="/dashboard/platform/passengers" filters={filters} label="Passenger name or reference" statuses={['active','merged','restricted','archived']} />
     {!response.success ? <><Failure error={response.error} />{firstPageHref && <PageLink href={firstPageHref}>Retry from first page</PageLink>}</>
       : page?.state === 'unavailable' ? <StateNotice role="alert" href={firstPageHref} label="Retry from first page">Passenger records are unavailable under your current access.</StateNotice>
         : page?.state === 'stale' ? <StateNotice href={firstPageHref} label="First page">This page is out of date.</StateNotice>
           : page?.state === 'empty' ? <Empty>No passengers match.</Empty>
             : <div className="space-y-3">
-              {page?.state === 'inconsistent' && <StateNotice href={firstPageHref ?? withWorklistSearch(passengerServiceHref('/dashboard/platform/passengers'), filters)} label="Reload first page">{page.items.length ? 'Passenger rows and their count disagree.' : `No rows returned for ${page.totalCount} passengers.`}</StateNotice>}
-              {page && page.items.length > 0 && <DeskSection title="Passengers" count={page.totalCount ?? undefined} actions={nextPageHref ? <PageLink href={nextPageHref}>Next 100</PageLink> : undefined}><Panel className="divide-y">{page.items.map(passenger => <RowLink key={passenger.id} href={detailWithReturn(`/dashboard/platform/passengers/${passenger.id}`, params)}><div className="min-w-0 flex-1"><TitleLine as="h3" tone={statusTone(passenger.status)} status={passenger.status ?? undefined} className="font-medium">{passenger.givenName ?? 'Name unavailable'} {passenger.familyName ?? ''}</TitleLine><p className="mt-0.5 pl-4"><Code>{passenger.passengerKey ?? 'No key'}</Code>{passenger.preferredLanguage ? <span className="ml-2 text-xs text-muted-foreground">{passenger.preferredLanguage}</span> : null}</p></div><dl className="grid grid-cols-4 gap-4 text-right tabular-nums text-xs "><div><dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Bkg</dt><dd>{passenger.bookingPassengersCount ?? '—'}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Req</dt><dd>{passenger.serviceRequestsCount ?? '—'}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Chk</dt><dd>{passenger.checkInsCount ?? '—'}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Bags</dt><dd>{passenger.bagsCount ?? '—'}</dd></div></dl></RowLink>)}</Panel></DeskSection>}
+              {page?.state === 'inconsistent' && <StateNotice href={firstPageHref ?? withWorklistSearch(passengerServiceHref('/dashboard/platform/passengers'), filters)} label="Reload first page">{page.items.length ? 'Passenger rows and their count disagree.' : `No rows returned for ${plural(page.totalCount ?? 0, 'passenger')}.`}</StateNotice>}
+              {page && page.items.length > 0 && <DeskSection title="Passengers" count={page.totalCount ?? undefined} actions={nextPageHref ? <PageLink href={nextPageHref}>Next 100</PageLink> : undefined}><Panel className="divide-y">{page.items.map(passenger => <RowLink key={passenger.id} href={detailWithReturn(`/dashboard/platform/passengers/${passenger.id}`, params)}><div className="min-w-0 flex-1"><TitleLine as="h3" tone={statusTone(passenger.status)} status={passenger.status ?? undefined} className="font-medium">{passenger.givenName ?? 'Name unavailable'} {passenger.familyName ?? ''}</TitleLine><p className="mt-0.5 pl-4"><Code>{passenger.passengerKey ?? 'No key'}</Code>{passenger.preferredLanguage ? <span className="ml-2 text-xs text-muted-foreground">{passenger.preferredLanguage}</span> : null}</p></div><dl className="grid grid-cols-4 gap-4 text-right tabular-nums text-xs "><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Bkg</dt><dd>{passenger.bookingPassengersCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Req</dt><dd>{passenger.serviceRequestsCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Chk</dt><dd>{passenger.checkInsCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Bags</dt><dd>{passenger.bagsCount ?? '—'}</dd></div></dl></RowLink>)}</Panel></DeskSection>}
             </div>}
   </Shell>
 }
@@ -238,7 +241,7 @@ export async function PlatformDisruptionsPage({ searchParams }: { searchParams?:
   const cursorState = { disruptionCursor, serviceCursor, recoveryFrom: recoveryServicesFrom }
   const serviceNextHref = servicePage?.nextCursor ? recoveryCursorHref('/dashboard/platform/disruptions', cursorState, 'service', servicePage.nextCursor) : null
   const disruptionNextHref = disruptionPage?.nextCursor ? recoveryCursorHref('/dashboard/platform/disruptions', cursorState, 'disruption', disruptionPage.nextCursor) : null
-  return <Shell title="Disruptions" eyebrow="Irregular operations" tone={disruptionPage && (disruptionPage.totalCount ?? 0) > 0 ? 'warn' : undefined} meta={disruptionPage ? <span className="tabular-nums ">{disruptionPage.totalCount ?? 0} disruptions · {servicePage?.totalCount ?? 0} flights</span> : undefined}>
+  return <Shell title="Disruptions" eyebrow="Irregular operations" tone={disruptionPage && (disruptionPage.totalCount ?? 0) > 0 ? 'warn' : undefined} meta={disruptionPage ? <span className="tabular-nums ">{plural(disruptionPage.totalCount ?? 0, 'disruption')} · {plural(servicePage?.totalCount ?? 0, 'flight')}</span> : undefined}>
     {response.success ? <RecoveryDesk key={disruptionCursor ?? 'first'} flights={servicePage?.items ?? []} flightCount={servicePage?.totalCount ?? 0} flightHasNextPage={servicePage?.hasNextPage ?? false} serviceNextHref={serviceNextHref} recoveryServicesFrom={recoveryServicesFrom} disruptions={disruptionPage?.items ?? []} disruptionCount={disruptionPage?.totalCount ?? 0} disruptionHasNextPage={disruptionPage?.hasNextPage ?? false} disruptionNextHref={disruptionNextHref} detailBase="/dashboard/platform/disruptions" /> : <Failure error={response.error} />}
   </Shell>
 }
@@ -367,14 +370,14 @@ export async function PlatformOffersPage({ searchParams }: { searchParams: Searc
   const offerPage = response.success ? offerWorklistPage(response.data.offers, response.data.offersCount, offerCursor) : null
   const nextOffersHref = offerPage?.nextCursor ? offerWorklistHref('/dashboard/platform/offers', shoppingState, offerPage.nextCursor) : null
   const latestOffersHref = offerCursor ? offerWorklistHref('/dashboard/platform/offers', shoppingState) : null
-  return <Shell title="Offers" eyebrow="Retailing" meta={offerPage ? <span className="tabular-nums ">{offerPage.totalCount} offers</span> : undefined}>
-    <FilterBar action="/dashboard/platform/offers" method="get"><Field label="From" className="sm:w-28"><input name="origin" defaultValue={origin} maxLength={3} required pattern="[A-Za-z]{3}" placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field><Field label="To" className="sm:w-28"><input name="destination" defaultValue={destination} maxLength={3} required pattern="[A-Za-z]{3}" placeholder="BOS" className={`${deskInput} tabular-nums uppercase`} /></Field><Field label="Date" className="sm:w-44"><input name="date" type="date" defaultValue={date} required className={deskInput} /></Field><Track><Pill type="submit" variant="primary">Search inventory</Pill></Track></FilterBar>
+  return <Shell title="Offers" eyebrow="Retailing" meta={offerPage ? <span className="tabular-nums ">{plural(offerPage.totalCount, 'offer')}</span> : undefined}>
+    <FilterBar action="/dashboard/platform/offers" method="get"><Field label="From" className="sm:w-28"><input name="origin" defaultValue={origin} maxLength={3} required pattern="[A-Za-z]{3}" placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field><Field label="To" className="sm:w-28"><input name="destination" defaultValue={destination} maxLength={3} required pattern="[A-Za-z]{3}" placeholder="BOS" className={`${deskInput} tabular-nums uppercase`} /></Field><Field label="Date" className="sm:w-44"><PlatformDateInput name="date" defaultValue={date} required /></Field><Track><Pill type="submit" variant="primary">Search inventory</Pill></Track></FilterBar>
     {!response.success ? <><Failure error={response.error} />{latestOffersHref && <PageLink href={latestOffersHref}>Latest offers</PageLink>}</> : <>
       {search ? <ShoppingResults flights={response.data.airlineFlightOptions} passengers={response.data.passengers} defaultTimezone={response.data.authenticatedItem?.carrier?.defaultTimezone ?? 'UTC'} /> : <Empty>Enter a route and date.</Empty>}
       <DeskSection title="Recent offers" count={offerPage?.totalCount ?? 0} actions={offerPage?.hasNextPage && nextOffersHref ? <PageLink href={nextOffersHref}>Next 50</PageLink> : undefined}>
         {offerPage?.items.length ? <Panel className="divide-y">{offerPage.items.map(offer => <RowLink key={offer.id} href={detailWithReturn(`/dashboard/platform/offers/${offer.id}`, params)}><div className="min-w-0"><TitleLine as="h3" tone={statusTone(offer.status)} status={offer.status} className="tabular-nums text-sm font-semibold tracking-wide">{offer.offerNumber}</TitleLine><p className="mt-0.5 pl-4 text-xs text-muted-foreground">{offer.source} · {offer.passengersCount} pax · expires <DateText value={offer.expiresAt} /></p></div><div className="text-right"><p className="tabular-nums text-sm font-semibold "><Money amount={offer.totalAmount} currency={offer.currencyCode} /></p><StatusLabel status={offer.status} /></div></RowLink>)}</Panel>
           : offerPage?.state === 'stale' ? <StateNotice href={latestOffersHref} label="Latest offers">This page is out of date.</StateNotice>
-            : offerPage?.state === 'inconsistent' ? <StateNotice href={offerWorklistHref('/dashboard/platform/offers', shoppingState)} label="Reload">No rows returned for {offerPage.totalCount} offers.</StateNotice>
+            : offerPage?.state === 'inconsistent' ? <StateNotice href={offerWorklistHref('/dashboard/platform/offers', shoppingState)} label="Reload">No rows returned for {plural(offerPage.totalCount, 'offer')}.</StateNotice>
               : <Empty>No offers yet.</Empty>}
       </DeskSection>
     </>}

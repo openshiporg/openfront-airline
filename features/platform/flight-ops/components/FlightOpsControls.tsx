@@ -8,6 +8,7 @@ import { Field, Notice, Pill, Route, StatusLabel, Track, deskInput } from '@/fea
 import { updateFlightOperationsAction } from '@/features/platform/flight-ops/actions/flight-operations'
 import { airportLocalToInstant, airportZoneLabel, instantToAirportLocal } from '@/features/platform/flight-ops/lib/airport-time'
 import type { FlightOperationsInput } from '@/features/platform/flight-ops/lib/types'
+import { PlatformDateTimeInput } from '@/features/platform/components/PlatformDateTime'
 
 export type FlightOpsFlight = {
   id: string
@@ -166,7 +167,7 @@ export function FlightOpsControls({ flight, canManage }: { flight: FlightOpsFlig
                 <Field label="Gate"><input value={draft.departureGate} maxLength={20} onChange={e => setDraft({ ...draft, departureGate: e.target.value })} className={`${deskInput} tabular-nums uppercase`} /></Field>
               </div>
               {TIME_FIELDS.filter(entry => entry.side === 'origin').map(entry => (
-                <Field key={entry.field} label={entry.label}><input type="datetime-local" value={draft[entry.field]} onChange={e => setDraft({ ...draft, [entry.field]: e.target.value })} className={`${deskInput} tabular-nums `} /></Field>
+                <Field key={entry.field} label={entry.label}><PlatformDateTimeInput value={draft[entry.field]} onChange={value => ((e: { target: { value: string } }) => setDraft({ ...draft, [entry.field]: e.target.value }))({ target: { value } })} /></Field>
               ))}
             </fieldset>
             <fieldset className="space-y-3">
@@ -176,7 +177,7 @@ export function FlightOpsControls({ flight, canManage }: { flight: FlightOpsFlig
                 <Field label="Gate"><input value={draft.arrivalGate} maxLength={20} onChange={e => setDraft({ ...draft, arrivalGate: e.target.value })} className={`${deskInput} tabular-nums uppercase`} /></Field>
               </div>
               {TIME_FIELDS.filter(entry => entry.side === 'destination').map(entry => (
-                <Field key={entry.field} label={entry.label}><input type="datetime-local" value={draft[entry.field]} onChange={e => setDraft({ ...draft, [entry.field]: e.target.value })} className={`${deskInput} tabular-nums `} /></Field>
+                <Field key={entry.field} label={entry.label}><PlatformDateTimeInput value={draft[entry.field]} onChange={value => ((e: { target: { value: string } }) => setDraft({ ...draft, [entry.field]: e.target.value }))({ target: { value } })} /></Field>
               ))}
             </fieldset>
             {message && <Notice tone={message.tone}>{message.text}</Notice>}

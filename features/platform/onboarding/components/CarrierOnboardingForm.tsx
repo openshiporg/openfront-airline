@@ -8,6 +8,8 @@ import { Code, DeskSection, Field, Notice, Panel, Pill, StatusLabel, TitleLine, 
 import onboardingContract from '../seed.json'
 import { AIRPORT_CATALOG } from '@/features/airline/lib/airport-catalog'
 import { decimalToMinorUnits } from '@/features/keystone/lib/money'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { PlatformDateInput, PlatformDateTimeInput } from '@/features/platform/components/PlatformDateTime'
 
 // Prices are entered in the carrier currency (129.00) and sent in minor units; unreadable input sends -1 so the
 // server's own validation message comes back.
@@ -168,19 +170,19 @@ export function CarrierOnboardingForm({ initialCarrier, initialServiceDate, onEx
           <Field label="Carrier name"><input className={deskInput} name="name" defaultValue={initialCarrier?.name ?? ''} required /></Field>
           <Field label="Legal name"><input className={deskInput} name="legalName" defaultValue={initialCarrier?.legalName ?? ''} required /></Field>
           <Field label="Carrier code"><input className={cn(deskInput, 'font-mono uppercase tabular-nums')} name="code" defaultValue={initialCarrier?.code ?? ''} maxLength={3} required /></Field>
-          <Field label="Currency"><select className={cn(deskInput, 'font-mono')} name="currencyCode" defaultValue={initialCarrier?.defaultCurrencyCode ?? 'USD'} required>{[...new Set([...onboardingContract.supportedCurrencies, initialCarrier?.defaultCurrencyCode ?? 'USD'])].map(currency => <option key={currency} value={currency}>{currency}</option>)}</select></Field>
+          <Field label="Currency"><OptionSelect className={cn(deskInput, 'font-mono')} name="currencyCode" defaultValue={initialCarrier?.defaultCurrencyCode ?? 'USD'} required>{[...new Set([...onboardingContract.supportedCurrencies, initialCarrier?.defaultCurrencyCode ?? 'USD'])].map(currency => <option key={currency} value={currency}>{currency}</option>)}</OptionSelect></Field>
           <Field label="Timezone" className="sm:col-span-2"><input className={cn(deskInput, 'font-mono')} name="timezone" defaultValue={initialCarrier?.defaultTimezone ?? 'America/New_York'} required /></Field>
         </div>
       </DeskSection>
 
       <DeskSection title={step('02', 'First sellable service')}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Origin"><select name="originCode" defaultValue="JFK" required className={cn(deskInput, 'font-mono')}>{airportOptions.map(airport => <option key={airport.code} value={airport.code}>{airport.code} · {airport.city}</option>)}</select></Field>
-          <Field label="Destination"><select name="destinationCode" defaultValue="BOS" required className={cn(deskInput, 'font-mono')}>{airportOptions.map(airport => <option key={airport.code} value={airport.code}>{airport.code} · {airport.city}</option>)}</select></Field>
+          <Field label="Origin"><OptionSelect name="originCode" defaultValue="JFK" required className={cn(deskInput, 'font-mono')}>{airportOptions.map(airport => <option key={airport.code} value={airport.code}>{airport.code} · {airport.city}</option>)}</OptionSelect></Field>
+          <Field label="Destination"><OptionSelect name="destinationCode" defaultValue="BOS" required className={cn(deskInput, 'font-mono')}>{airportOptions.map(airport => <option key={airport.code} value={airport.code}>{airport.code} · {airport.city}</option>)}</OptionSelect></Field>
           <Field label="Flight number"><input name="flightNumber" defaultValue="101" maxLength={6} required className={cn(deskInput, 'font-mono uppercase tabular-nums')} /></Field>
-          <Field label="Service date"><input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(value => `${next}T${value.slice(11)}`); setArrival(value => { const dayOffset = Math.round((Date.parse(value.slice(0, 10)) - Date.parse(serviceDate)) / 86_400_000); const day = new Date(Date.parse(next) + (Number.isFinite(dayOffset) ? dayOffset : 0) * 86_400_000).toISOString().slice(0, 10); return `${day}T${value.slice(11)}` }) }} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
-          <Field label="Departure (carrier time)"><input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
-          <Field label="Arrival (carrier time)"><input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
+          <Field label="Service date"><PlatformDateInput value={serviceDate} required onChange={value => ((event: { target: { value: string } }) => { const next = event.target.value; setServiceDate(next); setDeparture(value => `${next}T${value.slice(11)}`); setArrival(value => { const dayOffset = Math.round((Date.parse(value.slice(0, 10)) - Date.parse(serviceDate)) / 86_400_000); const day = new Date(Date.parse(next) + (Number.isFinite(dayOffset) ? dayOffset : 0) * 86_400_000).toISOString().slice(0, 10); return `${day}T${value.slice(11)}` }) })({ target: { value } })} /></Field>
+          <Field label="Departure (carrier time)"><PlatformDateTimeInput value={departure} required onChange={setDeparture} /></Field>
+          <Field label="Arrival (carrier time)"><PlatformDateTimeInput value={arrival} required onChange={setArrival} /></Field>
           <Field label="Capacity"><input type="number" name="capacity" defaultValue={30} min={1} max={300} required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
           <Field label="Base fare per traveler"><input name="baseAmount" inputMode="decimal" defaultValue="129.00" required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>
           <Field label="Tax per traveler"><input name="taxAmount" inputMode="decimal" defaultValue="25.80" required className={cn(deskInput, 'font-mono tabular-nums')} /></Field>

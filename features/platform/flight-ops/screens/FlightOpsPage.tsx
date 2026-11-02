@@ -6,6 +6,7 @@ import { Shell } from '@/features/platform/screens/Canonical/PlatformDeskPages'
 import { Code, DeskSection, Field, FilterBar, Notice, Panel, Pill, Readout, ReadoutStrip, Route, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
 import { FlightOpsControls, type FlightOpsFlight } from '@/features/platform/flight-ops/components/FlightOpsControls'
 import { formatAirportTime, instantToAirportLocal } from '@/features/platform/flight-ops/lib/airport-time'
+import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -74,7 +75,7 @@ function TimeTriple({ scheduled, estimated, actual, timezone, referenceDay }: { 
     <dl className="grid grid-cols-3 gap-2 tabular-nums text-xs ">
       {cells.map(cell => (
         <div key={cell.label} className="min-w-0">
-          <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{cell.label}</dt>
+          <dt className="text-xs uppercase tracking-wider text-muted-foreground">{cell.label}</dt>
           <dd className={cell.value ? 'text-foreground' : 'text-muted-foreground'}>{cell.value || '--'}</dd>
         </div>
       ))}
@@ -162,7 +163,7 @@ export async function FlightOpsPage({ searchParams }: { searchParams?: SearchPar
   const meta = <span className="tabular-nums ">{serviceDate}{station ? ` / ${station}` : ' / All stations'}</span>
   const filters = (
     <FilterBar action={BASE}>
-      <Field label="Service date" className="sm:w-48"><input type="date" name="date" defaultValue={serviceDate} required className={`${deskInput} tabular-nums `} /></Field>
+      <Field label="Service date" className="sm:w-48"><PlatformDateInput name="date" defaultValue={serviceDate} required /></Field>
       <Field label="Station" className="sm:w-32"><input name="station" defaultValue={rawStation} maxLength={3} placeholder="JFK" className={`${deskInput} tabular-nums uppercase`} /></Field>
       <Track><Pill type="submit">Load</Pill><Pill asChild><Link href={BASE}>Today</Link></Pill></Track>
     </FilterBar>

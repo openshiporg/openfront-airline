@@ -69,6 +69,9 @@ import {
   type FareBrandReadScope,
   type FareBrandWorklistPage,
 } from '@/features/platform/lib/provisioning-fare-brand'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { PlatformDateInput, PlatformDateTimeInput } from '@/features/platform/components/PlatformDateTime'
+import { plural } from '@/features/platform/lib/plural'
 
 type Schedule = { id: string; flightNumber: string; departureLocalTime?: string | null; arrivalLocalTime?: string | null; route: { origin: { iataCode: string }; destination: { iataCode: string } } }
 type Flight = { id: string; flightNumber: string; serviceDate: string; scheduledDepartureAt: string; status: string; carrier?: { id: string } | null; origin: { iataCode: string }; destination: { iataCode: string }; inventoryBuckets?: Array<{ id: string; status: string; authorized: number; capacity: number; sold: number; held: number; blocked: number; bookingClassCode: string }>; inventoryBucketsOverflow?: boolean }
@@ -732,7 +735,7 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
     title="Provision dated flight"
     count={scheduleWorklist?.state === 'ready' ? (scheduleWorklist.totalCount ?? undefined) : undefined}
     actions={scheduleWorklist?.state === 'ready' ? <div className="flex flex-wrap items-center gap-2">
-      <span className="tabular-nums text-xs  text-muted-foreground">{scheduleWorklist.pageItemCount} schedules on page</span>
+      <span className="tabular-nums text-xs  text-muted-foreground">{plural(scheduleWorklist.pageItemCount, 'schedule')} on page</span>
       <PageLinks firstHref={scheduleFirstHref} nextHref={scheduleNextHref} nextLabel="Next 100" />
     </div> : undefined}
   >
@@ -764,10 +767,10 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
       <Panel>
         <form onSubmit={provision} className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
           <label className={cn(fieldLabel, 'sm:col-span-2')}>Published schedule
-            <select value={scheduleId} onChange={event => selectSchedule(event.target.value)} required className={cn(deskInput, 'tabular-nums ')}>
+            <OptionSelect value={scheduleId} onChange={event => selectSchedule(event.target.value)} required className={cn(deskInput, 'tabular-nums ')}>
               <option value="">Select a schedule</option>
               {schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.flightNumber} · {schedule.route.origin.iataCode}–{schedule.route.destination.iataCode}</option>)}
-            </select>
+            </OptionSelect>
           </label>
           <div className={fieldLabel}>
             <label htmlFor="cabin-search">Search cabins</label>
@@ -780,10 +783,10 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
             <label htmlFor="provisioning-cabin-select" className="flex items-baseline justify-between gap-2">Cabin
               {cabinPage.state === 'ready' && <span className="tabular-nums font-normal ">{cabinPage.items.length} of {cabinPage.totalCount}</span>}
             </label>
-            <select id="provisioning-cabin-select" value={selectedCabinId} onChange={event => selectCabin(event.target.value)} disabled={cabinPage.state !== 'ready' && cabinPage.state !== 'overflow'} required className={deskInput}>
+            <OptionSelect id="provisioning-cabin-select" value={selectedCabinId} onChange={event => selectCabin(event.target.value)} disabled={cabinPage.state !== 'ready' && cabinPage.state !== 'overflow'} required className={deskInput}>
               <option value="">Select a cabin</option>
               {cabinPage.items.map(cabin => <option key={cabin.id} value={cabin.id}>{cabin.code} · {cabin.name}</option>)}
-            </select>
+            </OptionSelect>
             {(cabinCursorStack.length > 0 || cabinPage.hasNextPage) && <Track className="self-start">
               {cabinCursorStack.length > 0 && <Pill size="sm" onClick={previousCabinPage} disabled={cabinPage.state === 'loading'}><ChevronLeft />Previous {CABIN_WORKLIST_PAGE_SIZE}</Pill>}
               {cabinPage.hasNextPage && <Pill size="sm" onClick={nextCabinPage} disabled={cabinPage.state === 'loading'}>Next {CABIN_WORKLIST_PAGE_SIZE}<ChevronRight /></Pill>}
@@ -800,19 +803,19 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
             <label htmlFor="fare-brand-select" className="flex items-baseline justify-between gap-2">Fare brand
               {selectedCabinId && fareBrandPage.state === 'ready' && <span className="tabular-nums font-normal ">{fareBrandPage.items.length} of {fareBrandPage.totalCount}</span>}
             </label>
-            <select id="fare-brand-select" value={selectedFareBrandId} onChange={event => setFareBrandId(event.target.value)} disabled={!selectedCabinId || (fareBrandPage.state !== 'ready' && fareBrandPage.state !== 'overflow')} required className={deskInput}>
+            <OptionSelect id="fare-brand-select" value={selectedFareBrandId} onChange={event => setFareBrandId(event.target.value)} disabled={!selectedCabinId || (fareBrandPage.state !== 'ready' && fareBrandPage.state !== 'overflow')} required className={deskInput}>
               <option value="">{!selectedCabinId && (cabinPage.state === 'ready' || cabinPage.state === 'overflow') ? 'Select a cabin first' : 'Select a fare brand'}</option>
               {compatibleBrands.map(brand => <option key={brand.id} value={brand.id}>{brand.code} · {brand.name}</option>)}
-            </select>
+            </OptionSelect>
             {staleFareBrandSelection && <span role="alert" className="text-xs font-normal text-red-700 dark:text-red-300">Previous fare brand is no longer on this page.</span>}
             {(fareBrandCursorStack.length > 0 || fareBrandPage.hasNextPage) && <Track className="self-start">
               {fareBrandCursorStack.length > 0 && <Pill size="sm" onClick={previousFareBrandPage} disabled={fareBrandPage.state === 'loading'}><ChevronLeft />Previous {FARE_BRAND_WORKLIST_PAGE_SIZE}</Pill>}
               {fareBrandPage.hasNextPage && <Pill size="sm" onClick={nextFareBrandPage} disabled={fareBrandPage.state === 'loading'}>Next {FARE_BRAND_WORKLIST_PAGE_SIZE}<ChevronRight /></Pill>}
             </Track>}
           </div>
-          <label className={fieldLabel}>Service date<input type="date" value={serviceDate} onChange={event => { const next = event.target.value; setServiceDate(next); setDeparture(`${next}T09:00`); setArrival(`${next}T10:20`) }} required className={cn(deskInput, 'tabular-nums ')} /></label>
-          <label className={fieldLabel}>Departure ({defaultTimezone})<input type="datetime-local" value={departure} onChange={event => setDeparture(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
-          <label className={fieldLabel}>Arrival ({defaultTimezone})<input type="datetime-local" value={arrival} onChange={event => setArrival(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
+          <label className={fieldLabel}>Service date<PlatformDateInput value={serviceDate} required onChange={value => ((event: { target: { value: string } }) => { const next = event.target.value; setServiceDate(next); setDeparture(`${next}T09:00`); setArrival(`${next}T10:20`) })({ target: { value } })} /></label>
+          <label className={fieldLabel}>Departure ({defaultTimezone})<PlatformDateTimeInput value={departure} required onChange={setDeparture} /></label>
+          <label className={fieldLabel}>Arrival ({defaultTimezone})<PlatformDateTimeInput value={arrival} required onChange={setArrival} /></label>
           <label className={fieldLabel}>Capacity<input type="number" min={1} max={300} value={capacity} onChange={event => setCapacity(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>
           <label className={fieldLabel}>Currency<input value={currencyCode} onChange={event => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required className={cn(deskInput, 'tabular-nums uppercase ')} /></label>
           <label className={fieldLabel}>Base (minor units)<input type="number" min={0} value={baseAmount} onChange={event => setBaseAmount(event.target.value)} required className={cn(deskInput, 'tabular-nums ')} /></label>

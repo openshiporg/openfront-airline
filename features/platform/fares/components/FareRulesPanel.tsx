@@ -7,6 +7,8 @@ import { createFareRuleAction, setFareRuleStatusAction, updateFareRuleAction } f
 import type { FareBrandOption, FareRouteOption, FareRuleRow } from '@/features/platform/fares/lib/types'
 import { CheckField, DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from '@/features/platform/network/components/DeskForm'
 import { dateInput, formatMinor, majorToMinor, minorToInput, PRODUCT_TRANSITIONS, wholeNumber } from '@/features/platform/network/lib/desk-shared'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
 
 type Values = {
   fareBrandId: string
@@ -183,16 +185,16 @@ export function FareRulesPanel({
         {values && (
           <>
             <FormField label="Fare brand" error={errors.fareBrandId} htmlFor="rule-brand">
-              <select id="rule-brand" value={values.fareBrandId} onChange={set('fareBrandId')} className={deskInput} aria-invalid={Boolean(errors.fareBrandId)}>
+              <OptionSelect id="rule-brand" value={values.fareBrandId} onChange={set('fareBrandId')} className={deskInput} aria-invalid={Boolean(errors.fareBrandId)}>
                 <option value="">Select fare brand</option>
                 {brandOptions.map(brand => <option key={brand.id} value={brand.id}>{brand.code} {brand.name} ({brand.status})</option>)}
-              </select>
+              </OptionSelect>
             </FormField>
             <FormField label="Route" htmlFor="rule-route">
-              <select id="rule-route" value={values.routeId} onChange={set('routeId')} className={`${deskInput} tabular-nums`}>
+              <OptionSelect id="rule-route" value={values.routeId} onChange={set('routeId')} className={`${deskInput} tabular-nums`}>
                 <option value="">All routes</option>
                 {routeOptions.map(route => <option key={route.id} value={route.id}>{route.origin?.iataCode ?? '---'}-{route.destination?.iataCode ?? '---'} ({route.status})</option>)}
-              </select>
+              </OptionSelect>
             </FormField>
             <FormField label="Fare basis pattern" error={errors.fareBasisPattern} htmlFor="rule-basis">
               <input id="rule-basis" value={values.fareBasisPattern} onChange={set('fareBasisPattern')} maxLength={32} autoComplete="off" placeholder="Y*" className={`${deskInput} tabular-nums uppercase`} aria-invalid={Boolean(errors.fareBasisPattern)} />
@@ -225,10 +227,10 @@ export function FareRulesPanel({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Effective from" htmlFor="rule-from">
-                <input id="rule-from" type="date" value={values.effectiveFrom} onChange={set('effectiveFrom')} className={`${deskInput} tabular-nums `} />
+                <PlatformDateInput id="rule-from" value={values.effectiveFrom} onChange={value => setValues(current => current ? { ...current, effectiveFrom: value } : current)} />
               </FormField>
               <FormField label="Effective to" error={errors.effectiveTo} htmlFor="rule-to">
-                <input id="rule-to" type="date" value={values.effectiveTo} onChange={set('effectiveTo')} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.effectiveTo)} />
+                <PlatformDateInput id="rule-to" value={values.effectiveTo} aria-invalid={Boolean(errors.effectiveTo)} onChange={value => setValues(current => current ? { ...current, effectiveTo: value } : current)} />
               </FormField>
             </div>
           </>

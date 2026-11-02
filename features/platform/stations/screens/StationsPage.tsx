@@ -17,6 +17,7 @@ import {
   deskInput,
 } from '@/features/platform/components/desk'
 import { NewStationAssignment, StationAssignmentActions } from '@/features/platform/stations/components/StationAssignmentForms'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -185,7 +186,7 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
             <Pill key={tab.value || 'all'} asChild size="sm" active={status === tab.value}>
               <Link href={hrefWith(filters, { status: tab.value })} aria-current={status === tab.value ? 'page' : undefined}>
                 {tab.label}
-                {tab.count != null && <span className="tabular-nums text-[11px]  text-muted-foreground">{tab.count}</span>}
+                {tab.count != null && <span className="tabular-nums text-xs  text-muted-foreground">{tab.count}</span>}
               </Link>
             </Pill>
           ))}
@@ -194,20 +195,20 @@ export async function StationsPage({ searchParams }: { searchParams?: SearchPara
         <FilterBar action={PATH}>
           {status && <input type="hidden" name="status" value={status} />}
           <Field label="Airport" className="sm:w-56">
-            <select name="airport" defaultValue={airport} className={`${deskInput} tabular-nums`}>
+            <OptionSelect name="airport" defaultValue={airport} className={`${deskInput} tabular-nums`}>
               <option value="">All airports</option>
               {airportOptions.map(option => (
                 <option key={option.id} value={option.iataCode ?? ''}>{option.iataCode} {option.city || option.name || ''}</option>
               ))}
-            </select>
+            </OptionSelect>
           </Field>
           <Field label="User" className="sm:flex-1">
-            <select name="user" defaultValue={user} className={deskInput}>
+            <OptionSelect name="user" defaultValue={user} className={deskInput}>
               <option value="">All users</option>
               {userOptions.map(option => (
                 <option key={option.id} value={option.id}>{option.name || option.email || option.id}</option>
               ))}
-            </select>
+            </OptionSelect>
           </Field>
           <Track>
             <Pill type="submit">Filter</Pill>

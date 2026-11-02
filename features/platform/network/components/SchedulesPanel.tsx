@@ -9,6 +9,9 @@ import { dateInput, FLIGHT_NUMBER_PATTERN, SCHEDULE_TRANSITIONS, TIME_PATTERN, W
 import type { RouteOption, ScheduleRow } from '@/features/platform/network/lib/types'
 import { cn } from '@/lib/utils'
 import { DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from './DeskForm'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { PlatformDateInput, PlatformTimeInput } from '@/features/platform/components/PlatformDateTime'
+import { plural } from '@/features/platform/lib/plural'
 
 type Values = {
   routeId: string
@@ -37,7 +40,7 @@ function DayChips({ days }: { days: number[] }) {
           key={day.value}
           aria-hidden="true"
           className={cn(
-            'inline-flex h-5 w-8 items-center justify-center rounded-md tabular-nums text-[10px] font-medium ',
+            'inline-flex h-5 w-8 items-center justify-center rounded-md tabular-nums text-xs font-medium ',
             days.includes(day.value) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground/60',
           )}
         >
@@ -74,7 +77,7 @@ function ScheduleItem({ schedule, onEdit }: { schedule: ScheduleRow; onEdit: () 
         </span>
         <DayChips days={scheduleDays(schedule.daysOfWeek)} />
         <span className="tabular-nums ">{dateInput(schedule.effectiveFrom) || 'Open'} / {dateInput(schedule.effectiveTo) || 'Open'}</span>
-        <span className="tabular-nums ">{schedule.instancesCount ?? 0} flights</span>
+        <span className="tabular-nums ">{plural(schedule.instancesCount ?? 0, 'flight')}</span>
         <Code>{schedule.scheduleKey}</Code>
       </div>
     </DeskRow>
@@ -200,22 +203,22 @@ export function SchedulesPanel({
         {values && (
           <>
             <FormField label="Route" error={errors.routeId} htmlFor="schedule-route">
-              <select id="schedule-route" value={values.routeId} onChange={event => update('routeId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.routeId)}>
+              <OptionSelect id="schedule-route" value={values.routeId} onChange={event => update('routeId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.routeId)}>
                 <option value="">Select route</option>
                 {routeOptions.map(route => (
                   <option key={route.id} value={route.id}>{route.origin?.iataCode ?? '---'}-{route.destination?.iataCode ?? '---'} ({route.status})</option>
                 ))}
-              </select>
+              </OptionSelect>
             </FormField>
             <FormField label="Flight number" error={errors.flightNumber} htmlFor="schedule-flight">
               <input id="schedule-flight" value={values.flightNumber} onChange={event => update('flightNumber', event.target.value)} maxLength={9} autoComplete="off" className={`${deskInput} tabular-nums uppercase `} aria-invalid={Boolean(errors.flightNumber)} />
             </FormField>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Departure (local)" error={errors.departureLocalTime} htmlFor="schedule-departure">
-                <input id="schedule-departure" type="time" value={values.departureLocalTime} onChange={event => update('departureLocalTime', event.target.value.slice(0, 5))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.departureLocalTime)} />
+                <PlatformTimeInput id="schedule-departure" value={values.departureLocalTime} aria-invalid={Boolean(errors.departureLocalTime)} onChange={value => ((event: { target: { value: string } }) => update('departureLocalTime', event.target.value.slice(0, 5)))({ target: { value } })} />
               </FormField>
               <FormField label="Arrival (local)" error={errors.arrivalLocalTime} htmlFor="schedule-arrival">
-                <input id="schedule-arrival" type="time" value={values.arrivalLocalTime} onChange={event => update('arrivalLocalTime', event.target.value.slice(0, 5))} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.arrivalLocalTime)} />
+                <PlatformTimeInput id="schedule-arrival" value={values.arrivalLocalTime} aria-invalid={Boolean(errors.arrivalLocalTime)} onChange={value => ((event: { target: { value: string } }) => update('arrivalLocalTime', event.target.value.slice(0, 5)))({ target: { value } })} />
               </FormField>
             </div>
             <FormField label="Arrival day">
@@ -238,10 +241,10 @@ export function SchedulesPanel({
             </FormField>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Effective from" htmlFor="schedule-from">
-                <input id="schedule-from" type="date" value={values.effectiveFrom} onChange={event => update('effectiveFrom', event.target.value)} className={`${deskInput} tabular-nums `} />
+                <PlatformDateInput id="schedule-from" value={values.effectiveFrom} onChange={value => ((event: { target: { value: string } }) => update('effectiveFrom', event.target.value))({ target: { value } })} />
               </FormField>
               <FormField label="Effective to" error={errors.effectiveTo} htmlFor="schedule-to">
-                <input id="schedule-to" type="date" value={values.effectiveTo} onChange={event => update('effectiveTo', event.target.value)} className={`${deskInput} tabular-nums `} aria-invalid={Boolean(errors.effectiveTo)} />
+                <PlatformDateInput id="schedule-to" value={values.effectiveTo} aria-invalid={Boolean(errors.effectiveTo)} onChange={value => ((event: { target: { value: string } }) => update('effectiveTo', event.target.value))({ target: { value } })} />
               </FormField>
             </div>
           </>

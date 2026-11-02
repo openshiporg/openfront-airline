@@ -8,6 +8,7 @@ import type { BookingReceipt } from '@/features/airline/lib/booking-receipt'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
 import { formatAirportTime } from '@/features/airline/lib/time'
 import { Code, DeskSection, Facts, Notice, Panel, Pill, Route, RowLink, StatusLabel, TitleLine, Track, Well, statusTone } from '@/features/platform/components/desk'
+import { plural } from '@/features/platform/lib/plural'
 
 type Desk = 'schedules' | 'inventory' | 'offers' | 'bookings' | 'passengers' | 'departures' | 'disruptions' | 'payments' | 'manifests' | 'settings'
 
@@ -216,7 +217,7 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
       {data.bookingPassengers?.length ? <Panel className="divide-y overflow-hidden">
         {data.bookingPassengers.slice(0,20).map(link => <div key={link.id} className="min-w-0">
           {link.booking?.recordLocator
-            ? <RowLink href={bookingHref(link.booking.recordLocator)}><Code className="text-sm font-semibold text-foreground">{link.booking.recordLocator}</Code><span className="tabular-nums text-xs  text-muted-foreground">{link.booking.segments?.length ?? 0} segments</span></RowLink>
+            ? <RowLink href={bookingHref(link.booking.recordLocator)}><Code className="text-sm font-semibold text-foreground">{link.booking.recordLocator}</Code><span className="tabular-nums text-xs  text-muted-foreground">{plural(link.booking.segments?.length ?? 0, 'segment')}</span></RowLink>
             : <div className="px-4 py-3 text-sm text-muted-foreground">Booking unavailable</div>}
           {link.booking?.segments?.slice(0,20).map(segment => segment.flightInstance?.serviceDate
             ? <RowLink key={segment.id} className="py-2 pl-8" href={`/dashboard/platform/departures?date=${encodeURIComponent(segment.flightInstance.serviceDate.slice(0,10))}&origin=${encodeURIComponent(segment.originCode)}`}><span className="flex items-center gap-3"><Route from={segment.originCode} to={segment.destinationCode} /><Code>{segment.flightInstance.serviceDate.slice(0,10)}</Code></span><span className="text-xs font-medium">Station manifest</span></RowLink>

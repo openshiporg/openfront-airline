@@ -7,6 +7,8 @@ import { createFareBrandAction, setFareBrandStatusAction, updateFareBrandAction 
 import { baggageOf, type CabinOption, type FareBrandRow } from '@/features/platform/fares/lib/types'
 import { DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from '@/features/platform/network/components/DeskForm'
 import { PRODUCT_TRANSITIONS, wholeNumber } from '@/features/platform/network/lib/desk-shared'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { plural } from '@/features/platform/lib/plural'
 
 type Values = { code: string; name: string; description: string; cabinId: string; displayOrder: string; pieces: string; weightKg: string }
 type Errors = Partial<Record<keyof Values, string>>
@@ -40,7 +42,7 @@ function BrandItem({ brand, onEdit }: { brand: FareBrandRow; onEdit: () => void 
         <span className="tabular-nums ">
           {baggage.pieces === 0 ? 'No checked bags' : `${baggage.pieces} x ${baggage.maxWeightGrams ? formatKg(baggage.maxWeightGrams) : 'bag'}`}
         </span>
-        <span className="tabular-nums ">{brand.rulesCount ?? 0} rules</span>
+        <span className="tabular-nums ">{plural(brand.rulesCount ?? 0, 'rule')}</span>
         <span className="tabular-nums">Position {(brand.displayOrder ?? 0) + 1}</span>
       </div>
       {brand.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{brand.description}</p>}
@@ -152,10 +154,10 @@ export function FareBrandsPanel({
           <input id="brand-name" value={values.name} onChange={set('name')} maxLength={80} className={deskInput} aria-invalid={Boolean(errors.name)} />
         </FormField>
         <FormField label="Cabin" error={errors.cabinId} htmlFor="brand-cabin">
-          <select id="brand-cabin" value={values.cabinId} onChange={set('cabinId')} className={deskInput} aria-invalid={Boolean(errors.cabinId)}>
+          <OptionSelect id="brand-cabin" value={values.cabinId} onChange={set('cabinId')} className={deskInput} aria-invalid={Boolean(errors.cabinId)}>
             <option value="">Select cabin</option>
             {cabinOptions.map(cabin => <option key={cabin.id} value={cabin.id}>{cabin.code} {cabin.name}</option>)}
-          </select>
+          </OptionSelect>
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Included bags" error={errors.pieces} htmlFor="brand-pieces">

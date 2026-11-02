@@ -8,6 +8,8 @@ import { createRouteAction, setRouteStatusAction, updateRouteAction } from '@/fe
 import { ROUTE_TRANSITIONS, wholeNumber } from '@/features/platform/network/lib/desk-shared'
 import type { AirportOption, RouteRow } from '@/features/platform/network/lib/types'
 import { CheckField, DeskRow, FormField, FormSheet, TransitionPills, useDeskAction } from './DeskForm'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { plural } from '@/features/platform/lib/plural'
 
 type Values = { originId: string; destinationId: string; distance: string; connection: string; isInternational: boolean }
 type Errors = Partial<Record<'originId' | 'destinationId' | 'distance' | 'connection', string>>
@@ -44,7 +46,7 @@ function RouteItem({ route, onEdit }: { route: RouteRow; onEdit: () => void }) {
         <span className="tabular-nums ">{route.distanceKilometers != null ? `${route.distanceKilometers.toLocaleString('en-US')} km` : 'No distance'}</span>
         <span>{route.isInternational ? 'International' : 'Domestic'}</span>
         {route.minimumConnectionMinutes != null && <span className="tabular-nums ">MCT {route.minimumConnectionMinutes} min</span>}
-        <span className="tabular-nums ">{route.schedulesCount ?? 0} schedules</span>
+        <span className="tabular-nums ">{plural(route.schedulesCount ?? 0, 'schedule')}</span>
       </div>
     </DeskRow>
   )
@@ -156,16 +158,16 @@ export function RoutesPanel({
         onSubmit={submit}
       >
         <FormField label="Origin" error={errors.originId} htmlFor="route-origin">
-          <select id="route-origin" value={values.originId} disabled={locked} onChange={event => pickAirport('originId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.originId)}>
+          <OptionSelect id="route-origin" value={values.originId} disabled={locked} onChange={event => pickAirport('originId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.originId)}>
             <option value="">Select airport</option>
             {options.map(airport => <option key={airport.id} value={airport.id}>{airportLabel(airport)}</option>)}
-          </select>
+          </OptionSelect>
         </FormField>
         <FormField label="Destination" error={errors.destinationId} htmlFor="route-destination">
-          <select id="route-destination" value={values.destinationId} disabled={locked} onChange={event => pickAirport('destinationId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.destinationId)}>
+          <OptionSelect id="route-destination" value={values.destinationId} disabled={locked} onChange={event => pickAirport('destinationId', event.target.value)} className={`${deskInput} tabular-nums`} aria-invalid={Boolean(errors.destinationId)}>
             <option value="">Select airport</option>
             {options.map(airport => <option key={airport.id} value={airport.id}>{airportLabel(airport)}</option>)}
-          </select>
+          </OptionSelect>
         </FormField>
         <FormField label="Route key">
           <Code className="text-[13px] text-foreground">{carrierCode || '--'}:{origin?.iataCode ?? '---'}:{destination?.iataCode ?? '---'}</Code>

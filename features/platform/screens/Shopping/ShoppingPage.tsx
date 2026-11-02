@@ -1,6 +1,7 @@
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { ShoppingResults } from '@/features/platform/components/ShoppingResults'
+import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
 
 const query = `query OperatorShopping($origin: String!, $destination: String!, $date: String!) {
   authenticatedItem { ... on User { carrier { defaultTimezone } } }
@@ -25,7 +26,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         <form className="mb-6 grid gap-3 rounded-[4px] border bg-card p-4 sm:grid-cols-4" method="get">
           <label className="text-sm font-medium">From<input name="origin" defaultValue={origin} className="mt-2 w-full rounded-[4px] border bg-background px-3 py-2 uppercase" maxLength={3} /></label>
           <label className="text-sm font-medium">To<input name="destination" defaultValue={destination} className="mt-2 w-full rounded-[4px] border bg-background px-3 py-2 uppercase" maxLength={3} /></label>
-          <label className="text-sm font-medium">Date<input name="date" type="date" defaultValue={date} className="mt-2 w-full rounded-[4px] border bg-background px-3 py-2" /></label>
+          <label className="text-sm font-medium">Date<PlatformDateInput name="date" defaultValue={date} /></label>
           <button className="self-end rounded-[4px] bg-primary px-4 py-2 font-medium text-primary-foreground">Search</button>
         </form>
         {!response.success && <p className="mb-4 rounded-[4px] bg-destructive/10 px-3 py-2 text-sm">{response.error}</p>}

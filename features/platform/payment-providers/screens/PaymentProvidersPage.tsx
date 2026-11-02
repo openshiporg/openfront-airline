@@ -5,6 +5,7 @@ import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { isEvidenceOnlyManualProvider } from '@/features/keystone/lib/bounded-payment-policy'
 import { Code, DeskHeader, type DeskTone, Notice, Panel, Pill, TitleLine, Track, Well } from '@/features/platform/components/desk'
 import { NewManualProvider, NewStripeProvider, PaymentProviderActions } from '@/features/platform/payment-providers/components/PaymentProviderControls'
+import { plural } from '@/features/platform/lib/plural'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -93,7 +94,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
                 <Pill key={tab.value || 'all'} asChild size="sm" active={status === tab.value}>
                   <Link href={tab.value ? `${PATH}?status=${tab.value}` : PATH} aria-current={status === tab.value ? 'page' : undefined}>
                     {tab.label}
-                    {tab.count != null && <span className="tabular-nums text-[11px]  text-muted-foreground">{tab.count}</span>}
+                    {tab.count != null && <span className="tabular-nums text-xs  text-muted-foreground">{tab.count}</span>}
                   </Link>
                 </Pill>
               ))}
@@ -117,7 +118,7 @@ export async function PaymentProvidersPage({ searchParams }: { searchParams?: Se
                           <Code className="text-foreground">{provider.code}</Code>
                           <span>{adapter}</span>
                           <span>{evidenceOnly ? 'Evidence only' : provider.adapterType === 'manual' ? 'Configuration not evidence-only' : provider.adapterType === 'stripe' ? 'Card payments online' : 'Not installed'}</span>
-                          <span className="tabular-nums ">{provider.paymentsCount ?? 0} payments</span>
+                          <span className="tabular-nums ">{plural(provider.paymentsCount ?? 0, 'payment')}</span>
                         </p>
                         <p className="pl-4"><Code className="break-all">{provider.providerKey}</Code></p>
                       </div>

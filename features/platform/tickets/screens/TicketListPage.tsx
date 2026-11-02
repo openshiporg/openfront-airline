@@ -9,6 +9,7 @@ import { Code, DeskSection, Field, FilterBar, Notice, Panel, Pill, TitleLine, Tr
 import { TicketStatusLabel, ticketTone } from '@/features/platform/tickets/components/TicketStatus'
 import { StatusTrack } from '@/features/platform/tickets/components/StatusTrack'
 import { TICKETING_ACTOR_QUERY, TICKET_STATUSES, canReadTickets, statusText, type TicketStatus, type TicketingActor } from '@/features/platform/tickets/lib/tickets'
+import { plural } from '@/features/platform/lib/plural'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -101,7 +102,7 @@ export async function TicketListPage({ searchParams }: { searchParams?: SearchPa
   const returnParams = { q, status }
 
   return (
-    <Shell title="Tickets" eyebrow="Ticketing" actions={bookingsLink} meta={<span className="tabular-nums ">{response.data.all ?? 0} tickets</span>}>
+    <Shell title="Tickets" eyebrow="Ticketing" actions={bookingsLink} meta={<span className="tabular-nums ">{plural(response.data.all ?? 0, 'ticket')}</span>}>
       {filters}
       <StatusTrack label="Ticket status" current={status} options={tabs} hrefFor={value => hrefWith({ status: value })} />
       {cursor && <Track><Pill asChild size="sm"><Link href={hrefWith({})}>First page</Link></Pill></Track>}

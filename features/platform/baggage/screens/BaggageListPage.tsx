@@ -8,6 +8,7 @@ import { Code, DeskSection, Field, FilterBar, Notice, Panel, Pill, Route, RowLin
 import { BagStatusLabel, bagTone } from '@/features/platform/baggage/components/BagStatus'
 import { StatusTrack } from '@/features/platform/baggage/components/StatusTrack'
 import { BAG_STATUSES, formatKg } from '@/features/platform/baggage/lib/bag-actions'
+import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -81,7 +82,7 @@ export async function BaggageListPage({ searchParams }: { searchParams?: SearchP
     <FilterBar action={BASE}>
       {status && <input type="hidden" name="status" value={status} />}
       <Field label="Tag number or record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input type="search" name="q" defaultValue={q} maxLength={60} className={`${deskInput} pl-9 tabular-nums uppercase`} /></span></Field>
-      <Field label="Flight date" className="sm:w-48"><input type="date" name="date" defaultValue={date} className={`${deskInput} tabular-nums `} /></Field>
+      <Field label="Flight date" className="sm:w-48"><PlatformDateInput name="date" defaultValue={date} /></Field>
       <Track><Pill type="submit">Search</Pill><Pill asChild><Link href={BASE}>Clear</Link></Pill></Track>
     </FilterBar>
   )

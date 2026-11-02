@@ -9,6 +9,8 @@ import {
   setStationAssignmentStatus,
   updateStationAssignment,
 } from '@/features/platform/stations/actions/stationAssignments'
+import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { PlatformDateTimeInput } from '@/features/platform/components/PlatformDateTime'
 
 export type StationCapabilities = { canCheckIn: boolean; canAcceptBags: boolean; canBoard: boolean }
 
@@ -67,10 +69,10 @@ function ValidityFields({ from, until, onFrom, onUntil }: { from: string; until:
   return (
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       <Field label="Valid from">
-        <input type="datetime-local" value={from} onChange={event => onFrom(event.target.value)} className={`${deskInput} tabular-nums `} />
+        <PlatformDateTimeInput value={from} onChange={value => ((event: { target: { value: string } }) => onFrom(event.target.value))({ target: { value } })} />
       </Field>
       <Field label="Valid until">
-        <input type="datetime-local" value={until} onChange={event => onUntil(event.target.value)} className={`${deskInput} tabular-nums `} />
+        <PlatformDateTimeInput value={until} onChange={value => ((event: { target: { value: string } }) => onUntil(event.target.value))({ target: { value } })} />
       </Field>
     </div>
   )
@@ -138,20 +140,20 @@ export function NewStationAssignment({
         <h2 className="text-sm font-semibold text-foreground">New assignment</h2>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <Field label="User">
-            <select required value={userId} onChange={event => setUserId(event.target.value)} className={deskInput}>
+            <OptionSelect required value={userId} onChange={event => setUserId(event.target.value)} className={deskInput}>
               <option value="">Select user</option>
               {users.map(user => (
                 <option key={user.id} value={user.id}>{user.name || user.email || user.id}{user.name && user.email ? ` (${user.email})` : ''}</option>
               ))}
-            </select>
+            </OptionSelect>
           </Field>
           <Field label="Airport">
-            <select required value={airportId} onChange={event => setAirportId(event.target.value)} className={`${deskInput} tabular-nums`}>
+            <OptionSelect required value={airportId} onChange={event => setAirportId(event.target.value)} className={`${deskInput} tabular-nums`}>
               <option value="">Select airport</option>
               {airports.map(airport => (
                 <option key={airport.id} value={airport.id}>{airport.iataCode} {airport.city || airport.name || ''}</option>
               ))}
-            </select>
+            </OptionSelect>
           </Field>
         </div>
         <CapabilityToggles value={capabilities} onChange={setCapabilities} />

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import { Code, DeskSection, Meter, Notice, Panel, Pill, Track } from '@/features/platform/components/desk'
 import { demoNetworkSummary, useDemoNetwork } from '../hooks/useDemoNetwork'
+import { plural } from '@/features/platform/lib/plural'
 
 // The full template: shows what the demo network creates, then loads it through the operator's own setup commands.
 export function DemoNetworkSetup({ carrierId, onBusyChange, onBack }: { carrierId: string; onBusyChange?: (busy: boolean) => void; onBack?: () => void }) {
@@ -32,7 +33,7 @@ export function DemoNetworkSetup({ carrierId, onBusyChange, onBack }: { carrierI
           <span className="font-mono text-xs tabular-nums text-muted-foreground">{route.departure}–{route.arrival} ET · {route.capacity} seats · ${route.baseFare} + ${route.tax}</span>
         </li>)}</ul>
       </Panel>
-      <p className="mt-2 text-xs text-muted-foreground">Daily for the next {summary.serviceDays} days: {summary.flights} dated flights across {summary.airports.length} airports, an Economy cabin with a Standard fare (seat selection, one checked bag), station access at each origin and the manual settlement providers. Direct sales are switched on.</p>
+      <p className="mt-2 text-xs text-muted-foreground">Daily for the next {plural(summary.serviceDays, 'day')}: {summary.flights} dated flights across {plural(summary.airports.length, 'airport')}, an Economy cabin with a Standard fare (seat selection, one checked bag), station access at each origin and the manual settlement providers. Direct sales are switched on.</p>
     </DeskSection>
 
     {progress.phase !== 'idle' && <div className="space-y-2">

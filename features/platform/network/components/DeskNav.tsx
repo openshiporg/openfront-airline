@@ -46,7 +46,7 @@ export function StatusTabLinks({
     <Track aria-label="Status">
       <Pill asChild size="sm" active={!current} aria-current={!current ? 'page' : undefined}>
         <Link href={deskHref(base, { ...query, status: null, page: null })}>
-          All<span className="tabular-nums text-[11px]  text-muted-foreground">{total}</span>
+          All<span className="tabular-nums text-xs  text-muted-foreground">{total}</span>
         </Link>
       </Pill>
       {statuses.map(status => (
@@ -54,7 +54,7 @@ export function StatusTabLinks({
           <Link href={deskHref(base, { ...query, status, page: null })} className="capitalize">
             <StatusDot tone={statusTone(status)} className="size-1.5 shadow-none" />
             {status}
-            <span className="tabular-nums text-[11px]  text-muted-foreground">{counts[status] ?? 0}</span>
+            <span className="tabular-nums text-xs  text-muted-foreground">{counts[status] ?? 0}</span>
           </Link>
         </Pill>
       ))}

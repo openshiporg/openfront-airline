@@ -115,7 +115,7 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
             <Pill key={tab.value || 'all'} asChild size="sm" active={status === tab.value}>
               <Link href={hrefWith(filters, { status: tab.value, page: 1 })} aria-current={status === tab.value ? 'page' : undefined}>
                 {tab.label}
-                {tab.count != null && <span className="tabular-nums text-[11px]  text-muted-foreground">{tab.count}</span>}
+                {tab.count != null && <span className="tabular-nums text-xs  text-muted-foreground">{tab.count}</span>}
               </Link>
             </Pill>
           ))}
