@@ -57,11 +57,21 @@ test('demo + identity changes refused', async () => {
 });
 
 test('demo + locked credential lists refused', async () => {
-  for (const key of ['PaymentProvider', 'ProviderConnection', 'IntegrationProvider', 'WebhookEndpoint', 'MachineCredential']) {
+  for (const key of ['ProviderConnection', 'IntegrationProvider', 'WebhookEndpoint', 'MachineCredential']) {
     await refused(run(key, 'update', DEMO, { item: { id: 'x' }, inputData: { credentials: {} } }));
     await refused(run(key, 'create', DEMO, { inputData: {} }));
     await refused(run(key, 'delete', DEMO, { item: { id: 'x' } }));
   }
+});
+
+test('demo + PaymentProvider: keys and selectors refused, name/status/configuration allowed', async () => {
+  const item = { id: 'p', name: 'Stripe', code: 'stripe', status: 'active', credentials: {}, createPaymentFunction: null };
+  for (const field of ['code', 'providerKey', 'adapterType', 'credentials', 'createPaymentFunction', 'capturePaymentFunction', 'refundPaymentFunction', 'getPaymentStatusFunction', 'handleWebhookFunction'])
+    await refused(run('PaymentProvider', 'update', DEMO, { item, inputData: { [field]: 'x' } }));
+  await run('PaymentProvider', 'update', DEMO, { item, inputData: { code: 'stripe', createPaymentFunction: '' } });
+  await run('PaymentProvider', 'update', DEMO, { item, inputData: { name: 'Stripe QA', status: 'inactive', configuration: { a: 1 } } });
+  await refused(run('PaymentProvider', 'create', DEMO, { inputData: { name: 'X' } }));
+  await refused(run('PaymentProvider', 'delete', DEMO, { item }));
 });
 
 test('demo + delete of a business record refused, create and update allowed', async () => {

@@ -45,7 +45,13 @@ export const DEMO_GUARD_POLICY: DemoGuardPolicy = {
   User: { kind: 'identity', protectedFields: [...IDENTITY_FIELDS, 'carrier', 'approvedAgent'] },
   Role: { kind: 'locked' },
   // Provider credentials, webhook URLs/secrets and machine tokens.
-  PaymentProvider: { kind: 'locked' },
+  // Name, status and configuration stay editable; keys, selectors and adapter are refused, as are create/delete.
+  PaymentProvider: {
+    kind: 'fields',
+    fields: ['providerKey', 'code', 'adapterType', 'credentials', 'createPaymentFunction', 'capturePaymentFunction',
+      'refundPaymentFunction', 'getPaymentStatusFunction', 'handleWebhookFunction'],
+    allowCreateDelete: false,
+  },
   ProviderConnection: { kind: 'locked' },
   IntegrationProvider: { kind: 'locked' },
   WebhookEndpoint: { kind: 'locked' },
