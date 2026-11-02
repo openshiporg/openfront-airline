@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -6,7 +7,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { decimalToMinorUnits, formatMinorUnits } from '@/features/keystone/lib/money'
 import { cn } from '@/lib/utils'
-import { formatAirportTime } from '@/features/airline/lib/time'
 import { Code, DeskSection, Notice, Panel, Pill, Route, StatusDot, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
 
 import type { Offer, Booking, RefundCleanupBooking, Evidence } from '@/features/airline/lib/operator-bookings'
@@ -248,12 +248,12 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
               <p className="break-words font-medium text-foreground">{booking.passengers?.length ? booking.passengers.map(entry => `${entry.passenger?.givenName ?? ''} ${entry.passenger?.familyName ?? ''}`.trim() + (entry.passengerType && entry.passengerType !== 'adult' ? ` (${entry.passengerType === 'child' ? 'child' : 'infant'})` : '')).join(', ') : <span className="text-muted-foreground">Travelers restricted</span>}{(booking.passengersCount ?? 0) > (booking.passengers?.length ?? 0) ? ` +${(booking.passengersCount ?? 0) - (booking.passengers?.length ?? 0)}` : ''}</p>
               <p className="break-words text-xs text-muted-foreground">{[booking.contactEmail, booking.contactPhone].filter(Boolean).join(' · ') || 'No contact'}</p>
             </div>
-            {booking.segments?.length ? <ul className="min-w-0 space-y-1">{booking.segments.map(segment => <li key={segment.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"><span className="w-12 font-semibold tabular-nums">{segment.marketingFlightNumber}</span><Route from={segment.originCode} to={segment.destinationCode} /><span className="tabular-nums text-muted-foreground">{formatAirportTime(segment.scheduledDepartureAt, 'UTC')}</span></li>)}</ul> : <span className="text-xs text-muted-foreground">No segments</span>}
+            {booking.segments?.length ? <ul className="min-w-0 space-y-1">{booking.segments.map(segment => <li key={segment.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"><span className="w-12 font-semibold tabular-nums">{segment.marketingFlightNumber}</span><Route from={segment.originCode} to={segment.destinationCode} /><span className="tabular-nums text-muted-foreground"><ViewerTime value={segment.scheduledDepartureAt} style="datetime" /></span></li>)}</ul> : <span className="text-xs text-muted-foreground">No segments</span>}
             <div className="flex min-w-0 flex-col gap-0.5">
               <StatusLabel status={booking.status} />
               <StateLabel label="Pay" status={booking.paymentStatus} />
               <StateLabel label="Ticket" status={booking.ticketingStatus} />
-              {booking.paymentStatus === 'unpaid' && booking.metadata?.paymentDueAt && <span className="text-xs text-amber-700 dark:text-amber-300">Pay by <span className="tabular-nums">{formatAirportTime(booking.metadata.paymentDueAt, 'UTC')}</span></span>}
+              {booking.paymentStatus === 'unpaid' && booking.metadata?.paymentDueAt && <span className="text-xs text-amber-700 dark:text-amber-300">Pay by <span className="tabular-nums"><ViewerTime value={booking.metadata.paymentDueAt} style="datetime" /></span></span>}
             </div>
             <span className="font-semibold tabular-nums text-foreground lg:text-right">{formatMinorUnits(booking.totalAmount, booking.currencyCode)}</span>
             <div className="flex lg:justify-end">
@@ -318,7 +318,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             <StateLabel label="Pay" status={booking.paymentStatus} />
             <StateLabel label="Ticket" status={booking.ticketingStatus} />
           </div>
-          <span className="tabular-nums text-xs  text-muted-foreground">{formatAirportTime(booking.updatedAt, 'UTC')}</span>
+          <span className="tabular-nums text-xs  text-muted-foreground"><ViewerTime value={booking.updatedAt} style="datetime" /></span>
         </div>
         <p className="text-xs font-medium text-muted-foreground">{booking.status === 'cancelled' ? 'Cancelled · residual state' : 'Refund/void marked · cancellation review'}</p>
         {booking.segments.length ? <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1.5">{booking.segments.map(segment => <li key={segment.id} className="inline-flex items-baseline gap-2"><span className="tabular-nums text-xs  text-muted-foreground">{segment.sequence}</span><Route from={segment.originCode} to={segment.destinationCode} /><StatusLabel status={segment.status} /></li>)}</ul> : <p className="text-xs text-muted-foreground">No segments</p>}
