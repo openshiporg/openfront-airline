@@ -55,10 +55,28 @@ export function verifiedInternalIdentity(
   return safeEqual(signature, expected) ? `forwarded:${identity}` : null
 }
 
+/**
+ * Railway's HTTP edge overwrites X-Real-IP with the connecting client before forwarding (a caller-sent value is
+ * replaced; grocery proved this live), while the socket peer is one of several changing edge addresses. So on
+ * Railway (RAILWAY_ENVIRONMENT, set by the platform) a single valid X-Real-IP from a non-loopback peer is the client.
+ * Loopback callers are this app's own server and are handled by the signed internal identity instead.
+ */
+export function railwayEdgeClientAddress(request: RequestLike) {
+  if (!process.env.RAILWAY_ENVIRONMENT) return null
+  const peer = normalizeAddress(request.socket?.remoteAddress ?? '')
+  if (!peer || /^(?:127\.|::1$)/.test(peer)) return null
+  const raw = request.headers?.['x-real-ip']
+  const value = normalizeAddress(String(Array.isArray(raw) ? raw[0] ?? '' : raw ?? ''))
+  if (!value || value.length > 64 || value.includes(',') || net.isIP(value) === 0) return null
+  return value.toLowerCase()
+}
+
 export function trustedClientAddress(request: RequestLike) {
-  // 1) verified internal identity (loopback + valid HMAC), 2) existing trusted-proxy logic, 3) socket.
+  // 1) verified internal identity (loopback + valid HMAC), 2) Railway edge X-Real-IP, 3) trusted-proxy logic, 4) socket.
   const internal = verifiedInternalIdentity(request.headers ?? {}, request.socket?.remoteAddress)
   if (internal) return internal
+  const edge = railwayEdgeClientAddress(request)
+  if (edge) return edge
   const peer = normalizeAddress(request.socket?.remoteAddress ?? '')
   if (!peer || net.isIP(peer) === 0) return 'unknown'
   const trusted = configuredTrustedProxies()
