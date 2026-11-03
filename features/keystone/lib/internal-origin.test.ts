@@ -178,3 +178,29 @@ test('limiter key: a valid signed loopback request is keyed by the signed end us
     else process.env.SESSION_SECRET = prev
   }
 })
+
+test('two visitors through per-request internal fetches get two different signed identities (no frozen first visitor)', async () => {
+  const original = globalThis.fetch
+  const prev = process.env.SESSION_SECRET
+  process.env.SESSION_SECRET = SECRET
+  const seen: string[] = []
+  globalThis.fetch = (async (_url: any, init: any) => {
+    seen.push(new Headers(init.headers).get('x-openfront-client-identity') || '')
+    return new Response('{}')
+  }) as typeof fetch
+  try {
+    const h = (o: Record<string, string>) => ({ get: (n: string) => o[n] ?? null })
+    const endpoint = 'http://127.0.0.1:4321/api/graphql'
+    const first = createInternalGraphqlFetch(clientSourceFromHeaders(h({ 'x-real-ip': '203.0.113.7' })), endpoint)
+    const second = createInternalGraphqlFetch(clientSourceFromHeaders(h({ 'x-real-ip': '203.0.113.8' })), endpoint)
+    await first(endpoint, {})
+    await second(endpoint, {})
+    assert.match(seen[0], /^[a-f0-9]{64}$/)
+    assert.match(seen[1], /^[a-f0-9]{64}$/)
+    assert.notEqual(seen[0], seen[1])
+  } finally {
+    globalThis.fetch = original
+    if (prev === undefined) delete process.env.SESSION_SECRET
+    else process.env.SESSION_SECRET = prev
+  }
+})
