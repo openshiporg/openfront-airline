@@ -3,7 +3,7 @@
 // Unexpected errors are masked by the API and surface here as a fixed message.
 
 import { getAuthHeaders } from '@/features/dashboard/lib/cookies'
-import { getGraphQLEndpoint } from '@/features/dashboard/lib/getBaseUrl'
+import { getServerGraphQLTarget } from '@/features/dashboard/lib/getBaseUrl'
 
 export type OperatorGraphqlResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -31,8 +31,8 @@ function describeError(error: GraphqlError): string {
 
 export async function operatorGraphql<T>(query: string, variables: Record<string, unknown> = {}): Promise<OperatorGraphqlResult<T>> {
   try {
-    const [endpoint, authHeaders] = await Promise.all([getGraphQLEndpoint(), getAuthHeaders()])
-    const response = await fetch(endpoint, {
+    const [{ endpoint, fetch: internalFetch }, authHeaders] = await Promise.all([getServerGraphQLTarget(), getAuthHeaders()])
+    const response = await (internalFetch ?? fetch)(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(authHeaders || {}) },
       body: JSON.stringify({ query, variables }),

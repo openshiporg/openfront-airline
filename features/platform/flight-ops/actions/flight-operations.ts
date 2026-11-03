@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { ClientError, GraphQLClient } from 'graphql-request'
 
 import { getAuthHeaders } from '@/features/dashboard/lib/cookies'
-import { getGraphQLEndpoint } from '@/features/dashboard/lib/getBaseUrl'
+import { getServerGraphQLTarget } from '@/features/dashboard/lib/getBaseUrl'
 import type { FlightOperationsInput, FlightOperationsResult } from '@/features/platform/flight-ops/lib/types'
 
 const FIELDS = ['departureTerminal', 'departureGate', 'arrivalTerminal', 'arrivalGate', 'estimatedDepartureAt', 'estimatedArrivalAt', 'actualDepartureAt', 'actualArrivalAt', 'status'] as const
@@ -25,7 +25,8 @@ export async function updateFlightOperationsAction(input: FlightOperationsInput)
   for (const field of FIELDS) if (input[field] !== undefined) variables[field] = input[field]
   if (Object.keys(variables).length === 2) return { success: false, error: 'Nothing to update.' }
   try {
-    const client = new GraphQLClient(await getGraphQLEndpoint(), { credentials: 'include', redirect: 'error', headers: (await getAuthHeaders()) || {} })
+    const target = await getServerGraphQLTarget()
+    const client = new GraphQLClient(target.endpoint, { credentials: 'include', redirect: 'error', ...(target.fetch ? { fetch: target.fetch } : {}), headers: (await getAuthHeaders()) || {} })
     const data = await client.request<{ updateFlightOperations: { status: string; replayed: boolean } }>(
       `mutation UpdateFlightOperations($flightInstanceId: ID!, $departureTerminal: String, $departureGate: String, $arrivalTerminal: String, $arrivalGate: String, $estimatedDepartureAt: String, $estimatedArrivalAt: String, $actualDepartureAt: String, $actualArrivalAt: String, $status: String, $idempotencyKey: String!) {
         updateFlightOperations(flightInstanceId: $flightInstanceId, departureTerminal: $departureTerminal, departureGate: $departureGate, arrivalTerminal: $arrivalTerminal, arrivalGate: $arrivalGate, estimatedDepartureAt: $estimatedDepartureAt, estimatedArrivalAt: $estimatedArrivalAt, actualDepartureAt: $actualDepartureAt, actualArrivalAt: $actualArrivalAt, status: $status, idempotencyKey: $idempotencyKey) { status replayed }

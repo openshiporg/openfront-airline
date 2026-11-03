@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { ClientError, GraphQLClient } from 'graphql-request'
 
 import { getAuthHeaders } from '@/features/dashboard/lib/cookies'
-import { getGraphQLEndpoint } from '@/features/dashboard/lib/getBaseUrl'
+import { getServerGraphQLTarget } from '@/features/dashboard/lib/getBaseUrl'
 import type { RecordBagEventInput, RecordBagEventResult } from '@/features/platform/baggage/lib/types'
 
 const ACTIONS = new Set(['load', 'transfer', 'arrive', 'deliver', 'delay', 'mishandle', 'close'])
@@ -26,7 +26,8 @@ export async function recordBagEventAction(input: RecordBagEventInput): Promise<
   const note = input.note?.trim() || null
   if (note && note.length > 300) return { success: false, error: 'Note must be at most 300 characters.' }
   try {
-    const client = new GraphQLClient(await getGraphQLEndpoint(), { credentials: 'include', redirect: 'error', headers: (await getAuthHeaders()) || {} })
+    const target = await getServerGraphQLTarget()
+    const client = new GraphQLClient(target.endpoint, { credentials: 'include', redirect: 'error', ...(target.fetch ? { fetch: target.fetch } : {}), headers: (await getAuthHeaders()) || {} })
     const data = await client.request<{ recordBagEvent: { status: string; replayed: boolean } }>(
       `mutation RecordBagEvent($bagId: ID!, $action: String!, $airportCode: String, $note: String, $idempotencyKey: String!) {
         recordBagEvent(bagId: $bagId, action: $action, airportCode: $airportCode, note: $note, idempotencyKey: $idempotencyKey) { status replayed }

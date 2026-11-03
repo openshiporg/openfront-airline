@@ -1,4 +1,4 @@
-import crypto from 'node:crypto'
+import crypto, { createHmac, timingSafeEqual } from 'node:crypto'
 import net from 'node:net'
 
 type RequestLike = {
@@ -25,7 +25,40 @@ function configuredTrustedProxies() {
  * closest hop: each trusted proxy vouches for the hop before it, and the first untrusted hop is the client, so a
  * caller-supplied left-most entry cannot choose the identity behind an appending proxy.
  */
+const INTERNAL_IDENTITY_MAX_AGE_MS = 90_000
+
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+/**
+ * The end user's identity forwarded by this app's own server-side GraphQL calls (hospital 861591a pattern).
+ * Accepted only from a LOOPBACK socket with a fresh (<= 90s) valid HMAC of SESSION_SECRET (>= 32 chars).
+ */
+export function verifiedInternalIdentity(
+  headers: Record<string, string | string[] | undefined>,
+  socketAddress: string | null | undefined,
+  secret: string = String(process.env.SESSION_SECRET || ''),
+  now: number = Date.now(),
+) {
+  const loopback = /^(?:127\.|::1$|::ffff:127\.)/.test(String(socketAddress || ''))
+  if (!loopback || secret.length < 32) return null
+  const identity = String(headers['x-openfront-client-identity'] || '')
+  const timestamp = String(headers['x-openfront-client-timestamp'] || '')
+  const signature = String(headers['x-openfront-client-signature'] || '')
+  if (!/^[a-f0-9]{64}$/.test(identity) || !/^\d{10}$/.test(timestamp) || !/^[a-f0-9]{64}$/.test(signature)) return null
+  const age = Math.abs(now - Number(timestamp) * 1_000)
+  if (!Number.isFinite(age) || age > INTERNAL_IDENTITY_MAX_AGE_MS) return null
+  const expected = createHmac('sha256', secret).update(`${timestamp}:${identity}`).digest('hex')
+  return safeEqual(signature, expected) ? `forwarded:${identity}` : null
+}
+
 export function trustedClientAddress(request: RequestLike) {
+  // 1) verified internal identity (loopback + valid HMAC), 2) existing trusted-proxy logic, 3) socket.
+  const internal = verifiedInternalIdentity(request.headers ?? {}, request.socket?.remoteAddress)
+  if (internal) return internal
   const peer = normalizeAddress(request.socket?.remoteAddress ?? '')
   if (!peer || net.isIP(peer) === 0) return 'unknown'
   const trusted = configuredTrustedProxies()

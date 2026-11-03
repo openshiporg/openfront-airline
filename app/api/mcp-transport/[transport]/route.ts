@@ -8,6 +8,14 @@ import {
   isInputObjectType,
 } from 'graphql';
 import { resolveServerBaseUrl } from '@/features/keystone/lib/server-base-url';
+import { clientSourceFromHeaders, internalGraphqlEndpoint, internalIdentityHeaders } from '@/features/keystone/lib/internal-origin';
+
+// Self-call to this process: loopback with the end user's signed identity when the port is known, else the configured origin.
+function graphqlTarget(request: Request) {
+  const internal = internalGraphqlEndpoint();
+  if (internal) return { endpoint: internal, extra: internalIdentityHeaders(clientSourceFromHeaders(request.headers)) };
+  return { endpoint: `${resolveServerBaseUrl()}/api/graphql`, extra: {} as Record<string, string> };
+}
 import {
   assertGraphQLOperation,
   assertGraphQLSelection,
@@ -27,12 +35,14 @@ function getSimpleTypeName(type: any): string {
 }
 
 // Execute GraphQL query with authentication
-async function executeGraphQL(query: string, graphqlEndpoint: string, cookie: string): Promise<any> {
+async function executeGraphQL(query: string, graphqlEndpoint: string, cookie: string, extra: Record<string, string> = {}): Promise<any> {
   const response = await fetch(graphqlEndpoint, {
     method: 'POST',
+    redirect: 'error',
     headers: {
       'Content-Type': 'application/json',
       'Cookie': cookie,
+      ...extra,
     },
     body: JSON.stringify({ query }),
   });
@@ -45,12 +55,14 @@ async function executeGraphQL(query: string, graphqlEndpoint: string, cookie: st
 }
 
 // Get GraphQL schema from introspection
-async function getGraphQLSchema(graphqlEndpoint: string, cookie: string): Promise<GraphQLSchema> {
+async function getGraphQLSchema(graphqlEndpoint: string, cookie: string, extra: Record<string, string> = {}): Promise<GraphQLSchema> {
   const response = await fetch(graphqlEndpoint, {
     method: 'POST',
+    redirect: 'error',
     headers: { 
       'Content-Type': 'application/json',
       'Cookie': cookie,
+      ...extra,
     },
     body: JSON.stringify({ query: getIntrospectionQuery() }),
   });
@@ -82,16 +94,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
     }
 
     // Construct GraphQL endpoint
-    const baseUrl = resolveServerBaseUrl();
-    const graphqlEndpoint = `${baseUrl}/api/graphql`;
+    const { endpoint: graphqlEndpoint, extra } = graphqlTarget(request);
     
     // Extract cookie from request and fail before introspection for anonymous callers.
     const cookie = request.headers.get('cookie') || ''
-    const authResult = await executeGraphQL('query { authenticatedItem { ... on User { id } } }', graphqlEndpoint, cookie)
+    const authResult = await executeGraphQL('query { authenticatedItem { ... on User { id } } }', graphqlEndpoint, cookie, extra)
     if (!authResult.data?.authenticatedItem?.id) return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Authentication required' } }), { status: 401, headers: { 'Content-Type': 'application/json' } })
 
     // Get the GraphQL schema
-    const schema = await getGraphQLSchema(graphqlEndpoint, cookie);
+    const schema = await getGraphQLSchema(graphqlEndpoint, cookie, extra);
     
     // Parse the JSON-RPC request
     const body = await request.json();
@@ -376,7 +387,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           `.trim();
           
           // Execute the query
-          const result = await executeGraphQL(queryString, graphqlEndpoint, cookie || '');
+          const result = await executeGraphQL(queryString, graphqlEndpoint, cookie || '', extra);
           
           return new Response(JSON.stringify({
             jsonrpc: '2.0',
@@ -631,7 +642,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           `.trim();
           
           // Execute the mutation
-          const result = await executeGraphQL(mutationString, graphqlEndpoint, cookie || '');
+          const result = await executeGraphQL(mutationString, graphqlEndpoint, cookie || '', extra);
           
           // Mark that data has changed
           dataHasChanged = true;
@@ -672,7 +683,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           `.trim();
           
           // Execute the mutation
-          const result = await executeGraphQL(mutationString, graphqlEndpoint, cookie || '');
+          const result = await executeGraphQL(mutationString, graphqlEndpoint, cookie || '', extra);
           
           // Mark that data has changed
           dataHasChanged = true;
@@ -712,7 +723,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           `.trim();
           
           // Execute the mutation
-          const result = await executeGraphQL(mutationString, graphqlEndpoint, cookie || '');
+          const result = await executeGraphQL(mutationString, graphqlEndpoint, cookie || '', extra);
           
           // Mark that data has changed
           dataHasChanged = true;
@@ -870,7 +881,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           `.trim();
           
           // Execute the search query
-          const result = await executeGraphQL(queryString, graphqlEndpoint, cookie || '');
+          const result = await executeGraphQL(queryString, graphqlEndpoint, cookie || '', extra);
           
           return new Response(JSON.stringify({
             jsonrpc: '2.0',
@@ -950,9 +961,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tran
     });
   }
 
-  const baseUrl = resolveServerBaseUrl();
-  const graphqlEndpoint = `${baseUrl}/api/graphql`;
-  const authResult = await executeGraphQL('query { authenticatedItem { ... on User { id } } }', graphqlEndpoint, request.headers.get('cookie') || '')
+  const { endpoint: graphqlEndpoint, extra } = graphqlTarget(request);
+  const authResult = await executeGraphQL('query { authenticatedItem { ... on User { id } } }', graphqlEndpoint, request.headers.get('cookie') || '', extra)
   if (!authResult.data?.authenticatedItem?.id) return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
 
   return new Response(JSON.stringify({ 
