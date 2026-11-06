@@ -230,3 +230,8 @@ select.af-input {
   .af-days { grid-template-columns: repeat(7, 1.125rem); }
   .af-day { height: 1.125rem; }
 }
+/* The narrowest phones (320px): flight numbers wrap under the carrier code and the days fold into two rows. */
+@media (max-width: 379px) {
+  .af-timetable td:nth-child(2), .af-timetable th:nth-child(2) { white-space: normal; }
+  .af-days { grid-template-columns: repeat(4, 1.125rem); }
+}

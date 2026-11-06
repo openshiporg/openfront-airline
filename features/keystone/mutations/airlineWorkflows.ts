@@ -25,6 +25,7 @@ import { checkedMinorTotal } from '../lib/money'
 import { assertDatedFlightEligibleForAction, selectCurrentTicketableSegments, ticketIssuanceArtifactBlockers, type DatedFlightEligibilityState, type TicketableSegmentState } from '../lib/service-eligibility'
 import { DomainError } from '../lib/domain-error'
 import { travelDocumentTokenizationKey } from '../lib/travel-document-key'
+import { travelDocumentsRequired } from '../../airline/lib/travel-documents'
 
 export function calculateAvailability(input: {
   authorized: number
@@ -941,7 +942,7 @@ export async function checkInBookingPassenger(
     })
     const segment = await sudo.query.BookingSegment.findOne({
       where: { id: args.bookingSegmentId },
-      query: 'id status booking { id carrier { id code } } flightInstance { id flightNumber status scheduledDepartureAt estimatedDepartureAt actualDepartureAt actualArrivalAt origin { id iataCode } destination { id iataCode } departureGate departureTerminal }',
+      query: 'id status booking { id carrier { id code } } flightInstance { id flightNumber status scheduledDepartureAt estimatedDepartureAt actualDepartureAt actualArrivalAt origin { id iataCode countryCode } destination { id iataCode countryCode } departureGate departureTerminal }',
     })
     if (!bookingPassenger || !segment || bookingPassenger.booking.id !== segment.booking.id) throw new DomainError('Passenger and segment must belong to the same booking.')
     const booking = bookingPassenger.booking
@@ -984,7 +985,8 @@ export async function checkInBookingPassenger(
       select: { id: true, evidenceVersion: true, providerReference: true },
       orderBy: { verifiedAt: 'desc' },
     })
-    if (!verification) throw new DomainError('A current authoritative travel-document verification is required.')
+    const documentsRequired = travelDocumentsRequired(segment.flightInstance.origin?.countryCode, segment.flightInstance.destination?.countryCode)
+    if (!verification && documentsRequired) throw new DomainError('A current authoritative travel-document verification is required.')
     const couponCandidates = await (transactionContext.prisma as any).ticketCoupon.findMany({
       where: {
         bookingSegmentId: segment.id, status: 'open',
@@ -1058,11 +1060,11 @@ export async function checkInBookingPassenger(
       }, query: 'id',
     })
     const checkInData = {
-      status: 'checked_in', channel: customerBookingId ? 'web' : 'agent', travelDocumentsVerified: true, checkedInAt: now,
+      status: 'checked_in', channel: customerBookingId ? 'web' : 'agent', travelDocumentsVerified: Boolean(verification), checkedInAt: now,
       offloadedAt: null, boardedAt: null,
       booking: { connect: { id: booking.id } }, bookingPassenger: { connect: { id: bookingPassenger.id } }, passenger: { connect: { id: bookingPassenger.passenger.id } },
       bookingSegment: { connect: { id: segment.id } }, flightInstance: { connect: { id: currentFlight.id } }, seatAssignment: { connect: { id: seatAssignment.id } },
-      ticketCoupon: { connect: { id: coupon.id } }, eligibilityData: { documentVerificationId: verification.id, evidenceVersion: verification.evidenceVersion, confirmedAt: now },
+      ticketCoupon: { connect: { id: coupon.id } }, eligibilityData: verification ? { documentVerificationId: verification.id, evidenceVersion: verification.evidenceVersion, confirmedAt: now } : { travelDocumentsRequired: false, reason: 'domestic', confirmedAt: now },
     }
     const checkIn = previousCheckIn
       ? await sudo.query.CheckIn.updateOne({ where: { id: previousCheckIn.id }, data: checkInData, query: 'id' })

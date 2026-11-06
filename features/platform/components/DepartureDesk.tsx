@@ -28,6 +28,7 @@ type Traveler = {
   passenger: { id: string; givenName: string; familyName: string; dateOfBirth?: string | null }
   documents: DocumentSummary[]
   verificationPresent?: boolean
+  documentsRequired?: boolean
   verification?: { id: string; status: string; expiresAt: string } | null
   checkIn?: CheckInSummary | null
 }
@@ -104,7 +105,7 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
   const allTravelers = manifest.flights.flatMap(flight => flight.travelers)
   const checkedInCount = allTravelers.filter(traveler => traveler.checkIn?.status === 'checked_in' || traveler.checkIn?.boardingPass?.status === 'boarded').length
   const boardedCount = allTravelers.filter(traveler => traveler.checkIn?.boardingPass?.status === 'boarded').length
-  const verifiedCount = allTravelers.filter(traveler => traveler.verificationPresent).length
+  const verifiedCount = allTravelers.filter(traveler => traveler.verificationPresent || traveler.documentsRequired === false).length
   const cleanup = manifest.refundCleanup
   return <div className="space-y-8">
     <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
@@ -114,7 +115,7 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
     {manifest.flights.length > 0 && <ReadoutStrip>
       <Readout label="Flights" value={<span className="tabular-nums">{manifest.flights.length}</span>} />
       <Readout label="Passengers" value={<span className="tabular-nums">{allTravelers.length}</span>} />
-      <Readout label="Docs verified" tone={verifiedCount < allTravelers.length ? 'warn' : 'ok'} value={<span className="tabular-nums">{verifiedCount}</span>} />
+      <Readout label="Docs cleared" tone={verifiedCount < allTravelers.length ? 'warn' : 'ok'} value={<span className="tabular-nums">{verifiedCount}</span>} />
       <Readout label="Checked in" value={<span className="tabular-nums">{checkedInCount}</span>} />
       <Readout label="Boarded" tone={boardedCount ? 'ok' : undefined} value={<span className="tabular-nums">{boardedCount}</span>} />
     </ReadoutStrip>}
@@ -141,20 +142,21 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
         const register = documentInput(key)
         const pass = traveler.checkIn?.boardingPass
         const passengerState = pass?.status === 'boarded' ? 'boarded' : traveler.checkIn?.status ?? 'not checked in'
-        const documentState = traveler.verificationPresent ? 'verified' : manifest.canVerifyDocuments ? 'pending' : 'restricted'
+        const documentsCleared = Boolean(traveler.verificationPresent || traveler.documentsRequired === false)
+        const documentState = traveler.verificationPresent ? 'verified' : traveler.documentsRequired === false ? 'not required' : manifest.canVerifyDocuments ? 'pending' : 'restricted'
         return <article key={key} className="space-y-3 px-4 py-3">
           <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
               <TitleLine as="h3" tone={traveler.checkIn ? statusTone(passengerState) : 'idle'} status={passengerState} className="text-sm font-semibold text-foreground">{traveler.passenger.givenName} {traveler.passenger.familyName}</TitleLine>
               <Code className="text-[13px] font-medium text-foreground">{traveler.recordLocator}</Code>
-              <PassengerState label="Doc" value={documentState} tone={traveler.verificationPresent ? 'ok' : manifest.canVerifyDocuments ? 'warn' : 'idle'} />
+              <PassengerState label="Doc" value={documentState} tone={documentsCleared ? 'ok' : manifest.canVerifyDocuments ? 'warn' : 'idle'} />
               <PassengerState label="Check-in" value={traveler.checkIn?.status ?? 'not started'} tone={traveler.checkIn ? statusTone(traveler.checkIn.status) : 'idle'} />
               {pass && <PassengerState label="Pass" value={pass.status} tone={statusTone(pass.status)} />}
             </div>
             {pass && <span className="inline-flex items-baseline gap-3 text-xs text-muted-foreground">{pass.boardingGroup && <span>Grp <span className="tabular-nums text-sm font-medium  text-foreground">{pass.boardingGroup}</span></span>}<span>Seat <span className="tabular-nums text-base font-semibold  text-foreground">{pass.seatDesignator ?? '—'}</span></span></span>}
           </div>
           <p className="text-xs text-muted-foreground">Segment <span className="capitalize">{traveler.segmentStatus.replaceAll('_', ' ')}</span>{traveler.passenger.dateOfBirth ? <> · DOB <span className="tabular-nums ">{traveler.passenger.dateOfBirth}</span></> : null}</p>
-          {!traveler.verificationPresent && <div className="border-t pt-3">
+          {!documentsCleared && <div className="border-t pt-3">
             {currentDocument ? <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_10rem_auto] lg:items-end">
               <Field label="Reference"><input value={verify.providerReference} onChange={event => setVerificationInputs(values => ({ ...values, [key]: { ...verify, providerReference: event.target.value } }))} placeholder="Provider or manual review reference" className={cn(deskInput, 'tabular-nums')} /></Field>
               <Field label="Evidence version"><input value={verify.evidenceVersion} onChange={event => setVerificationInputs(values => ({ ...values, [key]: { ...verify, evidenceVersion: event.target.value } }))} placeholder="Policy/evidence version" className={deskInput} /></Field>
@@ -175,7 +177,7 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
             </div> : <p className="text-xs text-muted-foreground">Document permission required</p>}
           </div>}
           <div className="flex min-w-0 flex-wrap items-end gap-2">
-            {(!traveler.checkIn || traveler.checkIn.status === 'offloaded') && <Track><Pill variant="primary" disabled={working === key || !traveler.verificationPresent} onClick={() => run(key, () => mutate(`mutation($passenger:ID!,$segment:ID!,$key:String!){checkInBookingPassenger(bookingPassengerId:$passenger,bookingSegmentId:$segment,idempotencyKey:$key){status}}`, { passenger: traveler.bookingPassengerId, segment: traveler.bookingSegmentId, key: `checkin-${traveler.bookingPassengerId}-${traveler.bookingSegmentId}-${traveler.checkIn?.id ?? 'initial'}-${traveler.checkIn?.offloadedAt ?? 'initial'}` }), 'Traveler checked in and boarding pass issued.')}>{traveler.checkIn?.status === 'offloaded' ? 'Re-check in' : 'Check in'}</Pill></Track>}
+            {(!traveler.checkIn || traveler.checkIn.status === 'offloaded') && <Track><Pill variant="primary" disabled={working === key || !documentsCleared} onClick={() => run(key, () => mutate(`mutation($passenger:ID!,$segment:ID!,$key:String!){checkInBookingPassenger(bookingPassengerId:$passenger,bookingSegmentId:$segment,idempotencyKey:$key){status}}`, { passenger: traveler.bookingPassengerId, segment: traveler.bookingSegmentId, key: `checkin-${traveler.bookingPassengerId}-${traveler.bookingSegmentId}-${traveler.checkIn?.id ?? 'initial'}-${traveler.checkIn?.offloadedAt ?? 'initial'}` }), 'Traveler checked in and boarding pass issued.')}>{traveler.checkIn?.status === 'offloaded' ? 'Re-check in' : 'Check in'}</Pill></Track>}
             {traveler.checkIn?.status === 'checked_in' && <><Field label="Bag weight (kg)" className="w-28"><input inputMode="decimal" value={bagWeights[key] ?? ''} onChange={event => setBagWeights(values => ({ ...values, [key]: event.target.value }))} className={cn(deskInput, 'tabular-nums ')} /></Field><Track><Pill disabled={working === key || !Number.isFinite(Number(bagWeights[key])) || Number(bagWeights[key]) <= 0} onClick={() => run(key, () => mutate(`mutation($passenger:ID!,$flight:ID!,$weight:Int!,$key:String!){acceptCheckedBag(bookingPassengerId:$passenger,flightInstanceId:$flight,weightGrams:$weight,idempotencyKey:$key){status}}`, { passenger: traveler.bookingPassengerId, flight: flight.id, weight: Math.round(Number(bagWeights[key]) * 1000), key: `bag-${crypto.randomUUID()}` }), 'Bag accepted with immutable entitlement evidence.')}>Accept bag</Pill></Track></>}
             {pass && ['issued', 'reissued'].includes(pass.status) && <Track><Pill variant="primary" disabled={working === key} onClick={() => run(key, () => mutate(`mutation($pass:ID!,$key:String!){boardBookingPassenger(boardingPassId:$pass,idempotencyKey:$key){status}}`, { pass: pass.id, key: `board-${pass.id}` }), 'Traveler boarded; pass, check-in, coupon, and seat were updated atomically.')}>Board</Pill></Track>}
             {pass?.status === 'boarded' && <><input aria-label="Offload reason" value={offloadReasons[key] ?? ''} onChange={event => setOffloadReasons(values => ({ ...values, [key]: event.target.value }))} placeholder="Offload reason" className={cn(deskInput, 'sm:w-56')} /><Track><Pill variant="danger" disabled={working === key || !offloadReasons[key]?.trim()} onClick={() => window.confirm('Offload this traveler? Their boarding pass is revoked.') && run(key, () => mutate(`mutation($pass:ID!,$reason:String!,$key:String!){offloadBookingPassenger(boardingPassId:$pass,reason:$reason,idempotencyKey:$key){status}}`, { pass: pass.id, reason: offloadReasons[key], key: `offload-${pass.id}` }), 'Traveler offloaded; boarding entitlement was revoked and audit evidence recorded.')}>Offload</Pill></Track></>}

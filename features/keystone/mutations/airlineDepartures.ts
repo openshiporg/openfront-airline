@@ -11,6 +11,7 @@ import { runSerializableTransaction, throwIfKeystonePrismaError } from '../lib/t
 import { normalizeSearchDate } from './airlineWorkflows'
 import { beginOperation, finishOperation, inspectOperation, normalizeIdempotencyKey, writeAudit } from './airlineOperations'
 import { DomainError } from '../lib/domain-error'
+import { travelDocumentsRequired } from '../../airline/lib/travel-documents'
 
 type DepartureResult = {
   resourceType: string
@@ -87,8 +88,8 @@ export async function departureManifest(
     take: 50,
     include: {
       carrier: { select: { id: true, code: true, name: true, defaultTimezone: true } },
-      origin: { select: { id: true, iataCode: true, city: true } },
-      destination: { select: { id: true, iataCode: true, city: true } },
+      origin: { select: { id: true, iataCode: true, city: true, countryCode: true } },
+      destination: { select: { id: true, iataCode: true, city: true, countryCode: true } },
       bookingSegments: {
         where: { status: { notIn: ['cancelled', 'refunded', 'reaccommodated'] }, booking: { ticketingStatus: 'ticketed', status: { in: ['ticketed', 'in_progress'] } } },
         orderBy: [{ booking: { recordLocator: 'asc' } }, { sequence: 'asc' }],
@@ -252,6 +253,7 @@ export async function departureManifest(
           segmentStatus: segment.status,
           passenger: { id: bookingPassenger.passenger.id, givenName: bookingPassenger.passenger.givenName, familyName: bookingPassenger.passenger.familyName, dateOfBirth: canVerifyDocuments ? bookingPassenger.passenger.dateOfBirth?.toISOString().slice(0, 10) ?? null : null },
           documents: documents.filter((document: any) => document.passengerId === bookingPassenger.passenger.id),
+          documentsRequired: travelDocumentsRequired(flight.origin?.countryCode, flight.destination?.countryCode),
           verificationPresent: currentProofs.has(`${bookingPassenger.passenger.id}:${segment.id}`),
           verification: canVerifyDocuments ? currentProofs.get(`${bookingPassenger.passenger.id}:${segment.id}`) ?? null : null,
           checkIn: checkIn ? {
