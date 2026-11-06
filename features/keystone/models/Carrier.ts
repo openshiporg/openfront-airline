@@ -62,6 +62,7 @@ export const Carrier = list({
     storefrontBrandColor: select({
       type: 'string',
       options: [
+        { label: 'Navy', value: 'navy' },
         { label: 'Slate', value: 'slate' },
         { label: 'Blue', value: 'blue' },
         { label: 'Rose', value: 'rose' },
