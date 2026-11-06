@@ -1,3 +1,4 @@
+import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON } from '../../platform/store-settings/lib/store-logo'
 // As in E-commerce: first-run setup is open while the database has no user. Keystone's initFirstItem mutation and
 // redirectToInit both refuse once any user exists, so this only governs the empty-database window.
 export function initialOperatorSetupEnabled(_env: NodeJS.ProcessEnv = process.env) {
@@ -34,6 +35,9 @@ export async function ensureInitialCarrierAndRole(prisma: any, permissions: read
           defaultTimezone: env.INITIAL_TIMEZONE || 'America/New_York',
           status: 'active',
           directSalesEnabled: false,
+          // Like E-commerce's onboarding, the new carrier always gets the registry logo.
+          logoIcon: DEFAULT_STORE_LOGO_ICON,
+          logoColor: DEFAULT_STORE_LOGO_COLOR,
         },
         select: { id: true },
       })

@@ -2,6 +2,7 @@ import 'dotenv/config'
 import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
 import { PrismaClient } from '@prisma/client'
+import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON } from '../store-settings/lib/store-logo'
 
 const require = createRequire(import.meta.url)
 const bcrypt = require('bcryptjs') as { hash(value: string, rounds: number): Promise<string> }
@@ -57,7 +58,7 @@ async function main() {
   const carrier = await prisma.carrier.upsert({
     where: { code: CARRIER_CODE },
     update: {},
-    create: { name: CARRIER_NAME, legalName: 'Avante Air LLC', code: CARRIER_CODE, defaultCurrencyCode: 'USD', defaultTimezone: 'America/New_York', status: 'active', directSalesEnabled: true },
+    create: { name: CARRIER_NAME, legalName: 'Avante Air LLC', code: CARRIER_CODE, defaultCurrencyCode: 'USD', defaultTimezone: 'America/New_York', status: 'active', directSalesEnabled: true, logoIcon: DEFAULT_STORE_LOGO_ICON, logoColor: DEFAULT_STORE_LOGO_COLOR },
   })
   const retainedRole = await prisma.role.findUnique({ where: { id: 'runtime-avante-admin-role' }, select: { carrierId: true } })
   if (retainedRole?.carrierId && retainedRole.carrierId !== carrier.id) throw new Error('The runtime role identity belongs to a different carrier; seed replay will not reassign it.')
