@@ -938,7 +938,7 @@ export async function checkInBookingPassenger(
     const sudo = transactionContext.sudo() as any
     const bookingPassenger = await sudo.query.BookingPassenger.findOne({
       where: { id: args.bookingPassengerId },
-      query: 'id booking { id status carrier { id code } } passenger { id givenName familyName }',
+      query: 'id booking { id status currencyCode carrier { id code } } passenger { id givenName familyName }',
     })
     const segment = await sudo.query.BookingSegment.findOne({
       where: { id: args.bookingSegmentId },
