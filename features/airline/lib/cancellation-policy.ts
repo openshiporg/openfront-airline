@@ -1,13 +1,14 @@
 // What a traveler gets back when they cancel online. The rules match how US carriers price it:
-// - US DOT 14 CFR 259.5: a booking made at least 7 days before departure can be cancelled for a full refund within
-//   24 hours of booking.
+// - 24-hour risk-free cancellation: a full refund within 24 hours of booking for trips booked at least 2 days before
+//   departure. That is American's published policy; Delta and United are similar, and all exceed the DOT floor
+//   (14 CFR 259.5, which requires 7 days' advance).
 // - A refundable fare refunds the airfare less the fare rule's cancellation fee.
 // - A non-refundable fare cancelled online returns nothing, so online cancellation is refused and the traveler is
 //   sent to the airline (the booking stays intact for a change or credit at the counter).
 // - Nothing is refundable online once the first flight has departed.
 
 export const RISK_FREE_WINDOW_MS = 24 * 60 * 60_000
-export const RISK_FREE_MIN_ADVANCE_MS = 7 * 24 * 60 * 60_000
+export const RISK_FREE_MIN_ADVANCE_MS = 2 * 24 * 60 * 60_000
 
 export type CancellationFareRule = { isRefundable: boolean; cancellationFeeAmount: number } | null
 
