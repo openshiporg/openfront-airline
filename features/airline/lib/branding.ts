@@ -1,8 +1,6 @@
 export const STOREFRONT_BRAND_COLORS = [
   { value: 'slate', label: 'Slate', hex: '#334155', hover: '#1e293b', soft: '#f1f5f9' },
   { value: 'blue', label: 'Blue', hex: '#1d4ed8', hover: '#1e40af', soft: '#eff6ff' },
-  { value: 'indigo', label: 'Indigo', hex: '#4338ca', hover: '#3730a3', soft: '#eef2ff' },
-  { value: 'violet', label: 'Violet', hex: '#6d28d9', hover: '#5b21b6', soft: '#f5f3ff' },
   { value: 'rose', label: 'Rose', hex: '#be123c', hover: '#9f1239', soft: '#fff1f2' },
   { value: 'emerald', label: 'Emerald', hex: '#047857', hover: '#065f46', soft: '#ecfdf5' },
   { value: 'amber', label: 'Amber', hex: '#92400e', hover: '#78350f', soft: '#fffbeb' },

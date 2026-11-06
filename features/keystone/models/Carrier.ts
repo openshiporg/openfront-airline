@@ -64,8 +64,6 @@ export const Carrier = list({
       options: [
         { label: 'Slate', value: 'slate' },
         { label: 'Blue', value: 'blue' },
-        { label: 'Indigo', value: 'indigo' },
-        { label: 'Violet', value: 'violet' },
         { label: 'Rose', value: 'rose' },
         { label: 'Emerald', value: 'emerald' },
         { label: 'Amber', value: 'amber' },

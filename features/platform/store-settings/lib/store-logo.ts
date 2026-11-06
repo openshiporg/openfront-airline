@@ -1,6 +1,6 @@
 import { LOGO_ICONS } from './icon-registry';
 export const DEFAULT_STORE_LOGO_ICON = LOGO_ICONS.find((icon) => icon.id === 'foresight')!.lightSvg;
-export const DEFAULT_STORE_LOGO_COLOR = '30';
+export const DEFAULT_STORE_LOGO_COLOR = '330';
 
 // This module is intentionally browser-safe. Server-only SVG parsing and
 // sanitization lives under features/keystone/utils/storeLogo.ts.

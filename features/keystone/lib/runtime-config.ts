@@ -43,7 +43,7 @@ export async function validateProductionRuntime(env: NodeJS.ProcessEnv, prisma?:
   if (!storefrontCarrier) throw new Error('STOREFRONT_CARRIER_CODE must identify a persisted carrier.')
   const maintenanceSetup = env.ALLOW_INCOMPLETE_LAUNCH_SETUP === 'true'
   if (!maintenanceSetup && (storefrontCarrier.status !== 'active' || !storefrontCarrier.directSalesEnabled)) throw new Error('STOREFRONT_CARRIER_CODE must identify an active direct-sales carrier.')
-  const approvedBrandColors = new Set(['slate', 'blue', 'indigo', 'violet', 'rose', 'emerald', 'amber'])
+  const approvedBrandColors = new Set(['slate', 'blue', 'rose', 'emerald', 'amber'])
   if (!maintenanceSetup && (!storefrontCarrier.storefrontBrandColor || !approvedBrandColors.has(storefrontCarrier.storefrontBrandColor) || !storefrontCarrier.storefrontHomepageTitle?.trim() || !storefrontCarrier.storefrontHomepageDescription?.trim())) throw new Error('The storefront carrier requires persisted homepage content and an approved brand color.')
   const providers = await prisma.paymentProvider.findMany({ where: { status: 'active' } })
   for (const provider of providers) {
