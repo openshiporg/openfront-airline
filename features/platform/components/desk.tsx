@@ -333,13 +333,14 @@ export function Code({ children, className }: { children: React.ReactNode; class
   return <span className={cn('text-[12px] font-medium uppercase tabular-nums tracking-[0.04em] text-muted-foreground', className)}>{children}</span>
 }
 
-/** Signage plate: an airport or flight code in white on graphite, the desk's signature mark. */
+/** Airport or flight code as plain tracked text (no plate). */
 export function Plate({ children, tone, className }: { children: React.ReactNode; tone?: 'attention'; className?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex h-[1.375rem] min-w-[2.75rem] items-center justify-center rounded-[3px] px-1.5 text-[12px] font-semibold uppercase tabular-nums tracking-[0.06em]',
-        tone === 'attention' ? 'bg-[#f5c400] text-[#1f2328]' : 'bg-[#1f2328] text-white dark:bg-zinc-200 dark:text-zinc-900',
+        'inline-flex items-center text-[12px] font-semibold uppercase tabular-nums tracking-[0.06em]',
+        // Coloured attention plate stays; the neutral graphite plate is plain text.
+        tone === 'attention' ? 'h-[1.375rem] min-w-[2.75rem] justify-center rounded-[3px] bg-[#f5c400] px-1.5 text-[#1f2328]' : 'text-foreground',
         className,
       )}
     >
