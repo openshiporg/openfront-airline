@@ -363,12 +363,24 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
     setBusy(false)
   }
 
+  // Cancel shows exactly what comes back (DOT 24-hour rule, refundable fare less fee) before anything changes.
+  const [cancelQuote, setCancelQuote] = useState<{ allowed: boolean; summary: string; refundAmount: number } | null>(null)
+  async function reviewCancellation() {
+    setBusy(true); setStatus('')
+    try {
+      const data = await graphql<{ customerCancellationQuote: { allowed: boolean; summary: string; refundAmount: number } }>(`query($record:String!,$token:String!){customerCancellationQuote(recordLocator:$record,accessToken:$token){allowed summary refundAmount}}`, { record: recordLocator, token: accessToken })
+      setCancelQuote(data.customerCancellationQuote)
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t check this booking’s cancellation terms.') }
+    setBusy(false)
+  }
   async function cancelBooking() {
-    if (!window.confirm('Cancel this booking? Your seats will be released and this cannot be undone.')) return
     setBusy(true)
     try {
-      await graphql(`mutation($record:String!,$token:String!,$reason:String!,$key:String!){cancelCustomerBooking(recordLocator:$record,accessToken:$token,reason:$reason,idempotencyKey:$key){status}}`, { record: recordLocator, token: accessToken, reason: 'Traveler cancelled before departure through self-service.', key: `customer-cancel-${managedBooking?.id ?? recordLocator}` })
-      setStatus('Booking cancelled. Your seats have been released.'); await manage(undefined, true)
+      const data = await graphql<{ cancelCustomerBookingWithRefund: { refundAmount: number; currencyCode: string } }>(`mutation($record:String!,$token:String!,$reason:String!,$key:String!){cancelCustomerBookingWithRefund(recordLocator:$record,accessToken:$token,reason:$reason,idempotencyKey:$key){refundAmount currencyCode}}`, { record: recordLocator, token: accessToken, reason: 'Traveler cancelled before departure through self-service.', key: `self-cancel:${recordLocator}:${crypto.randomUUID()}` })
+      const refunded = data.cancelCustomerBookingWithRefund
+      setCancelQuote(null)
+      setStatus(refunded.refundAmount > 0 ? `Booking cancelled. ${formatMinorUnits(refunded.refundAmount, refunded.currencyCode)} is on its way back to your card.` : 'Booking cancelled. Your seats have been released.')
+      await manage(undefined, true)
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Cancellation failed.') }
     setBusy(false)
   }
@@ -524,7 +536,11 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
             <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-mono text-3xl font-semibold tracking-[0.16em]">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
             <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
-          {mode !== 'check-in' && <div className="af-track w-fit">{carrier.onlinePaymentEnabled && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button onClick={cancelBooking} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
+          {mode !== 'check-in' && <div className="af-track w-fit">{carrier.onlinePaymentEnabled && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
+          {mode !== 'check-in' && cancelQuote && managedBooking.status !== 'cancelled' && <div role="region" aria-label="Cancel booking" className="af-notice mt-3 w-full max-w-xl flex-col !items-stretch" data-tone={cancelQuote.allowed ? 'warn' : 'bad'}>
+            <p className="text-sm font-medium"><span className="af-dot" data-tone={cancelQuote.allowed ? 'warn' : 'bad'} />{cancelQuote.summary}</p>
+            <div className="af-track mt-3 flex-wrap">{cancelQuote.allowed && <button disabled={busy} onClick={() => void cancelBooking()} className="af-pill af-pill-danger af-pill-sm">{cancelQuote.refundAmount > 0 ? 'Cancel and refund' : 'Cancel booking'}</button>}<button type="button" onClick={() => setCancelQuote(null)} className="af-pill af-pill-raised af-pill-sm">{cancelQuote.allowed ? 'Keep booking' : 'Close'}</button>{!cancelQuote.allowed && <a href="/contact" className="af-pill af-pill-sm">Contact the airline</a>}</div>
+          </div>}
         </div>
         <div className="af-rule bg-[var(--af-paper)] px-5 py-4 sm:px-6">
           {managedBooking.bookingReceipt.accepted ? <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

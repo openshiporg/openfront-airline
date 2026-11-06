@@ -1,6 +1,6 @@
-import { list } from '@keystone-6/core'
+import { graphql, list } from '@keystone-6/core'
 import { denyAll } from '@keystone-6/core/access'
-import { password, relationship, select, text } from '@keystone-6/core/fields'
+import { password, relationship, select, text, virtual } from '@keystone-6/core/fields'
 
 import {
   canAssignUserRole,
@@ -122,6 +122,18 @@ export const User = list({
       ],
       access: { create: () => false, update: () => false },
       graphql: { omit: { create: true, update: true } },
+    }),
+    // A carrier that has taken a paid booking is launched, whatever its stored launch-setup state says; the dashboard
+    // stops offering "Get started" to an airline that already sells.
+    carrierLaunched: virtual({
+      field: graphql.field({
+        type: graphql.Boolean,
+        async resolve(item: any, _args, context) {
+          if (!item.carrierId) return false
+          const paid = await (context.sudo().prisma as any).booking.findFirst({ where: { carrierId: item.carrierId, paymentStatus: { in: ['paid', 'partially_refunded', 'refunded'] } }, select: { id: true } })
+          return Boolean(paid)
+        },
+      }),
     }),
     passengerProfile: relationship({ ref: 'Passenger.userAccount', access: { create: () => false, update: () => false } }),
     offers: relationship({ ref: 'Offer.customer', many: true, access: { create: () => false, update: () => false } }),

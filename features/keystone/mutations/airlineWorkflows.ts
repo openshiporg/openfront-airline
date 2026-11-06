@@ -597,15 +597,26 @@ export async function processBookingRefund(
   args: { bookingId: string; amount: number; reason: string; providerReference: string; idempotencyKey: string },
   context: Context,
 ): Promise<WorkflowResult> {
-  return runSerializableTransaction(context, async transactionContext => {
-    await requireFreshPermission(transactionContext, 'canManagePayments')
+  return runSerializableTransaction(context, transactionContext => processBookingRefundInTransaction(transactionContext, args, { authorize: true }))
+}
+
+// The refund inside the caller's transaction. Operators come through processBookingRefund with payment permission;
+// a traveler's self-service cancellation refunds with authorize: false, after its own access proof and fare policy,
+// and only to the card it was paid with (adapter refunds never pay out anywhere else).
+export async function processBookingRefundInTransaction(
+  transactionContext: Context,
+  args: { bookingId: string; amount: number; reason: string; providerReference: string; idempotencyKey: string },
+  options: { authorize: boolean; cardOnly?: boolean },
+): Promise<WorkflowResult> {
+  {
+    if (options.authorize) await requireFreshPermission(transactionContext, 'canManagePayments')
     const sudo = transactionContext.sudo() as any
     let booking = await sudo.query.Booking.findOne({
       where: { id: args.bookingId },
       query: 'id status paymentStatus ticketingStatus totalAmount currencyCode carrier { id } payments { id status capturedAmount refundedAmount providerPaymentId metadata session { id providerData } provider { id providerKey adapterType configuration } } tickets { id status coupons { id status } }',
     })
     if (!booking) throw new DomainError('Booking not found.')
-    await requireFreshCarrierPermission(transactionContext, 'canManagePayments', booking.carrier.id)
+    if (options.authorize) await requireFreshCarrierPermission(transactionContext, 'canManagePayments', booking.carrier.id)
     if (!Number.isSafeInteger(args.amount) || args.amount <= 0) throw new DomainError('Refund amount must be a positive minor-unit integer.')
     const reason = args.reason.trim()
     const providerReference = args.providerReference.trim()
@@ -629,6 +640,7 @@ export async function processBookingRefund(
       return purchaseKind !== 'seat' && ['captured', 'partially_refunded'].includes(candidate.status)
     })
     if (!payment) throw new DomainError('No captured payment is available to refund.')
+    if (options.cardOnly && payment.provider.adapterType !== 'stripe') throw new DomainError('This booking was not paid by card online. Contact the airline to cancel it.')
     const remaining = payment.capturedAmount - payment.refundedAmount
     if (args.amount > remaining) throw new DomainError('Refund amount exceeds the remaining captured amount.')
     const providerLock = await transactionContext.prisma.$queryRaw(Prisma.sql`SELECT "id" FROM "PaymentProvider" WHERE "id" = ${payment.provider.id} FOR UPDATE`)
@@ -686,7 +698,7 @@ export async function processBookingRefund(
     const result = { resourceType: 'Refund', resourceId: refund.id, status: 'succeeded', changed: true, replayed: false }
     await finishOperation(sudo, claim.record.id, result)
     return result
-  })
+  }
 }
 
 // The BookingSegment columns issueBookingTickets selects; coupons copy their fare basis and booking class from these.

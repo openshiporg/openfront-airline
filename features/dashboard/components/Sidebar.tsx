@@ -50,6 +50,7 @@ interface User {
   email: string;
   name?: string;
   onboardingStatus?: string;
+  carrierLaunched?: boolean | null;
   role?: {
     canAccessDashboard?: boolean;
     canManageOnboarding?: boolean;
@@ -367,7 +368,7 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
               title: 'Welcome to Openfront Airline',
               description: 'Your airline is empty. Click get started to set up your carrier identity and first sellable flight.',
             }]}
-            onboardingStatus={user?.onboardingStatus}
+            onboardingStatus={user?.carrierLaunched ? 'completed' : user?.onboardingStatus}
             userRole={user?.role}
             onDismiss={async () => {
               try {

@@ -307,7 +307,19 @@ export async function cancelBooking(
   const storefrontBookingId = isStorefrontContext(context) ? (context.session as any)?.data?.storefrontBookingId : undefined
   if (!storefrontBookingId || storefrontBookingId !== args.customerBookingId) await requireFreshPermission(context, 'canManageBookings')
 
-  return runSerializableTransaction(context, async transactionContext => {
+  return runSerializableTransaction(context, transactionContext => cancelBookingInTransaction(transactionContext, args, storefrontBookingId))
+}
+
+// The cancellation inside the caller's transaction. `refundSettled` is set only by the traveler's self-service
+// cancel after it refunded the card in the same transaction under the fare policy, so retained fare (a cancellation
+// fee) does not block the cancel the refund was for.
+export async function cancelBookingInTransaction(
+  transactionContext: Context,
+  args: { bookingId: string; idempotencyKey: string; reason: string; customerBookingId?: string; customerAccessTokenHash?: string },
+  storefrontBookingId: string | undefined,
+  options: { refundSettled?: boolean } = {},
+): Promise<TransitionResult> {
+  {
     const prisma = transactionContext.prisma as any
     const readCancellationState = () => prisma.booking.findUnique({
       where: { id: args.bookingId },
@@ -370,7 +382,8 @@ export async function cancelBooking(
       const metadata = (payment.metadata ?? {}) as Record<string, unknown>
       return metadata.purchaseKind !== 'seat' && ['captured', 'partially_refunded'].includes(payment.status)
     })
-    if (unsettledFarePayment || ['paid', 'partially_refunded'].includes(booking.paymentStatus)) throw new DomainError('Refund captured airfare before cancelling this booking.')
+    const fareSettledByRefund = options.refundSettled === true && booking.paymentStatus !== 'paid' && (!unsettledFarePayment || unsettledFarePayment.status === 'partially_refunded')
+    if (!fareSettledByRefund && (unsettledFarePayment || ['paid', 'partially_refunded'].includes(booking.paymentStatus))) throw new DomainError('Refund captured airfare before cancelling this booking.')
     const unsettledSeatPayment = booking.payments.find((payment: any) => {
       const metadata = (payment.metadata ?? {}) as Record<string, unknown>
       return metadata.purchaseKind === 'seat' && ['captured', 'partially_refunded'].includes(payment.status)
@@ -435,7 +448,7 @@ export async function cancelBooking(
     const result = { resourceType: 'Booking', resourceId: booking.id, status: 'cancelled', changed: true, replayed: false }
     await finishOperation(sudo, claim.record.id, result)
     return result
-  })
+  }
 }
 
 const passengerServiceResources = {

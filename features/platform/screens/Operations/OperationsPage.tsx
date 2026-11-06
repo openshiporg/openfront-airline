@@ -79,13 +79,13 @@ function load(flight: NextFlight) {
 export default async function OperationsPage() {
   const now = new Date().toISOString()
   const [identity, departures, ...queueResults] = await Promise.all([
-    keystoneClient<{ authenticatedItem: { onboardingStatus: string; carrier?: { name: string; legalName: string; code: string; defaultCurrencyCode: string; defaultTimezone: string } | null; role?: { canManageOnboarding: boolean } | null } | null }>(`query OperatorOperationsIdentity { authenticatedItem { ... on User { onboardingStatus carrier { name legalName code defaultCurrencyCode defaultTimezone } role { canManageOnboarding } } } }`),
+    keystoneClient<{ authenticatedItem: { onboardingStatus: string; carrierLaunched?: boolean | null; carrier?: { name: string; legalName: string; code: string; defaultCurrencyCode: string; defaultTimezone: string } | null; role?: { canManageOnboarding: boolean } | null } | null }>(`query OperatorOperationsIdentity { authenticatedItem { ... on User { onboardingStatus carrierLaunched carrier { name legalName code defaultCurrencyCode defaultTimezone } role { canManageOnboarding } } } }`),
     keystoneClient<{ flightInstances: NextFlight[] | null }>(NEXT_DEPARTURES_QUERY, { now }),
     ...QUEUES.map(queue => keystoneClient<{ count: number | null }>(queue.query)),
   ])
   const operator = identity.success ? identity.data.authenticatedItem : null
   const carrier = operator?.carrier
-  const launchStatus = operator?.onboardingStatus
+  const launchStatus = operator?.carrierLaunched ? 'completed' : operator?.onboardingStatus
   const launchTone = launchStatus === 'completed' ? 'ok' as const : launchStatus ? 'warn' as const : 'idle' as const
   const flights = departures.success ? departures.data.flightInstances ?? [] : null
   const queues = QUEUES.map((queue, index) => {
@@ -98,7 +98,7 @@ export default async function OperationsPage() {
     header={<DeskHeader
       title={carrier?.name ?? 'Carrier unavailable'}
       tone={carrier ? launchTone : 'idle'}
-      status={carrier ? `Launch setup ${(launchStatus ?? 'unknown').replaceAll('_', ' ')}` : 'Unavailable'}
+      status={carrier ? (operator?.carrierLaunched ? 'Selling' : `Launch setup ${(launchStatus ?? 'unknown').replaceAll('_', ' ')}`) : 'Unavailable'}
       meta={carrier ? <span className="flex flex-wrap items-center gap-x-3 gap-y-1"><Plate>{carrier.code}</Plate><span>{carrier.legalName}</span><span>{carrier.defaultCurrencyCode}</span><span>{carrier.defaultTimezone}</span>{launchStatus !== 'completed' && <span className="capitalize">Launch setup {(launchStatus ?? 'unknown').replaceAll('_', ' ')}</span>}</span> : undefined}
     />}
   >

@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client'
 
 import { claimOutboxEvents, completeOutboxEvent, failOutboxEvent, renewOutboxLease } from './outbox'
 import { processPaymentWebhookEvent } from './payment/process-webhook'
+import { dispatchTravelerNotices, TRAVELER_NOTICE_TOPICS } from './traveler-notices'
 import { assertExternalWebhookUrl, assertPublicWebhookDestination } from './webhook-url'
 
 export { assertExternalWebhookUrl } from './webhook-url'
@@ -40,6 +41,7 @@ export async function dispatchOutboxEvent(prisma: PrismaClient, event: any, mayD
     return
   }
   if (event.topic === 'integration.webhook.received') throw new Error('No domain adapter is installed for this retained integration event; provider success was not recorded.')
+  if (TRAVELER_NOTICE_TOPICS.has(event.topic)) await dispatchTravelerNotices(prisma, event)
   await dispatchExternalEndpoints(prisma, event, mayDispatch)
 }
 

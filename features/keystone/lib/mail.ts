@@ -155,3 +155,36 @@ export async function sendBookingConfirmationEmail(booking: BookingConfirmation)
     return false
   }
 }
+
+export type BookingNotice = { to: string; carrierName: string; recordLocator: string; subject: string; heading: string; lines: string[] }
+
+export function bookingNoticeEmail(notice: BookingNotice, manageUrl: string): string {
+  const brandName = escapeHtml(safeCarrierName(notice.carrierName))
+  const lines = notice.lines.map(line => `<tr><td style="padding:8px 28px 0;font-size:15px;line-height:1.5;">${escapeHtml(line)}</td></tr>`).join('')
+  return `
+    <body style="background:#f5f2eb;margin:0;padding:24px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;background:#fffdf8;border-radius:16px;font-family:Helvetica,Arial,sans-serif;color:#0f1b2d;">
+        <tr><td style="padding:24px 28px 8px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6b7689;">${brandName} · ${escapeHtml(notice.recordLocator)}</td></tr>
+        <tr><td style="padding:0 28px;font-size:24px;font-weight:700;">${escapeHtml(notice.heading)}</td></tr>
+        ${lines}
+        <tr><td style="padding:24px 28px 28px;"><a href="${escapeHtml(manageUrl)}" style="background:#0f1b2d;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700;display:inline-block;">Manage booking</a></td></tr>
+      </table>
+    </body>
+  `
+}
+
+// Service messages about an existing booking (cancelled, expired, delayed). Best effort, like the confirmation.
+export async function sendBookingNoticeEmail(notice: BookingNotice): Promise<boolean> {
+  if (!emailConfigured()) {
+    console.warn(`Booking notice for ${notice.recordLocator} not emailed: SMTP is not configured.`)
+    return false
+  }
+  try {
+    const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(notice.recordLocator)}`
+    await transport.sendMail({ to: notice.to, from: process.env.SMTP_FROM, subject: `${safeCarrierName(notice.carrierName)}: ${notice.subject}`, html: bookingNoticeEmail(notice, manageUrl) })
+    return true
+  } catch (error) {
+    console.error(`Booking notice for ${notice.recordLocator} could not be emailed:`, error instanceof Error ? error.message : 'unknown error')
+    return false
+  }
+}

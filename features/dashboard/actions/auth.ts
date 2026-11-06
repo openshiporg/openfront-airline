@@ -153,7 +153,7 @@ export async function getAuthenticatedUser() {
     query AuthenticatedUser {
       authenticatedItem {
         ... on User {
-          id email name onboardingStatus
+          id email name onboardingStatus carrierLaunched
           role { canAccessDashboard canManageOnboarding }
         }
       }
