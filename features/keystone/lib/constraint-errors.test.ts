@@ -55,3 +55,11 @@ test('a raw SQL unique violation maps by its key columns', () => {
   const error = Object.assign(new Error('Raw query failed. Code: `23505`. Message: `Key ("user", airport)=(u1, a1) already exists.`'), { code: 'P2010' })
   assert.equal(constraintRefusal(error)?.code, 'AIRLINE_DUPLICATE_STATION_ASSIGNMENT')
 })
+
+test('a duplicate code is named by the mutation that failed', () => {
+  const unique = Object.assign(new Error('Unique constraint failed'), { code: 'P2002', meta: { target: ['carrier', 'code'] } })
+  const cabin = maskGraphqlError(new GraphQLError('Prisma error', { path: ['createCabin'], originalError: unique }), 'Unexpected error.') as GraphQLError
+  assert.equal(cabin.extensions.code, 'AIRLINE_DUPLICATE_CABIN')
+  const brand = maskGraphqlError(new GraphQLError('Prisma error', { path: ['updateFareBrand'], originalError: unique }), 'Unexpected error.') as GraphQLError
+  assert.equal(brand.extensions.code, 'AIRLINE_DUPLICATE_FARE_BRAND')
+})
