@@ -838,7 +838,8 @@ export function parseListAccessControl(access) {
     };
   }
 
-  let { operation, filter, item } = access;
+  const { filter, item } = access;
+  let { operation } = access;
   if (typeof operation === "function") {
     operation = {
       query: operation,
