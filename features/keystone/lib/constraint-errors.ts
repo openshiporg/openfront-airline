@@ -28,7 +28,11 @@ export const CONSTRAINT_MESSAGES: Record<string, { code: string; message: string
   Route_distinct_endpoints: { code: 'AIRLINE_INVALID_ROUTE', message: 'Origin and destination must differ.' },
 }
 
-type ErrorLink = { message?: unknown; meta?: { target?: unknown }; code?: unknown; originalError?: unknown; cause?: unknown } | null | undefined
+type ErrorLink = {
+  message?: unknown; meta?: { target?: unknown }; code?: unknown; originalError?: unknown; cause?: unknown
+  // Keystone returns uncoded Prisma failures (CHECK and trigger violations) as "Prisma error" with the text here.
+  extensions?: { debug?: { message?: unknown }; prisma?: { meta?: unknown } }
+} | null | undefined
 
 function chain(error: unknown) {
   const out: ErrorLink[] = []
@@ -40,7 +44,10 @@ function chain(error: unknown) {
 /** The readable, coded refusal for a known constraint violation anywhere in the error's cause chain, or null. */
 export function constraintRefusal(error: unknown): { code: string; message: string } | null {
   for (const link of chain(error)) {
-    const text = [link?.message, typeof link?.meta === 'object' ? JSON.stringify(link.meta) : ''].join(' ')
+    const text = [
+      link?.message, typeof link?.meta === 'object' ? JSON.stringify(link.meta) : '',
+      link?.extensions?.debug?.message ?? '', link?.extensions?.prisma?.meta ? JSON.stringify(link.extensions.prisma.meta) : '',
+    ].join(' ')
     for (const [name, rule] of Object.entries(CONSTRAINT_MESSAGES)) if (text.includes(name)) return rule
     // Prisma sometimes reports a unique violation by its fields instead of the index name.
     const listed = /Unique constraint failed on the fields: \(([^)]*)\)/.exec(String(link?.message || ''))?.[1]?.match(/`([^`]+)`/g)?.map(field => field.slice(1, -1))

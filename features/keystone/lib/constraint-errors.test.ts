@@ -63,3 +63,10 @@ test('a duplicate code is named by the mutation that failed', () => {
   const brand = maskGraphqlError(new GraphQLError('Prisma error', { path: ['updateFareBrand'], originalError: unique }), 'Unexpected error.') as GraphQLError
   assert.equal(brand.extensions.code, 'AIRLINE_DUPLICATE_FARE_BRAND')
 })
+
+test('a CHECK violation Keystone reports as "Prisma error" maps by its debug text', () => {
+  const keystone = new GraphQLError('Prisma error', { extensions: { code: 'KS_PRISMA_ERROR', debug: { message: 'new row for relation "Route" violates check constraint "Route_distinct_endpoints"' } } })
+  const shown = maskGraphqlError(new GraphQLError('Prisma error', { path: ['createRoute'], originalError: keystone }), 'Unexpected error.') as GraphQLError
+  assert.equal(shown.extensions.code, 'AIRLINE_INVALID_ROUTE')
+  assert.equal(shown.extensions.debug, undefined)
+})
