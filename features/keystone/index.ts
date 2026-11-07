@@ -11,6 +11,7 @@ import { hasFreshPermission } from "./access";
 import { permissionsList } from "./models/fields";
 import { initialOperatorSetupEnabled } from './lib/initial-operator-setup';
 import { pooledDatabaseUrl } from './database-url';
+import { throwKeystonePrismaErrors } from './lib/keystonePrismaErrors';
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -67,6 +68,8 @@ export default withAuth(
     db: {
       provider: "postgresql",
       url: pooledDatabaseUrl(databaseURL),
+      // Keystone returns failed queries as values; this makes them throw so transactions roll back.
+      extendPrismaClient: throwKeystonePrismaErrors,
     },
     lists: models,
     storage: {
