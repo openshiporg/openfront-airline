@@ -1,4 +1,5 @@
 import { createTransport, getTestMessageUrl } from "nodemailer";
+import { emailButton, emailHeading, emailLayout, emailMuted, emailPanel, emailParagraph, emailTotals } from "./email-layout";
 
 // Public origin for links in emails: SMTP_STORE_LINK when set, otherwise the Railway-provided public domain.
 function getBaseUrlForEmails(): string {
@@ -47,39 +48,14 @@ function escapeHtml(value: string) {
 }
 
 export function passwordResetEmail({ url, carrierName }: { url: string; carrierName?: string | null }): string {
-  const brandName = escapeHtml(safeCarrierName(carrierName));
-  const backgroundColor = "#f9f9f9";
-  const textColor = "#444444";
-  const mainBackgroundColor = "#ffffff";
-  const buttonBackgroundColor = "#346df1";
-  const buttonBorderColor = "#346df1";
-  const buttonTextColor = "#ffffff";
-
-  return `
-    <body style="background: ${backgroundColor};">
-      <table width="100%" border="0" cellspacing="20" cellpadding="0" style="background: ${mainBackgroundColor}; max-width: 600px; margin: auto; border-radius: 10px;">
-        <tr>
-          <td align="center" style="padding: 10px 0px 0px 0px; font-size: 18px; font-family: Helvetica, Arial, sans-serif; color: ${textColor};">
-            <strong>${brandName}</strong><br />Please click below to reset your password
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding: 20px 0;">
-            <table border="0" cellspacing="0" cellpadding="0">
-              <tr>
-                <td align="center" style="border-radius: 5px;" bgcolor="${buttonBackgroundColor}"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="font-size: 18px; font-family: Helvetica, Arial, sans-serif; color: ${buttonTextColor}; text-decoration: none; border-radius: 5px; padding: 10px 20px; border: 1px solid ${buttonBorderColor}; display: inline-block; font-weight: bold;">Reset Password</a></td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding: 0px 0px 10px 0px; font-size: 16px; line-height: 22px; font-family: Helvetica, Arial, sans-serif; color: ${textColor};">
-            If you did not request this email you can safely ignore it.
-          </td>
-        </tr>
-      </table>
-    </body>
-  `;
+  return emailLayout({
+    storeName: safeCarrierName(carrierName),
+    preheader: "Use this link to choose a new password.",
+    title: "Reset your password",
+    body: `${emailParagraph("We received a request to reset the password for your account. Use the button below to choose a new one.")}
+${emailButton("Reset password", url)}
+${emailMuted("If you did not request this, you can safely ignore this email. Your password will not change.")}`,
+  });
 }
 
 export async function sendPasswordResetEmail(resetToken: string, to: string, options: { baseUrl?: string; carrierName?: string | null } = {}): Promise<void> {
@@ -117,22 +93,22 @@ type BookingConfirmation = {
 }
 
 export function bookingConfirmationEmail(booking: BookingConfirmation, manageUrl: string): string {
-  const brandName = escapeHtml(safeCarrierName(booking.carrierName))
-  const rows = booking.segments.map(segment => `<tr><td style="padding:6px 0;font-family:Menlo,Consolas,monospace;">${escapeHtml(booking.carrierCode)} ${escapeHtml(segment.flightNumber)}</td><td style="padding:6px 0;font-family:Menlo,Consolas,monospace;">${escapeHtml(segment.originCode)} – ${escapeHtml(segment.destinationCode)}</td><td style="padding:6px 0;">${escapeHtml(segment.departureLabel)}</td></tr>`).join('')
-  return `
-    <body style="background:#f5f2eb;margin:0;padding:24px;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;background:#fffdf8;border-radius:16px;font-family:Helvetica,Arial,sans-serif;color:#0f1b2d;">
-        <tr><td style="padding:24px 28px 8px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6b7689;">${brandName} · Reservation</td></tr>
-        <tr><td style="padding:0 28px;font-family:Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:.18em;">${escapeHtml(booking.recordLocator)}</td></tr>
-        <tr><td style="padding:16px 28px 0;"><table width="100%" style="font-size:14px;">${rows}</table></td></tr>
-        <tr><td style="padding:12px 28px 0;font-size:14px;">${booking.travelers.map(escapeHtml).join(', ')}</td></tr>
-        <tr><td style="padding:12px 28px 0;font-size:16px;font-weight:700;">${escapeHtml(booking.totalLabel)}</td></tr>
-        <tr><td style="padding:20px 28px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#6b7689;">Access code</td></tr>
-        <tr><td style="padding:6px 28px 0;font-family:Menlo,Consolas,monospace;font-size:12px;word-break:break-all;">${escapeHtml(booking.accessToken)}</td></tr>
-        <tr><td style="padding:24px 28px 28px;"><a href="${escapeHtml(manageUrl)}" style="background:#0f1b2d;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700;display:inline-block;">Manage booking</a></td></tr>
-      </table>
-    </body>
-  `
+  const flights = booking.segments.map(segment => `<strong>${escapeHtml(booking.carrierCode)} ${escapeHtml(segment.flightNumber)}</strong> &nbsp; ${escapeHtml(segment.originCode)} – ${escapeHtml(segment.destinationCode)}<br><span style="font-size:13px;">${escapeHtml(segment.departureLabel)}</span>`).join('<br><br>')
+  return emailLayout({
+    storeName: safeCarrierName(booking.carrierName),
+    preheader: `Reservation ${booking.recordLocator}`,
+    title: 'Your reservation',
+    body: `${emailMuted('Record locator')}
+${emailPanel(`<span style="font-family:Menlo,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:.16em;">${escapeHtml(booking.recordLocator)}</span>`, 'center')}
+${emailHeading('Flights')}
+${emailPanel(flights)}
+${emailHeading('Travelers')}
+${emailParagraph(booking.travelers.map(escapeHtml).join(', '))}
+${emailTotals([{ label: 'Total', value: booking.totalLabel }])}
+${emailHeading('Access code')}
+${emailPanel(`<span style="font-family:Menlo,Consolas,monospace;font-size:13px;word-break:break-all;">${escapeHtml(booking.accessToken)}</span>`)}
+${emailButton('Manage booking', manageUrl)}`,
+  })
 }
 
 // Best effort: a booking never fails because mail is unavailable. Returns whether a message was handed to SMTP.
@@ -159,18 +135,14 @@ export async function sendBookingConfirmationEmail(booking: BookingConfirmation)
 export type BookingNotice = { to: string; carrierName: string; recordLocator: string; subject: string; heading: string; lines: string[] }
 
 export function bookingNoticeEmail(notice: BookingNotice, manageUrl: string): string {
-  const brandName = escapeHtml(safeCarrierName(notice.carrierName))
-  const lines = notice.lines.map(line => `<tr><td style="padding:8px 28px 0;font-size:15px;line-height:1.5;">${escapeHtml(line)}</td></tr>`).join('')
-  return `
-    <body style="background:#f5f2eb;margin:0;padding:24px;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;background:#fffdf8;border-radius:16px;font-family:Helvetica,Arial,sans-serif;color:#0f1b2d;">
-        <tr><td style="padding:24px 28px 8px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6b7689;">${brandName} · ${escapeHtml(notice.recordLocator)}</td></tr>
-        <tr><td style="padding:0 28px;font-size:24px;font-weight:700;">${escapeHtml(notice.heading)}</td></tr>
-        ${lines}
-        <tr><td style="padding:24px 28px 28px;"><a href="${escapeHtml(manageUrl)}" style="background:#0f1b2d;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700;display:inline-block;">Manage booking</a></td></tr>
-      </table>
-    </body>
-  `
+  return emailLayout({
+    storeName: safeCarrierName(notice.carrierName),
+    preheader: notice.heading,
+    title: notice.heading,
+    body: `${emailMuted(`Reservation ${escapeHtml(notice.recordLocator)}`)}
+${notice.lines.map(line => emailParagraph(escapeHtml(line))).join('')}
+${emailButton('Manage booking', manageUrl)}`,
+  })
 }
 
 // Service messages about an existing booking (cancelled, expired, delayed). Best effort, like the confirmation.
