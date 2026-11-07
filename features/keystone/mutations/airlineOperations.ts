@@ -813,7 +813,11 @@ async function createBookingFromOfferInTransaction(
   }
 
   try {
-    const recordLocator = randomReference('', 6)
+    // Six hex characters is 16.7M locators per carrier; draw until one is free (the unique index is the backstop).
+    let recordLocator = randomReference('', 6)
+    for (let attempt = 0; attempt < 5 && await (context.prisma as any).booking.findFirst({ where: { carrierId: offer.carrier.id, recordLocator }, select: { id: true } }); attempt++) {
+      recordLocator = randomReference('', 6)
+    }
     const orderNumber = randomReference(`${offer.carrier.code}-`, 12)
     const booking = await sudo.query.Booking.createOne({
       data: {
