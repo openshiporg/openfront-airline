@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { json, relationship, select, text, timestamp } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import {
   canCreateForSessionCarrier,
@@ -80,6 +81,7 @@ export const ApprovedAgent = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('approvedAgent'),
     requiredRelationshipHooks(['carrier']),
     commandOwnedRelationshipHooks(['offers', 'bookings']),
     chronologicalRangeHooks('validFrom', 'validTo', 'Agent approval'),

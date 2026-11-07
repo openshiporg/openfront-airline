@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { integer, json, relationship, select, text, timestamp } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import { carrierScopedAccess } from '../access'
 import {
@@ -52,6 +53,7 @@ export const FlightSchedule = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('flightSchedule'),
     {
       // Provisioning reads ISO weekdays (Monday 1 … Sunday 7) and treats an empty list as every day.
       validate({ resolvedData, addValidationError }: any) {

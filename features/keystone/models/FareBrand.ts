@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { integer, json, relationship, select, text } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import { carrierScopedAccess } from '../access'
 import { carrierRelationshipHooks, combineListHooks, commandOwnedRelationshipHooks, requiredRelationshipHooks } from '../lib/validation'
@@ -42,6 +43,7 @@ export const FareBrand = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('catalogProduct'),
     requiredRelationshipHooks(['carrier', 'cabin']),
     carrierRelationshipHooks({ cabin: { model: 'cabin' } }),
     commandOwnedRelationshipHooks(['rules', 'inventoryBuckets', 'offerItems']),

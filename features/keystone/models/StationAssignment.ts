@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { checkbox, relationship, select, text, timestamp } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import { carrierScopedAccess } from '../access'
 import { carrierRelationshipHooks, chronologicalRangeHooks, combineListHooks, requiredRelationshipHooks } from '../lib/validation'
@@ -24,6 +25,7 @@ export const StationAssignment = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('stationAssignment'),
     requiredRelationshipHooks(['carrier', 'user', 'airport']),
     carrierRelationshipHooks({ user: { model: 'user' } }),
     // An inverted range would silently never take effect in station capability checks.

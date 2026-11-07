@@ -129,6 +129,8 @@ export const Booking = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('bookingTicketing', 'ticketingStatus'),
+    lifecycleHooks('bookingPayment', 'paymentStatus'),
     requiredRelationshipHooks(['carrier']),
     lifecycleHooks('booking'),
     minorAmountHooks(['baseAmount', 'taxAmount', 'feeAmount', 'discountAmount', 'totalAmount']),

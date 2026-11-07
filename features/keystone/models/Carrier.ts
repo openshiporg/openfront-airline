@@ -1,3 +1,4 @@
+import { lifecycleHooks } from '../lib/lifecycle'
 import { list } from '@keystone-6/core'
 import { checkbox, relationship, select, text } from '@keystone-6/core/fields'
 
@@ -141,6 +142,7 @@ export const Carrier = list({
         try { new Intl.DateTimeFormat('en-US', { timeZone: String(timezone) }) } catch { addValidationError('Default timezone must be an IANA timezone such as America/New_York.') }
       }
       if (operation !== 'update') return
+      lifecycleHooks('carrier').validate({ operation, item, resolvedData, addValidationError })
       // Fares, inventory, and local schedule times are fixed in the carrier's code, currency, and timezone.
       const changed = (['code', 'defaultCurrencyCode', 'defaultTimezone'] as const).filter(field => resolvedData[field] !== undefined && resolvedData[field] !== item?.[field])
       if (!changed.length) return

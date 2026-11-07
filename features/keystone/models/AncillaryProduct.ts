@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { checkbox, integer, json, relationship, select, text } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import { carrierScopedAccess } from '../access'
 import { combineListHooks, commandOwnedRelationshipHooks, minorAmountHooks, requiredRelationshipHooks } from '../lib/validation'
@@ -65,6 +66,7 @@ export const AncillaryProduct = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('catalogProduct'),
     requiredRelationshipHooks(['carrier']),
     commandOwnedRelationshipHooks(['offerItems', 'bookingLineItems', 'electronicMiscCoupons']),
     minorAmountHooks(['defaultPriceAmount', 'taxAmount']),

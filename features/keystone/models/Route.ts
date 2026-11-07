@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { checkbox, integer, relationship, select, text } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import { carrierScopedAccess } from '../access'
 import { combineListHooks, commandOwnedRelationshipHooks, requiredRelationshipHooks } from '../lib/validation'
@@ -55,6 +56,7 @@ export const Route = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('route'),
     requiredRelationshipHooks(['carrier', 'origin', 'destination']),
     commandOwnedRelationshipHooks(['schedules', 'flightInstances', 'fareRules']),
     routeIdentityHooks,

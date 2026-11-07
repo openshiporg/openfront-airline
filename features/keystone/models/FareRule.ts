@@ -1,5 +1,6 @@
 import { list } from '@keystone-6/core'
 import { checkbox, integer, json, relationship, select, text, timestamp } from '@keystone-6/core/fields'
+import { lifecycleHooks } from '../lib/lifecycle'
 
 import { carrierScopedAccess } from '../access'
 import {
@@ -58,6 +59,7 @@ export const FareRule = list({
     ...trackingFields,
   },
   hooks: combineListHooks(
+    lifecycleHooks('catalogProduct'),
     requiredRelationshipHooks(['carrier', 'fareBrand']),
     carrierRelationshipHooks({ fareBrand: { model: 'fareBrand' }, route: { model: 'route' } }),
     commandOwnedRelationshipHooks(['offerItems']),
