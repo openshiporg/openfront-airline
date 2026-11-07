@@ -9,8 +9,9 @@ import { runOutboxWorkerCycle } from '../features/integrations/outbox-worker'
 import { sendOperationalAlert } from '../features/integrations/monitoring'
 import { pruneExpiredRateLimitBuckets } from '../features/keystone/lib/rate-limit'
 import { validateProductionRuntime } from '../features/keystone/lib/runtime-config'
+import { pooledPrismaOptions } from '../features/keystone/database-url'
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient(pooledPrismaOptions('worker'))
 // Web health checks REQUIRED_WORKER_ID, so a worker configured only from .env.example heartbeats under that same id.
 const configuredWorkerId = process.env.OUTBOX_WORKER_ID?.trim() || process.env.REQUIRED_WORKER_ID?.trim()
 const workerId = configuredWorkerId || `${os.hostname()}:${process.pid}`

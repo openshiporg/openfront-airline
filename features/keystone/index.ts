@@ -10,6 +10,7 @@ import { resolveSessionSecret } from "./lib/session";
 import { hasFreshPermission } from "./access";
 import { permissionsList } from "./models/fields";
 import { initialOperatorSetupEnabled } from './lib/initial-operator-setup';
+import { pooledDatabaseUrl } from './database-url';
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -65,7 +66,7 @@ export default withAuth(
   config({
     db: {
       provider: "postgresql",
-      url: databaseURL,
+      url: pooledDatabaseUrl(databaseURL),
     },
     lists: models,
     storage: {

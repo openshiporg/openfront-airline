@@ -10,13 +10,14 @@ export async function register() {
   if (globalState.airlineMaintenanceLoop) return
   globalState.airlineMaintenanceLoop = true
 
-  const [{ PrismaClient }, { reapExpiredInventoryHolds }, { expireUnpaidBookings }, { runOutboxWorkerCycle }] = await Promise.all([
+  const [{ PrismaClient }, { pooledPrismaOptions }, { reapExpiredInventoryHolds }, { expireUnpaidBookings }, { runOutboxWorkerCycle }] = await Promise.all([
     import('@prisma/client'),
+    import('./features/keystone/database-url'),
     import('./features/integrations/hold-reaper'),
     import('./features/integrations/booking-expiry'),
     import('./features/integrations/outbox-worker'),
   ])
-  const prisma = new PrismaClient()
+  const prisma = new PrismaClient(pooledPrismaOptions('worker'))
   const leaseOwner = `web-maintenance#${process.pid}:${Math.random().toString(36).slice(2)}`
   let running = false
   const pass = async () => {
