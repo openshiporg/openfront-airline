@@ -10,7 +10,7 @@ Source: `features/keystone/models/**` (59 lists), `features/keystone/mutations/*
 **Who creates a record:**
 - **M:** the merchant (an operator in the dashboard).
 - **C:** the customer (through the storefront).
-- **S:** the system (commands, hooks, the worker).
+- **S:** the system (commands, hooks).
 
 ## Lists
 
@@ -90,9 +90,9 @@ Source: `features/keystone/models/**` (59 lists), `features/keystone/mutations/*
 | List | Parent page |
 |---|---|
 | IntegrationProvider, ProviderConnection | Settings & readiness (connections) |
-| WebhookEndpoint, WebhookEvent, OutboxEvent | Settings & readiness, and the generic list views; `requeueDeadLetteredOutboxEvent` |
+| WebhookEndpoint, WebhookEvent | Settings & readiness, and the generic list views |
 | AuditEvent | Manifest entry & audit |
-| IdempotencyKey, RateLimitBucket, WorkerHeartbeat | System only, never shown |
+| IdempotencyKey, RateLimitBucket | System only, never shown |
 
 ## Merchant workflows
 1. **Launch:** first-run setup (User, Carrier, Role) → onboarding (Carrier, Airport, Route, Cabin, FareBrand, FlightSchedule, FlightInstance, InventoryBucket, SeatMap, PaymentProvider, MachineCredential, OnboardingStep) → storefront settings (Carrier branding).

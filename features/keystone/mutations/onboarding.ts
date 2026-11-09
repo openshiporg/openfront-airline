@@ -280,11 +280,6 @@ export async function completeCarrierOnboarding(
       where: { carrierId: actor.carrierId, id: { not: actor.itemId }, onboardingStatus: { in: ['not_started', 'in_progress', 'dismissed'] }, role: { canManageOnboarding: true } },
       data: { onboardingStatus: 'completed' },
     })
-    if (completed) await tx.outboxEvent.upsert({
-      where: { eventKey: `onboarding:${actor.carrierId}:${digest}` },
-      update: {},
-      create: { carrierId: actor.carrierId, eventKey: `onboarding:${actor.carrierId}:${digest}`, topic: 'carrier.onboarding.completed', aggregateType: 'Carrier', aggregateId: actor.carrierId, payload: { code: data.code, flightInstanceId: datedService.flight.id, boundedScope: onboardingContract.launchScope }, status: 'pending', availableAt: now },
-    })
     return { completed, steps: steps.map((step: any) => ({ key: step.step, status: step.status, attemptCount: step.attemptCount, requirements: step.requirements ?? [] })) }
     })
   } catch (error) {

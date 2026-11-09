@@ -70,7 +70,7 @@ Configure routes, schedules, dated flights, cabins, fare brands, rules, ancillar
 Maintain passengers, travel-document verification, tickets and coupons, seats, check-in, boarding passes, bags, manifests, boarding, and offloading.
 
 ### Servicing & Recovery
-Record disruptions, reaccommodation, exchanges, refunds, settlement evidence, and outbox recovery. The registered payment adapter is manual reconciliation, not a live card-acquiring or global distribution connection.
+Record disruptions, reaccommodation, exchanges, refunds, and settlement evidence. The registered payment adapter is manual reconciliation, not a live card-acquiring or global distribution connection.
 
 ## Architecture
 
@@ -99,7 +99,7 @@ The [model registry](features/keystone/models/index.ts) and [Prisma schema](sche
 - Carriers, airports, stations, agents, routes, schedules, and flight instances.
 - Cabins, inventory, fares, ancillaries, offers, holds, bookings, and journeys.
 - Passengers, documents, tickets, coupons, seats, check-in, boarding, and baggage.
-- Payments, reconciliation, exchanges, refunds, disruptions, provider records, credentials, audit events, and outbox.
+- Payments, reconciliation, exchanges, refunds, disruptions, provider records, credentials, and audit events.
 
 ## Getting Started
 
@@ -165,12 +165,11 @@ The [model registry](features/keystone/models/index.ts) and [Prisma schema](sche
 - `npm run lint` - Run the repository's ESLint script.
 - `npm run typecheck` - Run the configured TypeScript check.
 - `npm run test` - Run the repository's configured test suite.
-- `npm run worker` - Run the application's background worker.
 
 Use a disposable development database for migration generation. Review the script before running it against any existing data.
 
 ### Airline Provider Integration
-The [payment registry](features/integrations/payment/index.ts) includes manual reconciliation only. The [airline commands](features/keystone/mutations/index.ts) cover booking, flight provisioning, departures, customer access, disruptions, and outbox recovery. Configure specialist provider connections explicitly rather than treating ticket or payment records as external execution.
+The [payment registry](features/integrations/payment/index.ts) includes manual reconciliation only. The [airline commands](features/keystone/mutations/index.ts) cover booking, flight provisioning, departures, customer access, and disruptions. Configure specialist provider connections explicitly rather than treating ticket or payment records as external execution.
 
 ## Documentation
 
@@ -229,7 +228,7 @@ npm start
 The included [Railway configuration](railway.toml) defines this app's build and startup lifecycle. Provision services and secrets separately.
 
 ### Scaling Considerations
-Run `npm run worker` separately for hold reaping, unpaid-booking expiry, and outbox delivery. Configure the expected worker identity and heartbeat before using production readiness checks. `npm start` validates production configuration before starting the web server.
+Hold reaping and unpaid-booking expiry run inside the web process. `npm start` validates production configuration before starting the web server.
 
 ## Contributing
 

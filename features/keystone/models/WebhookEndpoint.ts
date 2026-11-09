@@ -20,7 +20,7 @@ export const WebhookEndpoint = list({
     name: text({ validation: { isRequired: true } }),
     url: text({
       validation: { isRequired: true },
-      // Stored normalized, so the value the worker dispatches to is exactly the one validated on save.
+      // Stored normalized, so the value delivery targets is exactly the one validated on save.
       hooks: { resolveInput: ({ resolvedData }: any) => { try { return typeof resolvedData.url === 'string' ? new URL(resolvedData.url).toString() : resolvedData.url } catch { return resolvedData.url } } },
     }),
     eventTypes: json({ defaultValue: [] }),
@@ -51,7 +51,7 @@ export const WebhookEndpoint = list({
     },
     {
       validate({ operation, resolvedData, inputData, addValidationError }: any) {
-        // [] subscribes to nothing; "*" is a deliberate subscription to every topic (outbox-worker.ts).
+        // [] subscribes to nothing; "*" is a deliberate subscription to every topic.
         const eventTypes = resolvedData.eventTypes
         if (eventTypes !== undefined && (!Array.isArray(eventTypes) || eventTypes.length > 50 || eventTypes.some((type: unknown) => typeof type !== 'string' || !(type === '*' || /^[a-z0-9][a-z0-9._-]{0,99}$/.test(type))))) {
           addValidationError('Event types must be a list of topic names (for example booking.confirmed), or "*" for every topic.')

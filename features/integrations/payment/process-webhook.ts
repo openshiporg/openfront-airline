@@ -12,7 +12,7 @@ export function assertAuthoritativeCheckoutSettlement(object: any) {
 export async function processPaymentWebhookEvent(prisma: PrismaClient, webhookEventId: string, signingProviderId: string | null) {
   return prisma.$transaction(async tx => {
     const webhook = await tx.webhookEvent.findUnique({ where: { id: webhookEventId } })
-    // Settlement and inbox success commit together; a retry after a crash before outbox acknowledgement is done.
+    // Settlement and inbox success commit together; a provider redelivery after a crash finds it already done.
     if (webhook?.status === 'succeeded') return
     if (!webhook || !webhook.signatureVerified || !webhook.status || !['pending', 'failed', 'processing'].includes(webhook.status)) throw new Error('Payment webhook is not processable.')
     if (!signingProviderId) throw new Error('Payment webhook has no verified signing provider; retained for reconciliation.')
@@ -74,7 +74,6 @@ export async function processPaymentWebhookEvent(prisma: PrismaClient, webhookEv
       }
       await tx.paymentSession.update({ where: { id: paymentSession.id }, data: { status: 'captured', authorizedAt: now, completedAt: now } })
       await tx.auditEvent.upsert({ where: { eventKey: `provider-payment:${webhook.dedupeKey}` }, update: {}, create: { carrierId: paymentSession.carrierId, eventKey: `provider-payment:${webhook.dedupeKey}`, action: purchase?.kind === 'seat' ? 'seat.payment.captured' : 'payment.captured', aggregateType: 'Payment', aggregateId: payment.id, source: 'provider', idempotencyKey: webhook.dedupeKey, beforeSummary: {}, afterSummary: { status: 'captured', amount: paymentSession.amount, currencyCode: paymentSession.currencyCode }, metadata: { bookingId: paymentSession.bookingId, paymentSessionId: paymentSession.id }, occurredAt: now } })
-      await tx.outboxEvent.upsert({ where: { eventKey: `payment:${webhook.dedupeKey}` }, update: {}, create: { carrierId: paymentSession.carrierId, eventKey: `payment:${webhook.dedupeKey}`, topic: purchase?.kind === 'seat' ? 'seat.entitlement.issued' : 'payment.captured', aggregateType: 'Payment', aggregateId: payment.id, payload: { bookingId: paymentSession.bookingId, paymentSessionId: paymentSession.id }, status: 'pending', availableAt: now } })
     }
     await tx.webhookEvent.update({ where: { id: webhook.id }, data: { status: 'succeeded', completedAt: new Date(), lastAttemptedAt: new Date(), attemptCount: { increment: 1 }, errorMessage: '' } })
   })

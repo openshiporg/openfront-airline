@@ -68,12 +68,11 @@ export async function expireUnpaidBookings(prisma: PrismaClient, limit = 25) {
       if (cancelled.count !== 1) throw new Error(`Expired booking ${booking.id} changed while being compensated.`)
       const eventKey = `booking-unpaid-expired:${booking.id}`
       await tx.auditEvent.upsert({ where: { eventKey }, update: {}, create: { carrierId: booking.carrierId, eventKey, action: 'booking.unpaid-expire', aggregateType: 'Booking', aggregateId: booking.id, source: 'system', beforeSummary: { status: 'pending', paymentStatus: booking.paymentStatus }, afterSummary: { status: 'cancelled' }, metadata: { releasedPassengerSegments: activeSegments.length * booking.passengers.length }, occurredAt: now } })
-      await tx.outboxEvent.upsert({ where: { eventKey }, update: {}, create: { carrierId: booking.carrierId, eventKey, topic: 'booking.unpaid-expired', aggregateType: 'Booking', aggregateId: booking.id, payload: {}, status: 'pending', availableAt: now } })
       return 'expired' as const
     }).catch(async error => {
       if (!candidateId) throw error
       // The oldest due booking is selected first, so one booking that cannot be compensated would otherwise be
-      // retried forever and stall expiry, outbox delivery, and the worker heartbeat. Park it for operator review.
+      // retried forever and stall expiry. Park it for operator review.
       await markExpiryBlocked(prisma, candidateId, error)
       return 'blocked' as const
     })

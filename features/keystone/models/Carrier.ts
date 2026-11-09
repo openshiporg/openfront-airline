@@ -126,7 +126,6 @@ export const Carrier = list({
     stationAssignments: relationship({ ref: 'StationAssignment.carrier', many: true, access: { create: () => false, update: () => false } }),
     documentVerifications: relationship({ ref: 'DocumentVerification.carrier', many: true, access: { create: () => false, update: () => false } }),
     machineCredentials: relationship({ ref: 'MachineCredential.carrier', many: true, access: { create: () => false, update: () => false } }),
-    outboxEvents: relationship({ ref: 'OutboxEvent.carrier', many: true, access: { create: () => false, update: () => false } }),
     manualPaymentEvidence: relationship({ ref: 'ManualPaymentEvidence.carrier', many: true, access: { create: () => false, update: () => false } }),
     settlementLedgerEntries: relationship({ ref: 'SettlementLedgerEntry.carrier', many: true, access: { create: () => false, update: () => false } }),
     onboardingSteps: relationship({ ref: 'OnboardingStep.carrier', many: true, access: { create: () => false, update: () => false } }),

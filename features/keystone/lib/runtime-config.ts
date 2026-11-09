@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client'
 import { isEvidenceOnlyManualProvider } from './bounded-payment-policy'
 import { initialOperatorSetupEnabled } from './initial-operator-setup'
 
-const requiredProductionValues = ['DATABASE_URL', 'SESSION_SECRET', 'APP_BASE_URL', 'PUBLIC_APP_URL', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM', 'SMTP_STORE_LINK', 'S3_BUCKET_NAME', 'S3_REGION', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'S3_ENDPOINT', 'TRUSTED_PROXY_IPS', 'ALERT_WEBHOOK_URL', 'REQUIRED_WORKER_ID', 'BACKUP_RETENTION_DAYS', 'BACKUP_POLICY_VERIFICATION_ID', 'STOREFRONT_CARRIER_CODE', 'TRAVEL_DOCUMENT_TOKENIZATION_KEY'] as const
+const requiredProductionValues = ['DATABASE_URL', 'SESSION_SECRET', 'APP_BASE_URL', 'PUBLIC_APP_URL', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM', 'SMTP_STORE_LINK', 'S3_BUCKET_NAME', 'S3_REGION', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'S3_ENDPOINT', 'TRUSTED_PROXY_IPS', 'ALERT_WEBHOOK_URL', 'BACKUP_RETENTION_DAYS', 'BACKUP_POLICY_VERIFICATION_ID', 'STOREFRONT_CARRIER_CODE', 'TRAVEL_DOCUMENT_TOKENIZATION_KEY'] as const
 const requiredOnboardingSteps = ['carrier_profile', 'network_catalog', 'dated_service', 'station_scope', 'settlement_boundary', 'launch_review'] as const
 
 export async function validateProductionRuntime(env: NodeJS.ProcessEnv, prisma?: PrismaClient) {

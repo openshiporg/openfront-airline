@@ -119,7 +119,6 @@ model Carrier {
   stationAssignments                   StationAssignment[]      @relation("StationAssignment_carrier")
   documentVerifications                DocumentVerification[]   @relation("DocumentVerification_carrier")
   machineCredentials                   MachineCredential[]      @relation("MachineCredential_carrier")
-  outboxEvents                         OutboxEvent[]            @relation("OutboxEvent_carrier")
   manualPaymentEvidence                ManualPaymentEvidence[]  @relation("ManualPaymentEvidence_carrier")
   settlementLedgerEntries              SettlementLedgerEntry[]  @relation("SettlementLedgerEntry_carrier")
   onboardingSteps                      OnboardingStep[]         @relation("OnboardingStep_carrier")
@@ -1761,30 +1760,6 @@ model MachineCredential {
   @@index([carrierId])
 }
 
-model OutboxEvent {
-  id            String                 @id @default(cuid())
-  carrier       Carrier?               @relation("OutboxEvent_carrier", fields: [carrierId], references: [id])
-  carrierId     String?                @map("carrier")
-  eventKey      String                 @unique @default("")
-  topic         String                 @default("")
-  aggregateType String                 @default("")
-  aggregateId   String                 @default("")
-  payload       Json?                  @default("{}")
-  status        OutboxEventStatusType? @default(pending)
-  attemptCount  Int?                   @default(0)
-  availableAt   DateTime?              @default(now())
-  leasedAt      DateTime?
-  leaseOwner    String                 @default("")
-  lastError     String                 @default("")
-  deliveredAt   DateTime?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @default(now()) @updatedAt
-
-  @@index([carrierId])
-  @@index([status, availableAt, createdAt], map: "OutboxEvent_status_availableAt_createdAt_idx")
-  @@index([status, leasedAt], map: "OutboxEvent_status_leasedAt_idx")
-}
-
 model OnboardingStep {
   id              String                    @id @default(cuid())
   carrier         Carrier?                  @relation("OnboardingStep_carrier", fields: [carrierId], references: [id])
@@ -1875,19 +1850,6 @@ model AuditEvent {
   @@index([correlationId])
   @@index([idempotencyKey])
   @@index([occurredAt])
-}
-
-model WorkerHeartbeat {
-  id         String                     @id @default(cuid())
-  workerKey  String                     @unique @default("")
-  component  String                     @default("")
-  status     WorkerHeartbeatStatusType? @default(running)
-  lastSeenAt DateTime
-  metadata   Json?                      @default("{}")
-  createdAt  DateTime                   @default(now())
-  updatedAt  DateTime                   @default(now()) @updatedAt
-
-  @@index([lastSeenAt])
 }
 
 enum UserOnboardingStatusType {
@@ -2482,14 +2444,6 @@ enum MachineCredentialStatusType {
   expired
 }
 
-enum OutboxEventStatusType {
-  pending
-  processing
-  delivered
-  failed
-  dead_lettered
-}
-
 enum OnboardingStepStatusType {
   pending
   completed
@@ -2508,10 +2462,4 @@ enum AuditEventSourceType {
   agent
   provider
   system
-}
-
-enum WorkerHeartbeatStatusType {
-  running
-  draining
-  stopped
 }

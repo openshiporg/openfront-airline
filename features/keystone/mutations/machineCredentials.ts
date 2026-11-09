@@ -38,7 +38,6 @@ export async function issueMachineCredential(
     } })
     const now = new Date()
     await tx.auditEvent.create({ data: { carrierId: actor.carrierId, actorId: actor.itemId, eventKey: `machine-credential:${created.id}:issued`, action: 'machine-credential.issue', aggregateType: 'MachineCredential', aggregateId: created.id, source: 'platform', beforeSummary: {}, afterSummary: { status: 'active', audience, scopes, expiresAt: expiresAt.toISOString() }, metadata: {}, occurredAt: now } })
-    await tx.outboxEvent.create({ data: { carrierId: actor.carrierId, eventKey: `machine-credential:${created.id}:issued`, topic: 'machine-credential.issued', aggregateType: 'MachineCredential', aggregateId: created.id, payload: { audience, scopes, expiresAt: expiresAt.toISOString() }, status: 'pending', availableAt: now } })
     return created
   })
   return { credentialId: credential.id, keyId: issued.keyId, token: issued.token, expiresAt: expiresAt.toISOString() }
@@ -57,7 +56,6 @@ export async function revokeMachineCredential(
     const result = await tx.machineCredential.updateMany({ where: { id: credential.id, carrierId: actor.carrierId, status: 'active' }, data: { status: 'revoked', revokedAt: now } })
     if (result.count !== 1) throw new DomainError('Resource not found or inaccessible.')
     await tx.auditEvent.create({ data: { carrierId: actor.carrierId, actorId: actor.itemId, eventKey: `machine-credential:${credential.id}:revoked`, action: 'machine-credential.revoke', aggregateType: 'MachineCredential', aggregateId: credential.id, source: 'platform', beforeSummary: { status: 'active' }, afterSummary: { status: 'revoked' }, metadata: { audience: credential.audience, scopes: credential.scopes }, occurredAt: now } })
-    await tx.outboxEvent.create({ data: { carrierId: actor.carrierId, eventKey: `machine-credential:${credential.id}:revoked`, topic: 'machine-credential.revoked', aggregateType: 'MachineCredential', aggregateId: credential.id, payload: { audience: credential.audience }, status: 'pending', availableAt: now } })
     return true
   })
 }

@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!secret) throw new Error('Webhook secret is not configured.')
     const body = await readBoundedBody(req)
     if (!verifyTimestampedWebhook(body, String(req.headers['x-openfront-signature'] ?? ''), secret)) return res.status(401).json({ error: 'Invalid signature.' })
-    // No domain adapter handles integration events yet (outbox-worker.ts), so a verified event is refused instead of
+    // No domain adapter handles integration events yet, so a verified event is refused instead of
     // being accepted as work that can only dead-letter. Already-received events stay retained for reconciliation.
     if (!INSTALLED_INTEGRATION_EVENT_HANDLER) return res.status(501).json({ error: 'No handler is installed for this connection’s events; nothing was accepted.' })
     const payload = JSON.parse(body.toString('utf8')) as Record<string, unknown>
@@ -59,12 +59,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         eventKey: `in:${dedupeKey}`, dedupeKey, providerEventId, direction: 'inbound', eventType,
         status: 'pending', signatureVerified: true, payload: payload,
         payloadSummary: { providerEventId, eventType }, occurredAt: new Date(),
-      } })
-      await tx.outboxEvent.create({ data: {
-        carrierId: connection.carrierId, eventKey: `webhook:${dedupeKey}`,
-        topic: 'integration.webhook.received', aggregateType: 'WebhookEvent', aggregateId: event.id,
-        payload: { connectionId: connection.id, providerKey: connection.provider.providerKey, eventType, providerEventId },
-        status: 'pending', availableAt: new Date(),
       } })
       return { id: event.id, replayed: false }
     })

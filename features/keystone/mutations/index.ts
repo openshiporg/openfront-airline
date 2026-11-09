@@ -26,7 +26,6 @@ import { publishFlightDisruption, reaccommodateBooking } from './airlineRecovery
 import { boardBookingPassenger, departureManifest, offloadBookingPassenger } from './airlineDepartures'
 import { provisionDatedFlight, setDatedFlightSalesStatus, setInventoryAuthorization } from './airlineProvisioning'
 import { issueMachineCredential, machineCredentialSummaries, revokeMachineCredential } from './machineCredentials'
-import { requeueDeadLetteredOutboxEvent } from './outboxRecovery'
 import { completeCarrierOnboarding, dismissCarrierOnboarding } from './onboarding'
 import { updateCarrierStorefrontSettings } from './storefrontSettings'
 
@@ -295,7 +294,6 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         dismissCarrierOnboarding: OnboardingStatusResult!
         issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
         revokeMachineCredential(credentialId: ID!): Boolean!
-        requeueDeadLetteredOutboxEvent(outboxEventId: ID!, expectedAttemptCount: Int!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
         registerAirport(iataCode: String!, icaoCode: String, name: String!, city: String!, countryCode: String!, subdivisionCode: String, timezone: String!, idempotencyKey: String!): AirlineOperationResult!
         updateFlightOperations(
           flightInstanceId: ID!
@@ -489,7 +487,6 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         dismissCarrierOnboarding,
         issueMachineCredential,
         revokeMachineCredential,
-        requeueDeadLetteredOutboxEvent,
         createCustomerOffer,
         createCustomerBooking,
         rotateCustomerBookingAccessToken,

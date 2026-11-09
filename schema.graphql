@@ -10,6 +10,7 @@ type User {
   role: Role
   approvedAgent: ApprovedAgent
   onboardingStatus: UserOnboardingStatusType
+  carrierLaunched: Boolean
   passengerProfile: Passenger
   offers(where: OfferWhereInput! = {}, orderBy: [OfferOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: OfferWhereUniqueInput): [Offer!]
   offersCount(where: OfferWhereInput! = {}): Int
@@ -652,8 +653,6 @@ type Carrier {
   documentVerificationsCount(where: DocumentVerificationWhereInput! = {}): Int
   machineCredentials(where: MachineCredentialWhereInput! = {}, orderBy: [MachineCredentialOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: MachineCredentialWhereUniqueInput): [MachineCredential!]
   machineCredentialsCount(where: MachineCredentialWhereInput! = {}): Int
-  outboxEvents(where: OutboxEventWhereInput! = {}, orderBy: [OutboxEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: OutboxEventWhereUniqueInput): [OutboxEvent!]
-  outboxEventsCount(where: OutboxEventWhereInput! = {}): Int
   manualPaymentEvidence(where: ManualPaymentEvidenceWhereInput! = {}, orderBy: [ManualPaymentEvidenceOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ManualPaymentEvidenceWhereUniqueInput): [ManualPaymentEvidence!]
   manualPaymentEvidenceCount(where: ManualPaymentEvidenceWhereInput! = {}): Int
   settlementLedgerEntries(where: SettlementLedgerEntryWhereInput! = {}, orderBy: [SettlementLedgerEntryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: SettlementLedgerEntryWhereUniqueInput): [SettlementLedgerEntry!]
@@ -711,7 +710,6 @@ input CarrierWhereInput {
   stationAssignments: StationAssignmentManyRelationFilter
   documentVerifications: DocumentVerificationManyRelationFilter
   machineCredentials: MachineCredentialManyRelationFilter
-  outboxEvents: OutboxEventManyRelationFilter
   manualPaymentEvidence: ManualPaymentEvidenceManyRelationFilter
   settlementLedgerEntries: SettlementLedgerEntryManyRelationFilter
   onboardingSteps: OnboardingStepManyRelationFilter
@@ -795,12 +793,6 @@ input MachineCredentialManyRelationFilter {
   none: MachineCredentialWhereInput
 }
 
-input OutboxEventManyRelationFilter {
-  every: OutboxEventWhereInput
-  some: OutboxEventWhereInput
-  none: OutboxEventWhereInput
-}
-
 input SettlementLedgerEntryManyRelationFilter {
   every: SettlementLedgerEntryWhereInput
   some: SettlementLedgerEntryWhereInput
@@ -861,7 +853,6 @@ input CarrierUpdateInput {
   stationAssignments: StationAssignmentRelateToManyForUpdateInput
   documentVerifications: DocumentVerificationRelateToManyForUpdateInput
   machineCredentials: MachineCredentialRelateToManyForUpdateInput
-  outboxEvents: OutboxEventRelateToManyForUpdateInput
   manualPaymentEvidence: ManualPaymentEvidenceRelateToManyForUpdateInput
   settlementLedgerEntries: SettlementLedgerEntryRelateToManyForUpdateInput
   onboardingSteps: OnboardingStepRelateToManyForUpdateInput
@@ -927,12 +918,6 @@ input MachineCredentialRelateToManyForUpdateInput {
   connect: [MachineCredentialWhereUniqueInput!]
 }
 
-input OutboxEventRelateToManyForUpdateInput {
-  disconnect: [OutboxEventWhereUniqueInput!]
-  set: [OutboxEventWhereUniqueInput!]
-  connect: [OutboxEventWhereUniqueInput!]
-}
-
 input SettlementLedgerEntryRelateToManyForUpdateInput {
   disconnect: [SettlementLedgerEntryWhereUniqueInput!]
   set: [SettlementLedgerEntryWhereUniqueInput!]
@@ -975,7 +960,6 @@ input CarrierCreateInput {
   stationAssignments: StationAssignmentRelateToManyForCreateInput
   documentVerifications: DocumentVerificationRelateToManyForCreateInput
   machineCredentials: MachineCredentialRelateToManyForCreateInput
-  outboxEvents: OutboxEventRelateToManyForCreateInput
   manualPaymentEvidence: ManualPaymentEvidenceRelateToManyForCreateInput
   settlementLedgerEntries: SettlementLedgerEntryRelateToManyForCreateInput
   onboardingSteps: OnboardingStepRelateToManyForCreateInput
@@ -1021,10 +1005,6 @@ input ProviderConnectionRelateToManyForCreateInput {
 
 input MachineCredentialRelateToManyForCreateInput {
   connect: [MachineCredentialWhereUniqueInput!]
-}
-
-input OutboxEventRelateToManyForCreateInput {
-  connect: [OutboxEventWhereUniqueInput!]
 }
 
 input SettlementLedgerEntryRelateToManyForCreateInput {
@@ -6712,83 +6692,6 @@ input MachineCredentialOrderByInput {
   updatedAt: OrderDirection
 }
 
-type OutboxEvent {
-  id: ID!
-  carrier: Carrier
-  eventKey: String
-  topic: String
-  aggregateType: String
-  aggregateId: String
-  payload: JSON
-  status: OutboxEventStatusType
-  attemptCount: Int
-  availableAt: DateTime
-  leasedAt: DateTime
-  leaseOwner: String
-  lastError: String
-  deliveredAt: DateTime
-  createdAt: DateTime
-  updatedAt: DateTime
-}
-
-enum OutboxEventStatusType {
-  pending
-  processing
-  delivered
-  failed
-  dead_lettered
-}
-
-input OutboxEventWhereUniqueInput {
-  id: ID
-  eventKey: String
-}
-
-input OutboxEventWhereInput {
-  AND: [OutboxEventWhereInput!]
-  OR: [OutboxEventWhereInput!]
-  NOT: [OutboxEventWhereInput!]
-  id: IDFilter
-  carrier: CarrierWhereInput
-  eventKey: StringFilter
-  topic: StringFilter
-  aggregateType: StringFilter
-  aggregateId: StringFilter
-  status: OutboxEventStatusTypeNullableFilter
-  attemptCount: IntNullableFilter
-  availableAt: DateTimeNullableFilter
-  leasedAt: DateTimeNullableFilter
-  leaseOwner: StringFilter
-  lastError: StringFilter
-  deliveredAt: DateTimeNullableFilter
-  createdAt: DateTimeFilter
-  updatedAt: DateTimeFilter
-}
-
-input OutboxEventStatusTypeNullableFilter {
-  equals: OutboxEventStatusType
-  in: [OutboxEventStatusType!]
-  notIn: [OutboxEventStatusType!]
-  not: OutboxEventStatusTypeNullableFilter
-}
-
-input OutboxEventOrderByInput {
-  id: OrderDirection
-  eventKey: OrderDirection
-  topic: OrderDirection
-  aggregateType: OrderDirection
-  aggregateId: OrderDirection
-  status: OrderDirection
-  attemptCount: OrderDirection
-  availableAt: OrderDirection
-  leasedAt: OrderDirection
-  leaseOwner: OrderDirection
-  lastError: OrderDirection
-  deliveredAt: OrderDirection
-  createdAt: OrderDirection
-  updatedAt: OrderDirection
-}
-
 type OnboardingStep {
   id: ID!
   carrier: Carrier
@@ -7007,58 +6910,6 @@ input AuditEventOrderByInput {
   updatedAt: OrderDirection
 }
 
-type WorkerHeartbeat {
-  id: ID!
-  workerKey: String
-  component: String
-  status: WorkerHeartbeatStatusType
-  lastSeenAt: DateTime
-  metadata: JSON
-  createdAt: DateTime
-  updatedAt: DateTime
-}
-
-enum WorkerHeartbeatStatusType {
-  running
-  draining
-  stopped
-}
-
-input WorkerHeartbeatWhereUniqueInput {
-  id: ID
-  workerKey: String
-}
-
-input WorkerHeartbeatWhereInput {
-  AND: [WorkerHeartbeatWhereInput!]
-  OR: [WorkerHeartbeatWhereInput!]
-  NOT: [WorkerHeartbeatWhereInput!]
-  id: IDFilter
-  workerKey: StringFilter
-  component: StringFilter
-  status: WorkerHeartbeatStatusTypeNullableFilter
-  lastSeenAt: DateTimeFilter
-  createdAt: DateTimeFilter
-  updatedAt: DateTimeFilter
-}
-
-input WorkerHeartbeatStatusTypeNullableFilter {
-  equals: WorkerHeartbeatStatusType
-  in: [WorkerHeartbeatStatusType!]
-  notIn: [WorkerHeartbeatStatusType!]
-  not: WorkerHeartbeatStatusTypeNullableFilter
-}
-
-input WorkerHeartbeatOrderByInput {
-  id: OrderDirection
-  workerKey: OrderDirection
-  component: OrderDirection
-  status: OrderDirection
-  lastSeenAt: OrderDirection
-  createdAt: OrderDirection
-  updatedAt: OrderDirection
-}
-
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -7171,7 +7022,6 @@ type Mutation {
   dismissCarrierOnboarding: OnboardingStatusResult!
   issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
   revokeMachineCredential(credentialId: ID!): Boolean!
-  requeueDeadLetteredOutboxEvent(outboxEventId: ID!, expectedAttemptCount: Int!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
   registerAirport(iataCode: String!, icaoCode: String, name: String!, city: String!, countryCode: String!, subdivisionCode: String, timezone: String!, idempotencyKey: String!): AirlineOperationResult!
   updateFlightOperations(flightInstanceId: ID!, departureTerminal: String, departureGate: String, arrivalTerminal: String, arrivalGate: String, estimatedDepartureAt: String, estimatedArrivalAt: String, actualDepartureAt: String, actualArrivalAt: String, status: String, idempotencyKey: String!): AirlineOperationResult!
   recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
@@ -7182,6 +7032,7 @@ type Mutation {
   rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
   recoverCustomerBookingAccess(carrierCode: String!, recordLocator: String!, email: String!): Boolean!
   cancelCustomerBooking(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
+  cancelCustomerBookingWithRefund(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): CustomerCancellationResult!
   assignCustomerSeat(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID!, idempotencyKey: String!): AirlineOperationResult!
   checkInCustomerBooking(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID, idempotencyKey: String!): AirlineOperationResult!
   createCustomerOffer(carrierCode: String!, flightInstanceId: ID!, inventoryBucketId: ID!, shoppingSessionToken: String!, idempotencyKey: String!, passengers: [CustomerPassengerInput!]!): AirlineOperationResult!
@@ -7396,9 +7247,6 @@ type Query {
   machineCredential(where: MachineCredentialWhereUniqueInput!): MachineCredential
   machineCredentials(where: MachineCredentialWhereInput! = {}, orderBy: [MachineCredentialOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: MachineCredentialWhereUniqueInput): [MachineCredential!]
   machineCredentialsCount(where: MachineCredentialWhereInput! = {}): Int
-  outboxEvent(where: OutboxEventWhereUniqueInput!): OutboxEvent
-  outboxEvents(where: OutboxEventWhereInput! = {}, orderBy: [OutboxEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: OutboxEventWhereUniqueInput): [OutboxEvent!]
-  outboxEventsCount(where: OutboxEventWhereInput! = {}): Int
   onboardingStep(where: OnboardingStepWhereUniqueInput!): OnboardingStep
   onboardingSteps(where: OnboardingStepWhereInput! = {}, orderBy: [OnboardingStepOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: OnboardingStepWhereUniqueInput): [OnboardingStep!]
   onboardingStepsCount(where: OnboardingStepWhereInput! = {}): Int
@@ -7408,15 +7256,13 @@ type Query {
   auditEvent(where: AuditEventWhereUniqueInput!): AuditEvent
   auditEvents(where: AuditEventWhereInput! = {}, orderBy: [AuditEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: AuditEventWhereUniqueInput): [AuditEvent!]
   auditEventsCount(where: AuditEventWhereInput! = {}): Int
-  workerHeartbeat(where: WorkerHeartbeatWhereUniqueInput!): WorkerHeartbeat
-  workerHeartbeats(where: WorkerHeartbeatWhereInput! = {}, orderBy: [WorkerHeartbeatOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: WorkerHeartbeatWhereUniqueInput): [WorkerHeartbeat!]
-  workerHeartbeatsCount(where: WorkerHeartbeatWhereInput! = {}): Int
   keystone: KeystoneMeta!
   authenticatedItem: AuthenticatedItem
   validateUserPasswordResetToken(email: String!, token: String!): ValidateUserPasswordResetTokenResult
   redirectToInit: Boolean
   airlineFlightOptions(originCode: String!, destinationCode: String!, serviceDate: String!, passengerCount: Int = 1): [AirlineFlightOption!]!
   customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
+  customerCancellationQuote(recordLocator: String!, accessToken: String!): CustomerCancellationQuote!
   operatorBookingReceipt(bookingId: ID!): JSON!
   publicCarrierIdentity(carrierCode: String!): PublicCarrierIdentity
   departureManifest(serviceDate: String!, originCode: String, cleanupCursor: String): JSON!
@@ -7718,6 +7564,21 @@ type IssuedMachineCredential {
   keyId: String!
   token: String!
   expiresAt: String!
+}
+
+type CustomerCancellationQuote {
+  allowed: Boolean!
+  reason: String!
+  refundAmount: Int!
+  feeAmount: Int!
+  currencyCode: String!
+  summary: String!
+}
+
+type CustomerCancellationResult {
+  status: String!
+  refundAmount: Int!
+  currencyCode: String!
 }
 
 type CustomerBooking {

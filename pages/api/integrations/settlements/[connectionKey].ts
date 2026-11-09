@@ -54,10 +54,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where: { eventKey: `settlement-import:${ledgerKey}` }, update: {},
         create: { carrierId: connection.carrierId, eventKey: `settlement-import:${ledgerKey}`, action: 'settlement.ledger-entry.import', aggregateType: 'SettlementLedgerEntry', aggregateId: retained.id, source: 'provider', afterSummary: { externalReference, amount, currencyCode }, metadata: { credentialId: machine.credentialId, connectionId: connection.id } },
       })
-      await tx.outboxEvent.upsert({
-        where: { eventKey: `settlement-imported:${ledgerKey}` }, update: {},
-        create: { carrierId: connection.carrierId, eventKey: `settlement-imported:${ledgerKey}`, topic: 'settlement.ledger-entry.imported', aggregateType: 'SettlementLedgerEntry', aggregateId: retained.id, payload: { externalReference, amount, currencyCode, credentialId: machine.credentialId }, status: 'pending', availableAt: new Date() },
-      })
       return retained
     })
     return res.status(202).json({ accepted: true, ledgerEntryId: entry.id, ledgerSource })

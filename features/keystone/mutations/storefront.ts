@@ -381,7 +381,6 @@ export async function rotateCustomerBookingAccessToken(
     await (transactionContext.prisma as any).booking.update({ where: { id: booking.id }, data: { accessTokenHash: hashStorefrontToken(nextToken), accessTokenExpiresAt: new Date(now.getTime() + 365 * 24 * 60 * 60_000), accessTokenVersion: (current.accessTokenVersion ?? 1) + 1 } })
     const eventKey = `booking-access-rotated:${booking.id}:${crypto.randomUUID()}`
     await (transactionContext.prisma as any).auditEvent.create({ data: { carrierId: booking.carrier.id, eventKey, action: 'booking.access-token.rotate', aggregateType: 'Booking', aggregateId: booking.id, source: 'storefront', beforeSummary: {}, afterSummary: { accessRevoked: true }, metadata: {}, occurredAt: now } })
-    await (transactionContext.prisma as any).outboxEvent.create({ data: { carrierId: booking.carrier.id, eventKey, topic: 'booking.access-token.rotated', aggregateType: 'Booking', aggregateId: booking.id, payload: {}, status: 'pending', availableAt: now } })
   })
   return { recordLocator: booking.recordLocator, accessToken: nextToken }
 }

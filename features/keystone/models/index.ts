@@ -31,7 +31,6 @@ import { Journey } from './Journey'
 import { Offer } from './Offer'
 import { OfferItem } from './OfferItem'
 import { OnboardingStep } from './OnboardingStep'
-import { OutboxEvent } from './OutboxEvent'
 import { Passenger } from './Passenger'
 import { Payment } from './Payment'
 import { PaymentProvider } from './PaymentProvider'
@@ -56,7 +55,6 @@ import { TravelDocument } from './TravelDocument'
 import { User } from './User'
 import { WebhookEndpoint } from './WebhookEndpoint'
 import { WebhookEvent } from './WebhookEvent'
-import { WorkerHeartbeat } from './WorkerHeartbeat'
 
 export const models = {
   User,
@@ -112,12 +110,10 @@ export const models = {
   WebhookEndpoint,
   WebhookEvent,
   MachineCredential,
-  OutboxEvent,
   OnboardingStep,
   RateLimitBucket,
   IdempotencyKey,
   AuditEvent,
-  WorkerHeartbeat,
 }
 
 export default models

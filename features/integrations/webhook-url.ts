@@ -1,7 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import net from 'node:net'
 
-// Shared by the delivery worker and the WebhookEndpoint model, so a URL is rejected when it is saved, not only at dispatch.
+// Shared by delivery and the WebhookEndpoint model, so a URL is rejected when it is saved, not only at dispatch.
 export function assertExternalWebhookUrl(url: URL, env: NodeJS.ProcessEnv = process.env) {
   if (url.username || url.password || url.hash) throw new Error('Webhook endpoints cannot contain credentials or fragments.')
   if (env.NODE_ENV !== 'production') return

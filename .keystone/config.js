@@ -5,6 +5,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -27,13 +30,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// keystone.ts
-var keystone_exports = {};
-__export(keystone_exports, {
-  default: () => keystone_default2
-});
-module.exports = __toCommonJS(keystone_exports);
-
 // features/keystone/lib/s3-storage.ts
 function s3ForcePathStyle(endpoint2) {
   let hostname = "";
@@ -43,58 +39,433 @@ function s3ForcePathStyle(endpoint2) {
   }
   return !(hostname === "storageapi.dev" || hostname.endsWith(".storageapi.dev"));
 }
+var init_s3_storage = __esm({
+  "features/keystone/lib/s3-storage.ts"() {
+    "use strict";
+  }
+});
 
-// features/keystone/index.ts
-var import_auth = require("@keystone-6/auth");
-var import_core60 = require("@keystone-6/core");
-var import_config = require("dotenv/config");
-
-// features/keystone/models/AncillaryProduct.ts
-var import_core = require("@keystone-6/core");
-var import_fields4 = require("@keystone-6/core/fields");
+// features/keystone/lib/lifecycle.ts
+function canTransition(machineName, from, to) {
+  if (from === to) return true;
+  const machine = lifecycleMachines[machineName];
+  return machine.transitions[from]?.includes(to) ?? false;
+}
+function assertLifecycleTransition(machineName, from, to) {
+  const machine = lifecycleMachines[machineName];
+  if (!canTransition(machineName, from, to)) {
+    throw new Error(`${machine.label} cannot transition from ${from} to ${to}.`);
+  }
+  return { changed: from !== to, from, to };
+}
+function getLifecycleTarget(machineName, action) {
+  const machine = lifecycleMachines[machineName];
+  const target = machine.actions[action];
+  if (!target) throw new Error(`Unsupported ${machine.label} action: ${action}.`);
+  return target;
+}
+function lifecycleHooks(machineName, statusField = "status") {
+  return {
+    validate({ operation, item, resolvedData, addValidationError }) {
+      if (operation !== "update") return;
+      const current = String(item?.[statusField] ?? "");
+      const next = resolvedData?.[statusField];
+      if (next === void 0 || next === current) return;
+      try {
+        assertLifecycleTransition(machineName, current, String(next));
+      } catch (error) {
+        addValidationError(error instanceof Error ? error.message : "Invalid lifecycle transition.");
+      }
+    }
+  };
+}
+var lifecycleMachines;
+var init_lifecycle = __esm({
+  "features/keystone/lib/lifecycle.ts"() {
+    "use strict";
+    lifecycleMachines = {
+      offer: {
+        label: "Offer",
+        initial: "draft",
+        terminal: ["accepted", "expired", "withdrawn"],
+        transitions: {
+          draft: ["available", "withdrawn"],
+          available: ["held", "accepted", "expired", "withdrawn"],
+          held: ["available", "accepted", "expired", "withdrawn"],
+          accepted: [],
+          expired: [],
+          withdrawn: []
+        },
+        actions: { publish: "available", hold: "held", release: "available", accept: "accepted", expire: "expired", withdraw: "withdrawn" }
+      },
+      flightInstance: {
+        label: "Flight instance",
+        initial: "scheduled",
+        terminal: ["arrived", "cancelled"],
+        transitions: {
+          scheduled: ["open_for_sale", "closed_for_sale", "delayed", "cancelled"],
+          open_for_sale: ["closed_for_sale", "delayed", "cancelled"],
+          closed_for_sale: ["open_for_sale", "delayed", "departed", "cancelled"],
+          delayed: ["open_for_sale", "closed_for_sale", "departed", "cancelled"],
+          departed: ["arrived"],
+          arrived: [],
+          cancelled: []
+        },
+        actions: { openSales: "open_for_sale", closeSales: "closed_for_sale", delay: "delayed", depart: "departed", arrive: "arrived", cancel: "cancelled" }
+      },
+      inventoryHold: {
+        label: "Inventory hold",
+        initial: "active",
+        terminal: ["converted", "released", "expired"],
+        transitions: { active: ["converted", "released", "expired"], converted: [], released: [], expired: [] },
+        actions: { convert: "converted", release: "released", expire: "expired" }
+      },
+      booking: {
+        label: "Booking",
+        initial: "pending",
+        terminal: ["completed", "cancelled"],
+        transitions: {
+          pending: ["confirmed", "cancelled"],
+          confirmed: ["ticketed", "in_progress", "cancelled"],
+          ticketed: ["in_progress", "cancelled"],
+          in_progress: ["completed", "cancelled"],
+          completed: [],
+          cancelled: []
+        },
+        actions: { confirm: "confirmed", ticket: "ticketed", start: "in_progress", complete: "completed", cancel: "cancelled" }
+      },
+      journey: {
+        label: "Journey",
+        initial: "planned",
+        terminal: ["completed", "cancelled"],
+        transitions: {
+          planned: ["in_progress", "disrupted", "cancelled"],
+          in_progress: ["completed", "disrupted", "cancelled"],
+          disrupted: ["planned", "in_progress", "cancelled"],
+          completed: [],
+          cancelled: []
+        },
+        actions: { start: "in_progress", disrupt: "disrupted", recover: "planned", complete: "completed", cancel: "cancelled" }
+      },
+      bookingSegment: {
+        label: "Booking segment",
+        initial: "confirmed",
+        terminal: ["flown", "cancelled", "refunded"],
+        transitions: {
+          confirmed: ["checked_in", "disrupted", "reaccommodated", "cancelled", "refunded"],
+          checked_in: ["boarded", "offloaded", "disrupted", "reaccommodated", "cancelled"],
+          boarded: ["flown", "offloaded", "disrupted"],
+          offloaded: ["checked_in", "disrupted", "reaccommodated", "cancelled"],
+          disrupted: ["reaccommodated", "cancelled", "refunded"],
+          reaccommodated: ["confirmed", "cancelled"],
+          flown: [],
+          cancelled: [],
+          refunded: []
+        },
+        actions: { checkIn: "checked_in", board: "boarded", fly: "flown", offload: "offloaded", disrupt: "disrupted", reaccommodate: "reaccommodated", cancel: "cancelled", refund: "refunded" }
+      },
+      seatMap: {
+        label: "Seat map",
+        initial: "draft",
+        terminal: ["retired"],
+        transitions: { draft: ["published", "retired"], published: ["retired"], retired: [] },
+        actions: { publish: "published", retire: "retired" }
+      },
+      seatAssignment: {
+        label: "Seat assignment",
+        initial: "held",
+        terminal: ["boarded", "released", "cancelled"],
+        transitions: {
+          held: ["assigned", "released", "cancelled"],
+          assigned: ["confirmed", "released", "cancelled"],
+          confirmed: ["boarded", "released", "cancelled"],
+          boarded: ["confirmed", "released"],
+          released: [],
+          cancelled: []
+        },
+        actions: { assign: "assigned", confirm: "confirmed", board: "boarded", release: "released", cancel: "cancelled" }
+      },
+      serviceRequest: {
+        label: "Service request",
+        initial: "requested",
+        terminal: ["fulfilled", "unable", "cancelled"],
+        transitions: {
+          requested: ["pending", "confirmed", "unable", "cancelled"],
+          pending: ["confirmed", "unable", "cancelled"],
+          confirmed: ["fulfilled", "unable", "cancelled"],
+          fulfilled: [],
+          unable: [],
+          cancelled: []
+        },
+        actions: { pend: "pending", confirm: "confirmed", fulfill: "fulfilled", unable: "unable", cancel: "cancelled" }
+      },
+      ticket: {
+        label: "Ticket",
+        initial: "pending",
+        terminal: ["used", "voided", "refunded", "exchanged"],
+        transitions: {
+          pending: ["issued", "voided"],
+          issued: ["partially_used", "used", "voided", "refunded", "exchanged", "suspended"],
+          partially_used: ["used", "refunded", "exchanged", "suspended"],
+          suspended: ["issued", "partially_used", "refunded", "exchanged"],
+          used: [],
+          voided: [],
+          refunded: [],
+          exchanged: []
+        },
+        actions: { issue: "issued", partiallyUse: "partially_used", use: "used", suspend: "suspended", void: "voided", refund: "refunded", exchange: "exchanged" }
+      },
+      ticketCoupon: {
+        label: "Ticket coupon",
+        initial: "open",
+        terminal: ["flown", "voided", "refunded", "exchanged"],
+        transitions: {
+          open: ["checked_in", "voided", "refunded", "exchanged", "suspended"],
+          checked_in: ["boarded", "open", "voided", "refunded", "exchanged", "suspended"],
+          boarded: ["flown", "open", "suspended"],
+          suspended: ["open", "refunded", "exchanged", "voided"],
+          flown: [],
+          voided: [],
+          refunded: [],
+          exchanged: []
+        },
+        actions: { checkIn: "checked_in", reopen: "open", board: "boarded", fly: "flown", suspend: "suspended", void: "voided", refund: "refunded", exchange: "exchanged" }
+      },
+      electronicMiscDocument: {
+        label: "Electronic miscellaneous document",
+        initial: "pending",
+        terminal: ["used", "voided", "refunded", "exchanged"],
+        transitions: {
+          pending: ["issued", "voided"],
+          issued: ["partially_used", "used", "voided", "refunded", "exchanged"],
+          partially_used: ["used", "refunded", "exchanged"],
+          used: [],
+          voided: [],
+          refunded: [],
+          exchanged: []
+        },
+        actions: { issue: "issued", partiallyUse: "partially_used", use: "used", void: "voided", refund: "refunded", exchange: "exchanged" }
+      },
+      electronicMiscCoupon: {
+        label: "Electronic miscellaneous coupon",
+        initial: "open",
+        terminal: ["used", "voided", "refunded", "exchanged"],
+        transitions: { open: ["used", "voided", "refunded", "exchanged"], used: [], voided: [], refunded: [], exchanged: [] },
+        actions: { use: "used", void: "voided", refund: "refunded", exchange: "exchanged" }
+      },
+      paymentSession: {
+        label: "Payment session",
+        initial: "created",
+        terminal: ["captured", "failed", "cancelled", "expired"],
+        transitions: {
+          created: ["pending", "cancelled", "expired"],
+          pending: ["authorized", "captured", "failed", "cancelled", "expired"],
+          authorized: ["captured", "failed", "cancelled"],
+          captured: [],
+          failed: [],
+          cancelled: [],
+          expired: []
+        },
+        actions: { begin: "pending", authorize: "authorized", capture: "captured", fail: "failed", cancel: "cancelled", expire: "expired" }
+      },
+      payment: {
+        label: "Payment",
+        initial: "pending",
+        terminal: ["failed", "cancelled", "refunded"],
+        transitions: {
+          pending: ["authorized", "captured", "failed", "cancelled"],
+          authorized: ["captured", "failed", "cancelled"],
+          captured: ["partially_refunded", "refunded"],
+          partially_refunded: ["refunded"],
+          failed: [],
+          cancelled: [],
+          refunded: []
+        },
+        actions: { authorize: "authorized", capture: "captured", partiallyRefund: "partially_refunded", refund: "refunded", fail: "failed", cancel: "cancelled" }
+      },
+      refund: {
+        label: "Refund",
+        initial: "requested",
+        terminal: ["succeeded", "failed", "cancelled"],
+        transitions: {
+          requested: ["approved", "cancelled"],
+          approved: ["processing", "cancelled"],
+          processing: ["succeeded", "failed"],
+          succeeded: [],
+          failed: [],
+          cancelled: []
+        },
+        actions: { approve: "approved", process: "processing", succeed: "succeeded", fail: "failed", cancel: "cancelled" }
+      },
+      exchange: {
+        label: "Exchange",
+        initial: "quoted",
+        terminal: ["completed", "failed", "cancelled", "expired"],
+        transitions: {
+          quoted: ["accepted", "cancelled", "expired"],
+          accepted: ["processing", "cancelled"],
+          processing: ["completed", "failed"],
+          completed: [],
+          failed: [],
+          cancelled: [],
+          expired: []
+        },
+        actions: { accept: "accepted", process: "processing", complete: "completed", fail: "failed", cancel: "cancelled", expire: "expired" }
+      },
+      checkIn: {
+        label: "Check-in",
+        initial: "not_started",
+        terminal: ["boarded", "cancelled"],
+        transitions: {
+          not_started: ["eligible", "blocked", "cancelled"],
+          eligible: ["checked_in", "blocked", "cancelled"],
+          checked_in: ["boarded", "offloaded", "cancelled"],
+          offloaded: ["eligible", "checked_in", "cancelled"],
+          blocked: ["eligible", "cancelled"],
+          boarded: ["offloaded"],
+          cancelled: []
+        },
+        actions: { markEligible: "eligible", checkIn: "checked_in", board: "boarded", block: "blocked", offload: "offloaded", cancel: "cancelled" }
+      },
+      boardingPass: {
+        label: "Boarding pass",
+        initial: "issued",
+        terminal: ["revoked"],
+        transitions: { issued: ["boarded", "revoked", "reissued"], reissued: ["boarded", "revoked"], boarded: ["revoked"], revoked: [] },
+        actions: { board: "boarded", revoke: "revoked", reissue: "reissued" }
+      },
+      bag: {
+        label: "Bag",
+        initial: "accepted",
+        terminal: ["delivered", "closed"],
+        transitions: {
+          accepted: ["loaded", "in_transit", "delayed", "mishandled"],
+          loaded: ["in_transit", "arrived", "delayed", "mishandled"],
+          in_transit: ["loaded", "arrived", "delayed", "mishandled"],
+          arrived: ["delivered", "delayed", "mishandled"],
+          delayed: ["in_transit", "arrived", "delivered", "mishandled", "closed"],
+          mishandled: ["in_transit", "arrived", "delivered", "closed"],
+          delivered: ["closed"],
+          closed: []
+        },
+        actions: { load: "loaded", transfer: "in_transit", arrive: "arrived", deliver: "delivered", delay: "delayed", mishandle: "mishandled", close: "closed" }
+      },
+      disruption: {
+        label: "Disruption",
+        initial: "detected",
+        terminal: ["resolved", "cancelled"],
+        transitions: { detected: ["published", "recovering", "resolved", "cancelled"], published: ["recovering", "resolved", "cancelled"], recovering: ["resolved", "cancelled"], resolved: [], cancelled: [] },
+        actions: { publish: "published", recover: "recovering", resolve: "resolved", cancel: "cancelled" }
+      },
+      reaccommodation: {
+        label: "Reaccommodation",
+        initial: "proposed",
+        terminal: ["confirmed", "declined", "failed", "expired", "cancelled"],
+        transitions: { proposed: ["accepted", "declined", "expired", "cancelled"], accepted: ["confirmed", "failed", "cancelled"], confirmed: [], declined: [], failed: [], expired: [], cancelled: [] },
+        actions: { accept: "accepted", confirm: "confirmed", decline: "declined", fail: "failed", expire: "expired", cancel: "cancelled" }
+      },
+      providerConnection: {
+        label: "Provider connection",
+        initial: "pending",
+        terminal: ["revoked"],
+        transitions: { pending: ["active", "failed", "revoked"], active: ["paused", "failed", "revoked"], paused: ["active", "revoked"], failed: ["pending", "active", "revoked"], revoked: [] },
+        actions: { activate: "active", pause: "paused", fail: "failed", retry: "pending", revoke: "revoked" }
+      },
+      webhookEvent: {
+        label: "Webhook event",
+        initial: "pending",
+        terminal: ["succeeded", "dead_lettered"],
+        transitions: { pending: ["processing", "failed", "succeeded"], processing: ["succeeded", "failed"], failed: ["pending", "dead_lettered"], succeeded: [], dead_lettered: [] },
+        actions: { process: "processing", succeed: "succeeded", fail: "failed", retry: "pending", deadLetter: "dead_lettered" }
+      },
+      route: {
+        label: "Route",
+        initial: "draft",
+        terminal: ["archived"],
+        transitions: { draft: ["active", "archived"], active: ["suspended", "archived"], suspended: ["active", "archived"], archived: [] },
+        actions: { activate: "active", suspend: "suspended", archive: "archived" }
+      },
+      flightSchedule: {
+        label: "Flight schedule",
+        initial: "draft",
+        terminal: ["retired"],
+        transitions: { draft: ["published", "retired"], published: ["suspended", "retired"], suspended: ["published", "retired"], retired: [] },
+        actions: { publish: "published", suspend: "suspended", retire: "retired" }
+      },
+      catalogProduct: {
+        label: "Catalog item",
+        initial: "draft",
+        terminal: ["archived"],
+        transitions: { draft: ["active", "archived"], active: ["inactive", "archived"], inactive: ["active", "archived"], archived: [] },
+        actions: { activate: "active", deactivate: "inactive", archive: "archived" }
+      },
+      stationAssignment: {
+        label: "Station assignment",
+        initial: "active",
+        terminal: ["revoked"],
+        transitions: { active: ["suspended", "revoked"], suspended: ["active", "revoked"], revoked: [] },
+        actions: { suspend: "suspended", reinstate: "active", revoke: "revoked" }
+      },
+      carrier: {
+        label: "Carrier",
+        initial: "active",
+        terminal: ["archived"],
+        transitions: { active: ["suspended", "archived"], suspended: ["active", "archived"], archived: [] },
+        actions: { suspend: "suspended", reinstate: "active", archive: "archived" }
+      },
+      approvedAgent: {
+        label: "Approved agent",
+        initial: "pending",
+        terminal: ["revoked", "expired"],
+        transitions: { pending: ["approved", "revoked"], approved: ["suspended", "revoked", "expired"], suspended: ["approved", "revoked", "expired"], revoked: [], expired: [] },
+        actions: { approve: "approved", suspend: "suspended", revoke: "revoked", expire: "expired" }
+      },
+      bookingPayment: {
+        label: "Booking payment status",
+        initial: "unpaid",
+        terminal: ["refunded"],
+        transitions: {
+          unpaid: ["partially_paid", "paid", "failed"],
+          failed: ["unpaid", "partially_paid", "paid"],
+          partially_paid: ["paid", "failed", "partially_refunded", "refunded"],
+          paid: ["partially_refunded", "refunded"],
+          partially_refunded: ["refunded"],
+          refunded: []
+        },
+        actions: { pay: "paid", fail: "failed", refundPartly: "partially_refunded", refund: "refunded" }
+      },
+      bookingTicketing: {
+        label: "Booking ticketing status",
+        initial: "not_ticketed",
+        terminal: ["voided", "exchanged"],
+        transitions: {
+          not_ticketed: ["partially_ticketed", "ticketed", "voided"],
+          partially_ticketed: ["ticketed", "voided", "exchanged"],
+          ticketed: ["voided", "exchanged"],
+          voided: [],
+          exchanged: []
+        },
+        actions: { ticket: "ticketed", void: "voided", exchange: "exchanged" }
+      }
+    };
+  }
+});
 
 // features/keystone/lib/domain-error.ts
-var import_graphql = require("graphql");
-var DomainError = class extends import_graphql.GraphQLError {
-  constructor(message, code = "BAD_USER_INPUT") {
-    super(message, { extensions: { code } });
+var import_graphql, DomainError;
+var init_domain_error = __esm({
+  "features/keystone/lib/domain-error.ts"() {
+    "use strict";
+    import_graphql = require("graphql");
+    DomainError = class extends import_graphql.GraphQLError {
+      constructor(message, code = "BAD_USER_INPUT") {
+        super(message, { extensions: { code } });
+      }
+    };
   }
-};
+});
 
 // features/keystone/models/fields.ts
-var import_fields = require("@keystone-6/core/fields");
-var permissionLabels = {
-  canAccessDashboard: "Access the operations dashboard",
-  canManageCarriers: "Manage carrier tenants and cross carrier boundaries",
-  canReadUsers: "Read carrier users",
-  canManageUsers: "Create and manage carrier users",
-  canReadRoles: "Read carrier roles",
-  canManageRoles: "Create and manage carrier roles",
-  canManageAgents: "Approve and manage travel sellers",
-  canReadNetwork: "Read airports, routes, schedules, and dated flights",
-  canManageNetwork: "Manage routes, schedules, dated flights, cabins, and seat maps",
-  canReadInventory: "Read commercial inventory and holds",
-  canManageInventory: "Manage commercial inventory and holds",
-  canReadOffers: "Read fares, products, and offers",
-  canManageOffers: "Manage fares, products, and offers",
-  canReadBookings: "Read bookings and immutable commercial lines",
-  canManageBookings: "Create and service bookings",
-  canReadPassengers: "Read passenger profiles",
-  canManagePassengers: "Manage passenger profiles and service requests",
-  canManageSecurePassengerData: "Read and manage encrypted travel-document data",
-  canReadTicketing: "Read tickets, coupons, and EMDs",
-  canManageTicketing: "Issue and service tickets, coupons, and EMDs",
-  canReadPayments: "Read payment and refund records",
-  canManagePayments: "Manage payment, refund, and exchange records",
-  canReadAirportService: "Read check-in, boarding, seat, and baggage records",
-  canManageAirportService: "Manage check-in, boarding, seat, and baggage records",
-  canReadDisruptions: "Read disruption and reaccommodation records",
-  canManageDisruptions: "Manage disruption and reaccommodation records",
-  canReadIntegrations: "Read provider and webhook health records",
-  canManageIntegrations: "Manage provider connections and webhooks",
-  canReadAudit: "Read carrier audit events",
-  canManageOnboarding: "Run carrier onboarding and runtime setup"
-};
 function canGrantPermission(args, permission) {
   if (args.inputData?.[permission] !== true) return true;
   if (!args.session) return true;
@@ -113,40 +484,73 @@ async function canGrantFreshPermission(args, permission) {
   });
   return canGrantPermission({ inputData: args.inputData, session: { data: { role: user?.role ?? null } } }, permission);
 }
-var permissionFields = Object.fromEntries(
-  Object.entries(permissionLabels).map(([key, label]) => [
-    key,
-    (0, import_fields.checkbox)({
-      defaultValue: false,
-      label,
-      access: {
-        create: (args) => canGrantFreshPermission(args, key),
-        update: (args) => canGrantFreshPermission(args, key)
-      }
-    })
-  ])
-);
-var permissionsList = Object.keys(permissionLabels);
-var immutableFieldAccess = {
-  update: () => false
-};
-var hiddenSensitiveUi = {
-  createView: { fieldMode: "hidden" },
-  itemView: { fieldMode: "hidden" },
-  listView: { fieldMode: "hidden" }
-};
+var import_fields, permissionLabels, permissionFields, permissionsList, immutableFieldAccess, hiddenSensitiveUi;
+var init_fields = __esm({
+  "features/keystone/models/fields.ts"() {
+    "use strict";
+    import_fields = require("@keystone-6/core/fields");
+    permissionLabels = {
+      canAccessDashboard: "Access the operations dashboard",
+      canManageCarriers: "Manage carrier tenants and cross carrier boundaries",
+      canReadUsers: "Read carrier users",
+      canManageUsers: "Create and manage carrier users",
+      canReadRoles: "Read carrier roles",
+      canManageRoles: "Create and manage carrier roles",
+      canManageAgents: "Approve and manage travel sellers",
+      canReadNetwork: "Read airports, routes, schedules, and dated flights",
+      canManageNetwork: "Manage routes, schedules, dated flights, cabins, and seat maps",
+      canReadInventory: "Read commercial inventory and holds",
+      canManageInventory: "Manage commercial inventory and holds",
+      canReadOffers: "Read fares, products, and offers",
+      canManageOffers: "Manage fares, products, and offers",
+      canReadBookings: "Read bookings and immutable commercial lines",
+      canManageBookings: "Create and service bookings",
+      canReadPassengers: "Read passenger profiles",
+      canManagePassengers: "Manage passenger profiles and service requests",
+      canManageSecurePassengerData: "Read and manage encrypted travel-document data",
+      canReadTicketing: "Read tickets, coupons, and EMDs",
+      canManageTicketing: "Issue and service tickets, coupons, and EMDs",
+      canReadPayments: "Read payment and refund records",
+      canManagePayments: "Manage payment, refund, and exchange records",
+      canReadAirportService: "Read check-in, boarding, seat, and baggage records",
+      canManageAirportService: "Manage check-in, boarding, seat, and baggage records",
+      canReadDisruptions: "Read disruption and reaccommodation records",
+      canManageDisruptions: "Manage disruption and reaccommodation records",
+      canReadIntegrations: "Read provider and webhook health records",
+      canManageIntegrations: "Manage provider connections and webhooks",
+      canReadAudit: "Read carrier audit events",
+      canManageOnboarding: "Run carrier onboarding and runtime setup"
+    };
+    permissionFields = Object.fromEntries(
+      Object.entries(permissionLabels).map(([key, label]) => [
+        key,
+        (0, import_fields.checkbox)({
+          defaultValue: false,
+          label,
+          access: {
+            create: (args) => canGrantFreshPermission(args, key),
+            update: (args) => canGrantFreshPermission(args, key)
+          }
+        })
+      ])
+    );
+    permissionsList = Object.keys(permissionLabels);
+    immutableFieldAccess = {
+      update: () => false
+    };
+    hiddenSensitiveUi = {
+      createView: { fieldMode: "hidden" },
+      itemView: { fieldMode: "hidden" },
+      listView: { fieldMode: "hidden" }
+    };
+  }
+});
 
 // features/keystone/access.ts
 function hasPermission({ session }, permission) {
   if (!session?.data.role || !permissionsList.includes(permission)) return false;
   return session.data.role[permission] === true;
 }
-var permissions = Object.fromEntries(
-  permissionsList.map((permission) => [
-    permission,
-    (args) => hasPermission(args, permission)
-  ])
-);
 async function freshSessionActor(args) {
   if (!args.session?.itemId || args.session.listKey !== "User" || !args.context?.prisma) return null;
   return args.context.prisma.user.findUnique({
@@ -213,7 +617,7 @@ async function freshCarrierFilter(args, carrierPath = "carrier") {
 function nestedRelationshipFilter(path, id2) {
   const parts = path.split(".").filter(Boolean);
   return parts.reduceRight(
-    (filter, relationship58) => ({ [relationship58]: filter }),
+    (filter, relationship57) => ({ [relationship57]: filter }),
     { id: typeof id2 === "string" ? { equals: id2 } : id2 }
   );
 }
@@ -350,6 +754,20 @@ async function requireStationCapability(context, permission, carrierId, airportI
   if (!assignment) throw new DomainError("Resource not found or inaccessible.", "NOT_FOUND");
   return actor;
 }
+var permissions;
+var init_access = __esm({
+  "features/keystone/access.ts"() {
+    "use strict";
+    init_domain_error();
+    init_fields();
+    permissions = Object.fromEntries(
+      permissionsList.map((permission) => [
+        permission,
+        (args) => hasPermission(args, permission)
+      ])
+    );
+  }
+});
 
 // features/keystone/lib/validation.ts
 function assertMinorAmount(value, label) {
@@ -516,1544 +934,1833 @@ function travelDocumentHooks() {
     }
   };
 }
+var init_validation = __esm({
+  "features/keystone/lib/validation.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/models/trackingFields.ts
-var import_fields3 = require("@keystone-6/core/fields");
-var trackingFields = {
-  createdAt: (0, import_fields3.timestamp)({
-    access: { read: () => true, create: () => false, update: () => false },
-    validation: { isRequired: true },
-    defaultValue: { kind: "now" },
-    ui: {
-      createView: { fieldMode: "hidden" },
-      itemView: { fieldMode: "read" }
-    }
-  }),
-  updatedAt: (0, import_fields3.timestamp)({
-    access: { read: () => true, create: () => false, update: () => false },
-    db: { updatedAt: true },
-    validation: { isRequired: true },
-    defaultValue: { kind: "now" },
-    ui: {
-      createView: { fieldMode: "hidden" },
-      itemView: { fieldMode: "read" }
-    }
-  })
-};
+var import_fields3, trackingFields;
+var init_trackingFields = __esm({
+  "features/keystone/models/trackingFields.ts"() {
+    "use strict";
+    import_fields3 = require("@keystone-6/core/fields");
+    trackingFields = {
+      createdAt: (0, import_fields3.timestamp)({
+        access: { read: () => true, create: () => false, update: () => false },
+        validation: { isRequired: true },
+        defaultValue: { kind: "now" },
+        ui: {
+          createView: { fieldMode: "hidden" },
+          itemView: { fieldMode: "read" }
+        }
+      }),
+      updatedAt: (0, import_fields3.timestamp)({
+        access: { read: () => true, create: () => false, update: () => false },
+        db: { updatedAt: true },
+        validation: { isRequired: true },
+        defaultValue: { kind: "now" },
+        ui: {
+          createView: { fieldMode: "hidden" },
+          itemView: { fieldMode: "read" }
+        }
+      })
+    };
+  }
+});
 
 // features/keystone/models/AncillaryProduct.ts
-var AncillaryProduct = (0, import_core.list)({
-  access: carrierScopedAccess("canReadOffers", "canManageOffers"),
-  ui: {
-    labelField: "name",
-    listView: { initialColumns: ["name", "code", "type", "status", "defaultPriceAmount", "currencyCode"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields4.relationship)({ ref: "Carrier" }),
-    productKey: (0, import_fields4.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    code: (0, import_fields4.text)({ validation: { isRequired: true } }),
-    name: (0, import_fields4.text)({ validation: { isRequired: true } }),
-    description: (0, import_fields4.text)({ ui: { displayMode: "textarea" } }),
-    type: (0, import_fields4.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      options: [
-        { label: "Seat", value: "seat" },
-        { label: "Checked bag", value: "checked_bag" },
-        { label: "Cabin bag", value: "cabin_bag" },
-        { label: "Priority", value: "priority" },
-        { label: "Lounge", value: "lounge" },
-        { label: "Meal", value: "meal" },
-        { label: "Wi-Fi", value: "wifi" },
-        { label: "Assistance", value: "assistance" },
-        { label: "Other", value: "other" }
-      ]
-    }),
-    status: (0, import_fields4.select)({
-      type: "enum",
-      defaultValue: "draft",
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Active", value: "active" },
-        { label: "Inactive", value: "inactive" },
-        { label: "Archived", value: "archived" }
-      ]
-    }),
-    fulfillmentType: (0, import_fields4.select)({
-      type: "enum",
-      defaultValue: "associated",
-      options: [
-        { label: "Associated to flight", value: "associated" },
-        { label: "Standalone", value: "standalone" }
-      ]
-    }),
-    defaultPriceAmount: (0, import_fields4.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    taxAmount: (0, import_fields4.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields4.text)({
-      defaultValue: "USD",
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    requiresInventory: (0, import_fields4.checkbox)({ defaultValue: false }),
-    attributes: (0, import_fields4.json)({ defaultValue: {} }),
-    offerItems: (0, import_fields4.relationship)({ ref: "OfferItem.ancillaryProduct", many: true }),
-    bookingLineItems: (0, import_fields4.relationship)({ ref: "BookingLineItem.ancillaryProduct", many: true }),
-    electronicMiscCoupons: (0, import_fields4.relationship)({ ref: "ElectronicMiscCoupon.ancillaryProduct", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    commandOwnedRelationshipHooks(["offerItems", "bookingLineItems", "electronicMiscCoupons"]),
-    minorAmountHooks(["defaultPriceAmount", "taxAmount"])
-  )
+var import_core, import_fields4, AncillaryProduct;
+var init_AncillaryProduct = __esm({
+  "features/keystone/models/AncillaryProduct.ts"() {
+    "use strict";
+    import_core = require("@keystone-6/core");
+    import_fields4 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_trackingFields();
+    AncillaryProduct = (0, import_core.list)({
+      access: carrierScopedAccess("canReadOffers", "canManageOffers"),
+      ui: {
+        labelField: "name",
+        listView: { initialColumns: ["name", "code", "type", "status", "defaultPriceAmount", "currencyCode"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields4.relationship)({ ref: "Carrier" }),
+        productKey: (0, import_fields4.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        code: (0, import_fields4.text)({ validation: { isRequired: true } }),
+        name: (0, import_fields4.text)({ validation: { isRequired: true } }),
+        description: (0, import_fields4.text)({ ui: { displayMode: "textarea" } }),
+        type: (0, import_fields4.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          options: [
+            { label: "Seat", value: "seat" },
+            { label: "Checked bag", value: "checked_bag" },
+            { label: "Cabin bag", value: "cabin_bag" },
+            { label: "Priority", value: "priority" },
+            { label: "Lounge", value: "lounge" },
+            { label: "Meal", value: "meal" },
+            { label: "Wi-Fi", value: "wifi" },
+            { label: "Assistance", value: "assistance" },
+            { label: "Other", value: "other" }
+          ]
+        }),
+        status: (0, import_fields4.select)({
+          type: "enum",
+          defaultValue: "draft",
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Active", value: "active" },
+            { label: "Inactive", value: "inactive" },
+            { label: "Archived", value: "archived" }
+          ]
+        }),
+        fulfillmentType: (0, import_fields4.select)({
+          type: "enum",
+          defaultValue: "associated",
+          options: [
+            { label: "Associated to flight", value: "associated" },
+            { label: "Standalone", value: "standalone" }
+          ]
+        }),
+        defaultPriceAmount: (0, import_fields4.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        taxAmount: (0, import_fields4.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields4.text)({
+          defaultValue: "USD",
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        requiresInventory: (0, import_fields4.checkbox)({ defaultValue: false }),
+        attributes: (0, import_fields4.json)({ defaultValue: {} }),
+        offerItems: (0, import_fields4.relationship)({ ref: "OfferItem.ancillaryProduct", many: true }),
+        bookingLineItems: (0, import_fields4.relationship)({ ref: "BookingLineItem.ancillaryProduct", many: true }),
+        electronicMiscCoupons: (0, import_fields4.relationship)({ ref: "ElectronicMiscCoupon.ancillaryProduct", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("catalogProduct"),
+        requiredRelationshipHooks(["carrier"]),
+        commandOwnedRelationshipHooks(["offerItems", "bookingLineItems", "electronicMiscCoupons"]),
+        minorAmountHooks(["defaultPriceAmount", "taxAmount"])
+      )
+    });
+  }
 });
 
 // features/keystone/models/ApprovedAgent.ts
-var import_core2 = require("@keystone-6/core");
-var import_fields5 = require("@keystone-6/core/fields");
-var canReadAgents = (args) => hasFreshPermission(args, "canManageAgents", "canReadOffers", "canReadBookings");
-var ApprovedAgent = (0, import_core2.list)({
-  access: {
-    operation: {
-      query: canReadAgents,
-      create: (args) => hasFreshPermission(args, "canManageAgents"),
-      update: (args) => hasFreshPermission(args, "canManageAgents"),
-      delete: () => false
-    },
-    filter: {
-      query: freshCarrierFilter,
-      update: freshCarrierFilter
-    },
-    item: {
-      create: canCreateForSessionCarrier,
-      update: canUpdateForSessionCarrier
-    }
-  },
-  ui: {
-    labelField: "legalName",
-    listView: { initialColumns: ["legalName", "tradingName", "status", "accreditationNumber", "validTo"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields5.relationship)({ ref: "Carrier.approvedAgents" }),
-    legalName: (0, import_fields5.text)({ validation: { isRequired: true } }),
-    tradingName: (0, import_fields5.text)(),
-    externalReference: (0, import_fields5.text)({ isIndexed: true }),
-    accreditationType: (0, import_fields5.select)({
-      type: "enum",
-      defaultValue: "other",
-      options: [
-        { label: "IATA", value: "iata" },
-        { label: "TIDS", value: "tids" },
-        { label: "ARC", value: "arc" },
-        { label: "Carrier appointed", value: "carrier_appointed" },
-        { label: "Other", value: "other" }
-      ]
-    }),
-    accreditationNumber: (0, import_fields5.text)({ isIndexed: true }),
-    status: (0, import_fields5.select)({
-      type: "enum",
-      defaultValue: "pending",
-      validation: { isRequired: true },
-      options: [
-        { label: "Pending", value: "pending" },
-        { label: "Approved", value: "approved" },
-        { label: "Suspended", value: "suspended" },
-        { label: "Revoked", value: "revoked" },
-        { label: "Expired", value: "expired" }
-      ]
-    }),
-    validFrom: (0, import_fields5.timestamp)(),
-    validTo: (0, import_fields5.timestamp)(),
-    salesChannels: (0, import_fields5.json)({ defaultValue: [] }),
-    servicingScopes: (0, import_fields5.json)({ defaultValue: [] }),
-    contactEmail: (0, import_fields5.text)(),
-    contactPhone: (0, import_fields5.text)(),
-    users: (0, import_fields5.relationship)({ ref: "User.approvedAgent", many: true, access: { create: () => false, update: () => false } }),
-    offers: (0, import_fields5.relationship)({ ref: "Offer.approvedAgent", many: true }),
-    bookings: (0, import_fields5.relationship)({ ref: "Booking.approvedAgent", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    commandOwnedRelationshipHooks(["offers", "bookings"]),
-    chronologicalRangeHooks("validFrom", "validTo", "Agent approval")
-  )
+var import_core2, import_fields5, canReadAgents, ApprovedAgent;
+var init_ApprovedAgent = __esm({
+  "features/keystone/models/ApprovedAgent.ts"() {
+    "use strict";
+    import_core2 = require("@keystone-6/core");
+    import_fields5 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_trackingFields();
+    canReadAgents = (args) => hasFreshPermission(args, "canManageAgents", "canReadOffers", "canReadBookings");
+    ApprovedAgent = (0, import_core2.list)({
+      access: {
+        operation: {
+          query: canReadAgents,
+          create: (args) => hasFreshPermission(args, "canManageAgents"),
+          update: (args) => hasFreshPermission(args, "canManageAgents"),
+          delete: () => false
+        },
+        filter: {
+          query: freshCarrierFilter,
+          update: freshCarrierFilter
+        },
+        item: {
+          create: canCreateForSessionCarrier,
+          update: canUpdateForSessionCarrier
+        }
+      },
+      ui: {
+        labelField: "legalName",
+        listView: { initialColumns: ["legalName", "tradingName", "status", "accreditationNumber", "validTo"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields5.relationship)({ ref: "Carrier.approvedAgents" }),
+        legalName: (0, import_fields5.text)({ validation: { isRequired: true } }),
+        tradingName: (0, import_fields5.text)(),
+        externalReference: (0, import_fields5.text)({ isIndexed: true }),
+        accreditationType: (0, import_fields5.select)({
+          type: "enum",
+          defaultValue: "other",
+          options: [
+            { label: "IATA", value: "iata" },
+            { label: "TIDS", value: "tids" },
+            { label: "ARC", value: "arc" },
+            { label: "Carrier appointed", value: "carrier_appointed" },
+            { label: "Other", value: "other" }
+          ]
+        }),
+        accreditationNumber: (0, import_fields5.text)({ isIndexed: true }),
+        status: (0, import_fields5.select)({
+          type: "enum",
+          defaultValue: "pending",
+          validation: { isRequired: true },
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Approved", value: "approved" },
+            { label: "Suspended", value: "suspended" },
+            { label: "Revoked", value: "revoked" },
+            { label: "Expired", value: "expired" }
+          ]
+        }),
+        validFrom: (0, import_fields5.timestamp)(),
+        validTo: (0, import_fields5.timestamp)(),
+        salesChannels: (0, import_fields5.json)({ defaultValue: [] }),
+        servicingScopes: (0, import_fields5.json)({ defaultValue: [] }),
+        contactEmail: (0, import_fields5.text)(),
+        contactPhone: (0, import_fields5.text)(),
+        users: (0, import_fields5.relationship)({ ref: "User.approvedAgent", many: true, access: { create: () => false, update: () => false } }),
+        offers: (0, import_fields5.relationship)({ ref: "Offer.approvedAgent", many: true }),
+        bookings: (0, import_fields5.relationship)({ ref: "Booking.approvedAgent", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("approvedAgent"),
+        requiredRelationshipHooks(["carrier"]),
+        commandOwnedRelationshipHooks(["offers", "bookings"]),
+        chronologicalRangeHooks("validFrom", "validTo", "Agent approval")
+      )
+    });
+  }
 });
 
 // features/keystone/models/Airport.ts
-var import_core3 = require("@keystone-6/core");
-var import_fields6 = require("@keystone-6/core/fields");
-var canReadAirport = (args) => hasFreshPermission(
-  args,
-  "canReadNetwork",
-  "canManageNetwork",
-  "canReadOffers",
-  "canManageOffers",
-  "canReadBookings",
-  "canManageBookings",
-  "canReadAirportService",
-  "canManageAirportService"
-);
-var Airport = (0, import_core3.list)({
-  access: {
-    operation: {
-      query: canReadAirport,
-      create: () => false,
-      update: () => false,
-      delete: () => false
-    }
-  },
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "iataCode",
-    listView: { initialColumns: ["iataCode", "name", "city", "countryCode", "timezone"] },
-    hideDelete: true
-  },
-  fields: {
-    iataCode: (0, import_fields6.text)({
-      isIndexed: "unique",
-      validation: { isRequired: true, match: { regex: /^[A-Z0-9]{3}$/, explanation: "Use a three-character IATA location code." } }
-    }),
-    icaoCode: (0, import_fields6.text)({
-      isIndexed: "unique",
-      db: { isNullable: true },
-      validation: { match: { regex: /^[A-Z0-9]{4}$/, explanation: "Use a four-character ICAO airport code." } }
-    }),
-    name: (0, import_fields6.text)({ validation: { isRequired: true } }),
-    city: (0, import_fields6.text)({ validation: { isRequired: true } }),
-    subdivisionCode: (0, import_fields6.text)(),
-    countryCode: (0, import_fields6.text)({
-      validation: { isRequired: true, match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 country code." } }
-    }),
-    timezone: (0, import_fields6.text)({ validation: { isRequired: true } }),
-    isActive: (0, import_fields6.checkbox)({ defaultValue: true }),
-    departingRoutes: (0, import_fields6.relationship)({ ref: "Route.origin", many: true }),
-    arrivingRoutes: (0, import_fields6.relationship)({ ref: "Route.destination", many: true }),
-    departingFlights: (0, import_fields6.relationship)({ ref: "FlightInstance.origin", many: true }),
-    arrivingFlights: (0, import_fields6.relationship)({ ref: "FlightInstance.destination", many: true }),
-    bagEvents: (0, import_fields6.relationship)({ ref: "BagEvent.airport", many: true }),
-    stationAssignments: (0, import_fields6.relationship)({ ref: "StationAssignment.airport", many: true }),
-    ...trackingFields
+var import_core3, import_fields6, canReadAirport, Airport;
+var init_Airport = __esm({
+  "features/keystone/models/Airport.ts"() {
+    "use strict";
+    import_core3 = require("@keystone-6/core");
+    import_fields6 = require("@keystone-6/core/fields");
+    init_access();
+    init_trackingFields();
+    canReadAirport = (args) => hasFreshPermission(
+      args,
+      "canReadNetwork",
+      "canManageNetwork",
+      "canReadOffers",
+      "canManageOffers",
+      "canReadBookings",
+      "canManageBookings",
+      "canReadAirportService",
+      "canManageAirportService"
+    );
+    Airport = (0, import_core3.list)({
+      access: {
+        operation: {
+          query: canReadAirport,
+          create: () => false,
+          update: () => false,
+          delete: () => false
+        }
+      },
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "iataCode",
+        listView: { initialColumns: ["iataCode", "name", "city", "countryCode", "timezone"] },
+        hideDelete: true
+      },
+      fields: {
+        iataCode: (0, import_fields6.text)({
+          isIndexed: "unique",
+          validation: { isRequired: true, match: { regex: /^[A-Z0-9]{3}$/, explanation: "Use a three-character IATA location code." } }
+        }),
+        icaoCode: (0, import_fields6.text)({
+          isIndexed: "unique",
+          db: { isNullable: true },
+          validation: { match: { regex: /^[A-Z0-9]{4}$/, explanation: "Use a four-character ICAO airport code." } }
+        }),
+        name: (0, import_fields6.text)({ validation: { isRequired: true } }),
+        city: (0, import_fields6.text)({ validation: { isRequired: true } }),
+        subdivisionCode: (0, import_fields6.text)(),
+        countryCode: (0, import_fields6.text)({
+          validation: { isRequired: true, match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 country code." } }
+        }),
+        timezone: (0, import_fields6.text)({ validation: { isRequired: true } }),
+        isActive: (0, import_fields6.checkbox)({ defaultValue: true }),
+        departingRoutes: (0, import_fields6.relationship)({ ref: "Route.origin", many: true }),
+        arrivingRoutes: (0, import_fields6.relationship)({ ref: "Route.destination", many: true }),
+        departingFlights: (0, import_fields6.relationship)({ ref: "FlightInstance.origin", many: true }),
+        arrivingFlights: (0, import_fields6.relationship)({ ref: "FlightInstance.destination", many: true }),
+        bagEvents: (0, import_fields6.relationship)({ ref: "BagEvent.airport", many: true }),
+        stationAssignments: (0, import_fields6.relationship)({ ref: "StationAssignment.airport", many: true }),
+        ...trackingFields
+      }
+    });
   }
 });
 
 // features/keystone/models/AuditEvent.ts
-var import_core4 = require("@keystone-6/core");
-var import_fields7 = require("@keystone-6/core/fields");
-var AuditEvent = (0, import_core4.list)({
-  access: {
-    operation: {
-      query: (args) => hasFreshPermission(args, "canReadAudit"),
-      create: () => false,
-      update: () => false,
-      delete: () => false
-    },
-    filter: { query: freshCarrierFilter }
-  },
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "eventKey",
-    listView: { initialColumns: ["action", "aggregateType", "aggregateId", "actor", "occurredAt"] },
-    hideCreate: true,
-    hideDelete: true,
-    itemView: { defaultFieldMode: "read" }
-  },
-  fields: {
-    carrier: (0, import_fields7.relationship)({ ref: "Carrier" }),
-    eventKey: (0, import_fields7.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    action: (0, import_fields7.text)({ validation: { isRequired: true } }),
-    aggregateType: (0, import_fields7.text)({ validation: { isRequired: true } }),
-    aggregateId: (0, import_fields7.text)({ validation: { isRequired: true } }),
-    actor: (0, import_fields7.relationship)({ ref: "User.auditEvents" }),
-    approvedAgent: (0, import_fields7.relationship)({ ref: "ApprovedAgent" }),
-    source: (0, import_fields7.select)({ type: "enum", defaultValue: "platform", options: [
-      { label: "Platform", value: "platform" },
-      { label: "Storefront", value: "storefront" },
-      { label: "Approved agent", value: "agent" },
-      { label: "Provider", value: "provider" },
-      { label: "System", value: "system" }
-    ] }),
-    correlationId: (0, import_fields7.text)({ isIndexed: true }),
-    idempotencyKey: (0, import_fields7.text)({ isIndexed: true }),
-    beforeSummary: (0, import_fields7.json)({ defaultValue: {} }),
-    afterSummary: (0, import_fields7.json)({ defaultValue: {} }),
-    metadata: (0, import_fields7.json)({ defaultValue: {} }),
-    ipAddress: (0, import_fields7.text)(),
-    userAgent: (0, import_fields7.text)(),
-    occurredAt: (0, import_fields7.timestamp)({ defaultValue: { kind: "now" }, validation: { isRequired: true }, isIndexed: true }),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier"])
+var import_core4, import_fields7, AuditEvent;
+var init_AuditEvent = __esm({
+  "features/keystone/models/AuditEvent.ts"() {
+    "use strict";
+    import_core4 = require("@keystone-6/core");
+    import_fields7 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    AuditEvent = (0, import_core4.list)({
+      access: {
+        operation: {
+          query: (args) => hasFreshPermission(args, "canReadAudit"),
+          create: () => false,
+          update: () => false,
+          delete: () => false
+        },
+        filter: { query: freshCarrierFilter }
+      },
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "eventKey",
+        listView: { initialColumns: ["action", "aggregateType", "aggregateId", "actor", "occurredAt"] },
+        hideCreate: true,
+        hideDelete: true,
+        itemView: { defaultFieldMode: "read" }
+      },
+      fields: {
+        carrier: (0, import_fields7.relationship)({ ref: "Carrier" }),
+        eventKey: (0, import_fields7.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        action: (0, import_fields7.text)({ validation: { isRequired: true } }),
+        aggregateType: (0, import_fields7.text)({ validation: { isRequired: true } }),
+        aggregateId: (0, import_fields7.text)({ validation: { isRequired: true } }),
+        actor: (0, import_fields7.relationship)({ ref: "User.auditEvents" }),
+        approvedAgent: (0, import_fields7.relationship)({ ref: "ApprovedAgent" }),
+        source: (0, import_fields7.select)({ type: "enum", defaultValue: "platform", options: [
+          { label: "Platform", value: "platform" },
+          { label: "Storefront", value: "storefront" },
+          { label: "Approved agent", value: "agent" },
+          { label: "Provider", value: "provider" },
+          { label: "System", value: "system" }
+        ] }),
+        correlationId: (0, import_fields7.text)({ isIndexed: true }),
+        idempotencyKey: (0, import_fields7.text)({ isIndexed: true }),
+        beforeSummary: (0, import_fields7.json)({ defaultValue: {} }),
+        afterSummary: (0, import_fields7.json)({ defaultValue: {} }),
+        metadata: (0, import_fields7.json)({ defaultValue: {} }),
+        ipAddress: (0, import_fields7.text)(),
+        userAgent: (0, import_fields7.text)(),
+        occurredAt: (0, import_fields7.timestamp)({ defaultValue: { kind: "now" }, validation: { isRequired: true }, isIndexed: true }),
+        ...trackingFields
+      },
+      hooks: requiredRelationshipHooks(["carrier"])
+    });
+  }
 });
 
 // features/keystone/models/Bag.ts
-var import_core5 = require("@keystone-6/core");
-var import_fields8 = require("@keystone-6/core/fields");
-
-// features/keystone/lib/lifecycle.ts
-var lifecycleMachines = {
-  offer: {
-    label: "Offer",
-    initial: "draft",
-    terminal: ["accepted", "expired", "withdrawn"],
-    transitions: {
-      draft: ["available", "withdrawn"],
-      available: ["held", "accepted", "expired", "withdrawn"],
-      held: ["available", "accepted", "expired", "withdrawn"],
-      accepted: [],
-      expired: [],
-      withdrawn: []
-    },
-    actions: { publish: "available", hold: "held", release: "available", accept: "accepted", expire: "expired", withdraw: "withdrawn" }
-  },
-  flightInstance: {
-    label: "Flight instance",
-    initial: "scheduled",
-    terminal: ["arrived", "cancelled"],
-    transitions: {
-      scheduled: ["open_for_sale", "closed_for_sale", "delayed", "cancelled"],
-      open_for_sale: ["closed_for_sale", "delayed", "cancelled"],
-      closed_for_sale: ["open_for_sale", "delayed", "departed", "cancelled"],
-      delayed: ["open_for_sale", "closed_for_sale", "departed", "cancelled"],
-      departed: ["arrived"],
-      arrived: [],
-      cancelled: []
-    },
-    actions: { openSales: "open_for_sale", closeSales: "closed_for_sale", delay: "delayed", depart: "departed", arrive: "arrived", cancel: "cancelled" }
-  },
-  inventoryHold: {
-    label: "Inventory hold",
-    initial: "active",
-    terminal: ["converted", "released", "expired"],
-    transitions: { active: ["converted", "released", "expired"], converted: [], released: [], expired: [] },
-    actions: { convert: "converted", release: "released", expire: "expired" }
-  },
-  booking: {
-    label: "Booking",
-    initial: "pending",
-    terminal: ["completed", "cancelled"],
-    transitions: {
-      pending: ["confirmed", "cancelled"],
-      confirmed: ["ticketed", "in_progress", "cancelled"],
-      ticketed: ["in_progress", "cancelled"],
-      in_progress: ["completed", "cancelled"],
-      completed: [],
-      cancelled: []
-    },
-    actions: { confirm: "confirmed", ticket: "ticketed", start: "in_progress", complete: "completed", cancel: "cancelled" }
-  },
-  journey: {
-    label: "Journey",
-    initial: "planned",
-    terminal: ["completed", "cancelled"],
-    transitions: {
-      planned: ["in_progress", "disrupted", "cancelled"],
-      in_progress: ["completed", "disrupted", "cancelled"],
-      disrupted: ["planned", "in_progress", "cancelled"],
-      completed: [],
-      cancelled: []
-    },
-    actions: { start: "in_progress", disrupt: "disrupted", recover: "planned", complete: "completed", cancel: "cancelled" }
-  },
-  bookingSegment: {
-    label: "Booking segment",
-    initial: "confirmed",
-    terminal: ["flown", "cancelled", "refunded"],
-    transitions: {
-      confirmed: ["checked_in", "disrupted", "reaccommodated", "cancelled", "refunded"],
-      checked_in: ["boarded", "offloaded", "disrupted", "reaccommodated", "cancelled"],
-      boarded: ["flown", "offloaded", "disrupted"],
-      offloaded: ["checked_in", "disrupted", "reaccommodated", "cancelled"],
-      disrupted: ["reaccommodated", "cancelled", "refunded"],
-      reaccommodated: ["confirmed", "cancelled"],
-      flown: [],
-      cancelled: [],
-      refunded: []
-    },
-    actions: { checkIn: "checked_in", board: "boarded", fly: "flown", offload: "offloaded", disrupt: "disrupted", reaccommodate: "reaccommodated", cancel: "cancelled", refund: "refunded" }
-  },
-  seatMap: {
-    label: "Seat map",
-    initial: "draft",
-    terminal: ["retired"],
-    transitions: { draft: ["published", "retired"], published: ["retired"], retired: [] },
-    actions: { publish: "published", retire: "retired" }
-  },
-  seatAssignment: {
-    label: "Seat assignment",
-    initial: "held",
-    terminal: ["boarded", "released", "cancelled"],
-    transitions: {
-      held: ["assigned", "released", "cancelled"],
-      assigned: ["confirmed", "released", "cancelled"],
-      confirmed: ["boarded", "released", "cancelled"],
-      boarded: ["confirmed", "released"],
-      released: [],
-      cancelled: []
-    },
-    actions: { assign: "assigned", confirm: "confirmed", board: "boarded", release: "released", cancel: "cancelled" }
-  },
-  serviceRequest: {
-    label: "Service request",
-    initial: "requested",
-    terminal: ["fulfilled", "unable", "cancelled"],
-    transitions: {
-      requested: ["pending", "confirmed", "unable", "cancelled"],
-      pending: ["confirmed", "unable", "cancelled"],
-      confirmed: ["fulfilled", "unable", "cancelled"],
-      fulfilled: [],
-      unable: [],
-      cancelled: []
-    },
-    actions: { pend: "pending", confirm: "confirmed", fulfill: "fulfilled", unable: "unable", cancel: "cancelled" }
-  },
-  ticket: {
-    label: "Ticket",
-    initial: "pending",
-    terminal: ["used", "voided", "refunded", "exchanged"],
-    transitions: {
-      pending: ["issued", "voided"],
-      issued: ["partially_used", "used", "voided", "refunded", "exchanged", "suspended"],
-      partially_used: ["used", "refunded", "exchanged", "suspended"],
-      suspended: ["issued", "partially_used", "refunded", "exchanged"],
-      used: [],
-      voided: [],
-      refunded: [],
-      exchanged: []
-    },
-    actions: { issue: "issued", partiallyUse: "partially_used", use: "used", suspend: "suspended", void: "voided", refund: "refunded", exchange: "exchanged" }
-  },
-  ticketCoupon: {
-    label: "Ticket coupon",
-    initial: "open",
-    terminal: ["flown", "voided", "refunded", "exchanged"],
-    transitions: {
-      open: ["checked_in", "voided", "refunded", "exchanged", "suspended"],
-      checked_in: ["boarded", "open", "voided", "refunded", "exchanged", "suspended"],
-      boarded: ["flown", "open", "suspended"],
-      suspended: ["open", "refunded", "exchanged", "voided"],
-      flown: [],
-      voided: [],
-      refunded: [],
-      exchanged: []
-    },
-    actions: { checkIn: "checked_in", reopen: "open", board: "boarded", fly: "flown", suspend: "suspended", void: "voided", refund: "refunded", exchange: "exchanged" }
-  },
-  electronicMiscDocument: {
-    label: "Electronic miscellaneous document",
-    initial: "pending",
-    terminal: ["used", "voided", "refunded", "exchanged"],
-    transitions: {
-      pending: ["issued", "voided"],
-      issued: ["partially_used", "used", "voided", "refunded", "exchanged"],
-      partially_used: ["used", "refunded", "exchanged"],
-      used: [],
-      voided: [],
-      refunded: [],
-      exchanged: []
-    },
-    actions: { issue: "issued", partiallyUse: "partially_used", use: "used", void: "voided", refund: "refunded", exchange: "exchanged" }
-  },
-  electronicMiscCoupon: {
-    label: "Electronic miscellaneous coupon",
-    initial: "open",
-    terminal: ["used", "voided", "refunded", "exchanged"],
-    transitions: { open: ["used", "voided", "refunded", "exchanged"], used: [], voided: [], refunded: [], exchanged: [] },
-    actions: { use: "used", void: "voided", refund: "refunded", exchange: "exchanged" }
-  },
-  paymentSession: {
-    label: "Payment session",
-    initial: "created",
-    terminal: ["captured", "failed", "cancelled", "expired"],
-    transitions: {
-      created: ["pending", "cancelled", "expired"],
-      pending: ["authorized", "captured", "failed", "cancelled", "expired"],
-      authorized: ["captured", "failed", "cancelled"],
-      captured: [],
-      failed: [],
-      cancelled: [],
-      expired: []
-    },
-    actions: { begin: "pending", authorize: "authorized", capture: "captured", fail: "failed", cancel: "cancelled", expire: "expired" }
-  },
-  payment: {
-    label: "Payment",
-    initial: "pending",
-    terminal: ["failed", "cancelled", "refunded"],
-    transitions: {
-      pending: ["authorized", "captured", "failed", "cancelled"],
-      authorized: ["captured", "failed", "cancelled"],
-      captured: ["partially_refunded", "refunded"],
-      partially_refunded: ["refunded"],
-      failed: [],
-      cancelled: [],
-      refunded: []
-    },
-    actions: { authorize: "authorized", capture: "captured", partiallyRefund: "partially_refunded", refund: "refunded", fail: "failed", cancel: "cancelled" }
-  },
-  refund: {
-    label: "Refund",
-    initial: "requested",
-    terminal: ["succeeded", "failed", "cancelled"],
-    transitions: {
-      requested: ["approved", "cancelled"],
-      approved: ["processing", "cancelled"],
-      processing: ["succeeded", "failed"],
-      succeeded: [],
-      failed: [],
-      cancelled: []
-    },
-    actions: { approve: "approved", process: "processing", succeed: "succeeded", fail: "failed", cancel: "cancelled" }
-  },
-  exchange: {
-    label: "Exchange",
-    initial: "quoted",
-    terminal: ["completed", "failed", "cancelled", "expired"],
-    transitions: {
-      quoted: ["accepted", "cancelled", "expired"],
-      accepted: ["processing", "cancelled"],
-      processing: ["completed", "failed"],
-      completed: [],
-      failed: [],
-      cancelled: [],
-      expired: []
-    },
-    actions: { accept: "accepted", process: "processing", complete: "completed", fail: "failed", cancel: "cancelled", expire: "expired" }
-  },
-  checkIn: {
-    label: "Check-in",
-    initial: "not_started",
-    terminal: ["boarded", "cancelled"],
-    transitions: {
-      not_started: ["eligible", "blocked", "cancelled"],
-      eligible: ["checked_in", "blocked", "cancelled"],
-      checked_in: ["boarded", "offloaded", "cancelled"],
-      offloaded: ["eligible", "checked_in", "cancelled"],
-      blocked: ["eligible", "cancelled"],
-      boarded: ["offloaded"],
-      cancelled: []
-    },
-    actions: { markEligible: "eligible", checkIn: "checked_in", board: "boarded", block: "blocked", offload: "offloaded", cancel: "cancelled" }
-  },
-  boardingPass: {
-    label: "Boarding pass",
-    initial: "issued",
-    terminal: ["revoked"],
-    transitions: { issued: ["boarded", "revoked", "reissued"], reissued: ["boarded", "revoked"], boarded: ["revoked"], revoked: [] },
-    actions: { board: "boarded", revoke: "revoked", reissue: "reissued" }
-  },
-  bag: {
-    label: "Bag",
-    initial: "accepted",
-    terminal: ["delivered", "closed"],
-    transitions: {
-      accepted: ["loaded", "in_transit", "delayed", "mishandled"],
-      loaded: ["in_transit", "arrived", "delayed", "mishandled"],
-      in_transit: ["loaded", "arrived", "delayed", "mishandled"],
-      arrived: ["delivered", "delayed", "mishandled"],
-      delayed: ["in_transit", "arrived", "delivered", "mishandled", "closed"],
-      mishandled: ["in_transit", "arrived", "delivered", "closed"],
-      delivered: ["closed"],
-      closed: []
-    },
-    actions: { load: "loaded", transfer: "in_transit", arrive: "arrived", deliver: "delivered", delay: "delayed", mishandle: "mishandled", close: "closed" }
-  },
-  disruption: {
-    label: "Disruption",
-    initial: "detected",
-    terminal: ["resolved", "cancelled"],
-    transitions: { detected: ["published", "recovering", "resolved", "cancelled"], published: ["recovering", "resolved", "cancelled"], recovering: ["resolved", "cancelled"], resolved: [], cancelled: [] },
-    actions: { publish: "published", recover: "recovering", resolve: "resolved", cancel: "cancelled" }
-  },
-  reaccommodation: {
-    label: "Reaccommodation",
-    initial: "proposed",
-    terminal: ["confirmed", "declined", "failed", "expired", "cancelled"],
-    transitions: { proposed: ["accepted", "declined", "expired", "cancelled"], accepted: ["confirmed", "failed", "cancelled"], confirmed: [], declined: [], failed: [], expired: [], cancelled: [] },
-    actions: { accept: "accepted", confirm: "confirmed", decline: "declined", fail: "failed", expire: "expired", cancel: "cancelled" }
-  },
-  providerConnection: {
-    label: "Provider connection",
-    initial: "pending",
-    terminal: ["revoked"],
-    transitions: { pending: ["active", "failed", "revoked"], active: ["paused", "failed", "revoked"], paused: ["active", "revoked"], failed: ["pending", "active", "revoked"], revoked: [] },
-    actions: { activate: "active", pause: "paused", fail: "failed", retry: "pending", revoke: "revoked" }
-  },
-  webhookEvent: {
-    label: "Webhook event",
-    initial: "pending",
-    terminal: ["succeeded", "dead_lettered"],
-    transitions: { pending: ["processing", "failed", "succeeded"], processing: ["succeeded", "failed"], failed: ["pending", "dead_lettered"], succeeded: [], dead_lettered: [] },
-    actions: { process: "processing", succeed: "succeeded", fail: "failed", retry: "pending", deadLetter: "dead_lettered" }
+var import_core5, import_fields8, Bag;
+var init_Bag = __esm({
+  "features/keystone/models/Bag.ts"() {
+    "use strict";
+    import_core5 = require("@keystone-6/core");
+    import_fields8 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    Bag = (0, import_core5.list)({
+      access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "origin", "canAcceptBags"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "tagNumber", listView: { initialColumns: ["tagNumber", "booking", "passenger", "flightInstance", "status", "weightGrams"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields8.relationship)({ ref: "Carrier" }),
+        bagKey: (0, import_fields8.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        tagNumber: (0, import_fields8.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields8.relationship)({ ref: "Booking.bags", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields8.relationship)({ ref: "BookingPassenger.bags", access: immutableFieldAccess }),
+        passenger: (0, import_fields8.relationship)({ ref: "Passenger.bags", access: immutableFieldAccess }),
+        flightInstance: (0, import_fields8.relationship)({ ref: "FlightInstance.bags", access: immutableFieldAccess }),
+        bookingSegment: (0, import_fields8.relationship)({ ref: "BookingSegment.primaryBags", access: immutableFieldAccess }),
+        checkIn: (0, import_fields8.relationship)({ ref: "CheckIn.bags", access: immutableFieldAccess }),
+        ticketCoupon: (0, import_fields8.relationship)({ ref: "TicketCoupon.bags", access: immutableFieldAccess }),
+        entitlementDocument: (0, import_fields8.relationship)({ ref: "ElectronicMiscDocument", access: immutableFieldAccess }),
+        segments: (0, import_fields8.relationship)({ ref: "BookingSegment.bags", many: true, access: immutableFieldAccess }),
+        origin: (0, import_fields8.relationship)({ ref: "Airport", access: immutableFieldAccess }),
+        destination: (0, import_fields8.relationship)({ ref: "Airport", access: immutableFieldAccess }),
+        status: (0, import_fields8.select)({ type: "enum", defaultValue: "accepted", options: [
+          { label: "Accepted", value: "accepted" },
+          { label: "Loaded", value: "loaded" },
+          { label: "In transit", value: "in_transit" },
+          { label: "Arrived", value: "arrived" },
+          { label: "Delivered", value: "delivered" },
+          { label: "Delayed", value: "delayed" },
+          { label: "Mishandled", value: "mishandled" },
+          { label: "Closed", value: "closed" }
+        ] }),
+        bagType: (0, import_fields8.select)({ type: "enum", defaultValue: "checked", options: [
+          { label: "Checked", value: "checked" },
+          { label: "Gate checked", value: "gate_checked" },
+          { label: "Special item", value: "special_item" },
+          { label: "Mobility aid", value: "mobility_aid" }
+        ] }),
+        weightGrams: (0, import_fields8.integer)({ validation: { min: 0 }, access: immutableFieldAccess }),
+        routeSnapshot: (0, import_fields8.json)({ defaultValue: [], access: immutableFieldAccess }),
+        acceptedAt: (0, import_fields8.timestamp)(),
+        deliveredAt: (0, import_fields8.timestamp)(),
+        events: (0, import_fields8.relationship)({ ref: "BagEvent.bag", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger", "bookingSegment", "checkIn", "ticketCoupon"]),
+        lifecycleHooks("bag")
+      )
+    });
   }
-};
-function canTransition(machineName, from, to) {
-  if (from === to) return true;
-  const machine = lifecycleMachines[machineName];
-  return machine.transitions[from]?.includes(to) ?? false;
-}
-function assertLifecycleTransition(machineName, from, to) {
-  const machine = lifecycleMachines[machineName];
-  if (!canTransition(machineName, from, to)) {
-    throw new Error(`${machine.label} cannot transition from ${from} to ${to}.`);
-  }
-  return { changed: from !== to, from, to };
-}
-function getLifecycleTarget(machineName, action) {
-  const machine = lifecycleMachines[machineName];
-  const target = machine.actions[action];
-  if (!target) throw new Error(`Unsupported ${machine.label} action: ${action}.`);
-  return target;
-}
-function lifecycleHooks(machineName, statusField = "status") {
-  return {
-    validate({ operation, item, resolvedData, addValidationError }) {
-      if (operation !== "update") return;
-      const current = String(item?.[statusField] ?? "");
-      const next = resolvedData?.[statusField];
-      if (next === void 0 || next === current) return;
-      try {
-        assertLifecycleTransition(machineName, current, String(next));
-      } catch (error) {
-        addValidationError(error instanceof Error ? error.message : "Invalid lifecycle transition.");
-      }
-    }
-  };
-}
-
-// features/keystone/models/Bag.ts
-var Bag = (0, import_core5.list)({
-  access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "origin", "canAcceptBags"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "tagNumber", listView: { initialColumns: ["tagNumber", "booking", "passenger", "flightInstance", "status", "weightGrams"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields8.relationship)({ ref: "Carrier" }),
-    bagKey: (0, import_fields8.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    tagNumber: (0, import_fields8.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields8.relationship)({ ref: "Booking.bags", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields8.relationship)({ ref: "BookingPassenger.bags", access: immutableFieldAccess }),
-    passenger: (0, import_fields8.relationship)({ ref: "Passenger.bags", access: immutableFieldAccess }),
-    flightInstance: (0, import_fields8.relationship)({ ref: "FlightInstance.bags", access: immutableFieldAccess }),
-    bookingSegment: (0, import_fields8.relationship)({ ref: "BookingSegment.primaryBags", access: immutableFieldAccess }),
-    checkIn: (0, import_fields8.relationship)({ ref: "CheckIn.bags", access: immutableFieldAccess }),
-    ticketCoupon: (0, import_fields8.relationship)({ ref: "TicketCoupon.bags", access: immutableFieldAccess }),
-    entitlementDocument: (0, import_fields8.relationship)({ ref: "ElectronicMiscDocument", access: immutableFieldAccess }),
-    segments: (0, import_fields8.relationship)({ ref: "BookingSegment.bags", many: true, access: immutableFieldAccess }),
-    origin: (0, import_fields8.relationship)({ ref: "Airport", access: immutableFieldAccess }),
-    destination: (0, import_fields8.relationship)({ ref: "Airport", access: immutableFieldAccess }),
-    status: (0, import_fields8.select)({ type: "enum", defaultValue: "accepted", options: [
-      { label: "Accepted", value: "accepted" },
-      { label: "Loaded", value: "loaded" },
-      { label: "In transit", value: "in_transit" },
-      { label: "Arrived", value: "arrived" },
-      { label: "Delivered", value: "delivered" },
-      { label: "Delayed", value: "delayed" },
-      { label: "Mishandled", value: "mishandled" },
-      { label: "Closed", value: "closed" }
-    ] }),
-    bagType: (0, import_fields8.select)({ type: "enum", defaultValue: "checked", options: [
-      { label: "Checked", value: "checked" },
-      { label: "Gate checked", value: "gate_checked" },
-      { label: "Special item", value: "special_item" },
-      { label: "Mobility aid", value: "mobility_aid" }
-    ] }),
-    weightGrams: (0, import_fields8.integer)({ validation: { min: 0 }, access: immutableFieldAccess }),
-    routeSnapshot: (0, import_fields8.json)({ defaultValue: [], access: immutableFieldAccess }),
-    acceptedAt: (0, import_fields8.timestamp)(),
-    deliveredAt: (0, import_fields8.timestamp)(),
-    events: (0, import_fields8.relationship)({ ref: "BagEvent.bag", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger", "bookingSegment", "checkIn", "ticketCoupon"]),
-    lifecycleHooks("bag")
-  )
 });
 
 // features/keystone/models/BagEvent.ts
-var import_core6 = require("@keystone-6/core");
-var import_fields10 = require("@keystone-6/core/fields");
-var BagEvent = (0, import_core6.list)({
-  access: commandOnlyCarrierAccess("canReadAirportService", "canManageAirportService"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "eventKey", listView: { initialColumns: ["bag", "eventType", "airport", "occurredAt", "source"] }, hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" } },
-  fields: {
-    carrier: (0, import_fields10.relationship)({ ref: "Carrier" }),
-    eventKey: (0, import_fields10.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    bag: (0, import_fields10.relationship)({ ref: "Bag.events" }),
-    airport: (0, import_fields10.relationship)({ ref: "Airport.bagEvents" }),
-    eventType: (0, import_fields10.select)({ type: "enum", validation: { isRequired: true }, options: [
-      { label: "Accepted", value: "accepted" },
-      { label: "Security screened", value: "screened" },
-      { label: "Loaded", value: "loaded" },
-      { label: "Unloaded", value: "unloaded" },
-      { label: "Transferred", value: "transferred" },
-      { label: "Arrived", value: "arrived" },
-      { label: "Delivered", value: "delivered" },
-      { label: "Exception", value: "exception" }
-    ] }),
-    statusSnapshot: (0, import_fields10.text)({ validation: { isRequired: true } }),
-    occurredAt: (0, import_fields10.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    source: (0, import_fields10.select)({ type: "enum", defaultValue: "system", options: [
-      { label: "System", value: "system" },
-      { label: "Scanner", value: "scanner" },
-      { label: "Provider", value: "provider" },
-      { label: "Agent", value: "agent" }
-    ] }),
-    providerConnection: (0, import_fields10.relationship)({ ref: "ProviderConnection" }),
-    providerReference: (0, import_fields10.text)(),
-    payloadSummary: (0, import_fields10.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier", "bag"])
+var import_core6, import_fields10, BagEvent;
+var init_BagEvent = __esm({
+  "features/keystone/models/BagEvent.ts"() {
+    "use strict";
+    import_core6 = require("@keystone-6/core");
+    import_fields10 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    BagEvent = (0, import_core6.list)({
+      access: commandOnlyCarrierAccess("canReadAirportService", "canManageAirportService"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "eventKey", listView: { initialColumns: ["bag", "eventType", "airport", "occurredAt", "source"] }, hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" } },
+      fields: {
+        carrier: (0, import_fields10.relationship)({ ref: "Carrier" }),
+        eventKey: (0, import_fields10.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        bag: (0, import_fields10.relationship)({ ref: "Bag.events" }),
+        airport: (0, import_fields10.relationship)({ ref: "Airport.bagEvents" }),
+        eventType: (0, import_fields10.select)({ type: "enum", validation: { isRequired: true }, options: [
+          { label: "Accepted", value: "accepted" },
+          { label: "Security screened", value: "screened" },
+          { label: "Loaded", value: "loaded" },
+          { label: "Unloaded", value: "unloaded" },
+          { label: "Transferred", value: "transferred" },
+          { label: "Arrived", value: "arrived" },
+          { label: "Delivered", value: "delivered" },
+          { label: "Exception", value: "exception" }
+        ] }),
+        statusSnapshot: (0, import_fields10.text)({ validation: { isRequired: true } }),
+        occurredAt: (0, import_fields10.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+        source: (0, import_fields10.select)({ type: "enum", defaultValue: "system", options: [
+          { label: "System", value: "system" },
+          { label: "Scanner", value: "scanner" },
+          { label: "Provider", value: "provider" },
+          { label: "Agent", value: "agent" }
+        ] }),
+        providerConnection: (0, import_fields10.relationship)({ ref: "ProviderConnection" }),
+        providerReference: (0, import_fields10.text)(),
+        payloadSummary: (0, import_fields10.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: requiredRelationshipHooks(["carrier", "bag"])
+    });
+  }
 });
 
 // features/keystone/models/BoardingPass.ts
-var import_core7 = require("@keystone-6/core");
-var import_fields11 = require("@keystone-6/core/fields");
-var manageAirportService = (args) => hasFreshPermission(args, "canManageAirportService");
-var BoardingPass = (0, import_core7.list)({
-  access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "bookingSegment.flightInstance.origin", "canBoard"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "passNumber", listView: { initialColumns: ["passNumber", "passenger", "bookingSegment", "status", "boardingGroup", "issuedAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields11.relationship)({ ref: "Carrier" }),
-    passNumber: (0, import_fields11.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    checkIn: (0, import_fields11.relationship)({ ref: "CheckIn.boardingPasses", access: immutableFieldAccess }),
-    passenger: (0, import_fields11.relationship)({ ref: "Passenger.boardingPasses", access: immutableFieldAccess }),
-    bookingSegment: (0, import_fields11.relationship)({ ref: "BookingSegment", access: immutableFieldAccess }),
-    seatAssignment: (0, import_fields11.relationship)({ ref: "SeatAssignment", access: immutableFieldAccess }),
-    status: (0, import_fields11.select)({ type: "enum", defaultValue: "issued", options: [
-      { label: "Issued", value: "issued" },
-      { label: "Reissued", value: "reissued" },
-      { label: "Boarded", value: "boarded" },
-      { label: "Revoked", value: "revoked" }
-    ] }),
-    barcodeToken: (0, import_fields11.text)({
-      access: { read: manageAirportService, create: manageAirportService, update: manageAirportService },
-      ui: hiddenSensitiveUi
-    }),
-    seatDesignatorSnapshot: (0, import_fields11.text)({ access: immutableFieldAccess }),
-    boardingGroup: (0, import_fields11.text)(),
-    boardingZone: (0, import_fields11.text)(),
-    sequenceNumber: (0, import_fields11.text)(),
-    gateSnapshot: (0, import_fields11.text)(),
-    terminalSnapshot: (0, import_fields11.text)(),
-    issuedAt: (0, import_fields11.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
-    boardedAt: (0, import_fields11.timestamp)(),
-    revokedAt: (0, import_fields11.timestamp)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "checkIn", "passenger", "bookingSegment"]),
-    lifecycleHooks("boardingPass")
-  )
+var import_core7, import_fields11, manageAirportService, BoardingPass;
+var init_BoardingPass = __esm({
+  "features/keystone/models/BoardingPass.ts"() {
+    "use strict";
+    import_core7 = require("@keystone-6/core");
+    import_fields11 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    manageAirportService = (args) => hasFreshPermission(args, "canManageAirportService");
+    BoardingPass = (0, import_core7.list)({
+      access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "bookingSegment.flightInstance.origin", "canBoard"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "passNumber", listView: { initialColumns: ["passNumber", "passenger", "bookingSegment", "status", "boardingGroup", "issuedAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields11.relationship)({ ref: "Carrier" }),
+        passNumber: (0, import_fields11.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        checkIn: (0, import_fields11.relationship)({ ref: "CheckIn.boardingPasses", access: immutableFieldAccess }),
+        passenger: (0, import_fields11.relationship)({ ref: "Passenger.boardingPasses", access: immutableFieldAccess }),
+        bookingSegment: (0, import_fields11.relationship)({ ref: "BookingSegment", access: immutableFieldAccess }),
+        seatAssignment: (0, import_fields11.relationship)({ ref: "SeatAssignment", access: immutableFieldAccess }),
+        status: (0, import_fields11.select)({ type: "enum", defaultValue: "issued", options: [
+          { label: "Issued", value: "issued" },
+          { label: "Reissued", value: "reissued" },
+          { label: "Boarded", value: "boarded" },
+          { label: "Revoked", value: "revoked" }
+        ] }),
+        barcodeToken: (0, import_fields11.text)({
+          access: { read: manageAirportService, create: manageAirportService, update: manageAirportService },
+          ui: hiddenSensitiveUi
+        }),
+        seatDesignatorSnapshot: (0, import_fields11.text)({ access: immutableFieldAccess }),
+        boardingGroup: (0, import_fields11.text)(),
+        boardingZone: (0, import_fields11.text)(),
+        sequenceNumber: (0, import_fields11.text)(),
+        gateSnapshot: (0, import_fields11.text)(),
+        terminalSnapshot: (0, import_fields11.text)(),
+        issuedAt: (0, import_fields11.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
+        boardedAt: (0, import_fields11.timestamp)(),
+        revokedAt: (0, import_fields11.timestamp)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "checkIn", "passenger", "bookingSegment"]),
+        lifecycleHooks("boardingPass")
+      )
+    });
+  }
 });
 
 // features/keystone/models/Booking.ts
-var import_core8 = require("@keystone-6/core");
-var import_access8 = require("@keystone-6/core/access");
-var import_fields13 = require("@keystone-6/core/fields");
-var bookingTotalHooks = {
-  validate({ resolvedData, item, addValidationError }) {
-    const value = (key) => Number(resolvedData[key] ?? item?.[key] ?? 0);
-    if (value("baseAmount") + value("taxAmount") + value("feeAmount") - value("discountAmount") !== value("totalAmount")) {
-      addValidationError("Booking total must equal base plus tax and fees minus discounts.");
-    }
+var import_core8, import_access8, import_fields13, bookingTotalHooks, Booking;
+var init_Booking = __esm({
+  "features/keystone/models/Booking.ts"() {
+    "use strict";
+    import_core8 = require("@keystone-6/core");
+    import_access8 = require("@keystone-6/core/access");
+    import_fields13 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    bookingTotalHooks = {
+      validate({ resolvedData, item, addValidationError }) {
+        const value = (key) => Number(resolvedData[key] ?? item?.[key] ?? 0);
+        if (value("baseAmount") + value("taxAmount") + value("feeAmount") - value("discountAmount") !== value("totalAmount")) {
+          addValidationError("Booking total must equal base plus tax and fees minus discounts.");
+        }
+      }
+    };
+    Booking = (0, import_core8.list)({
+      access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "recordLocator",
+        listView: { initialColumns: ["recordLocator", "orderNumber", "status", "paymentStatus", "ticketingStatus", "totalAmount", "currencyCode"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields13.relationship)({ ref: "Carrier.bookings" }),
+        bookingKey: (0, import_fields13.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        recordLocator: (0, import_fields13.text)({
+          isIndexed: true,
+          validation: { isRequired: true, match: { regex: /^[A-Z0-9]{5,8}$/, explanation: "Use a five-to-eight character record locator." } }
+        }),
+        orderNumber: (0, import_fields13.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        idempotencyKey: (0, import_fields13.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        accessTokenHash: (0, import_fields13.text)({ isIndexed: true, db: { isNullable: true }, access: { read: import_access8.denyAll, create: import_access8.denyAll, update: import_access8.denyAll }, ui: { createView: { fieldMode: "hidden" }, itemView: { fieldMode: "hidden" }, listView: { fieldMode: "hidden" } } }),
+        accessTokenExpiresAt: (0, import_fields13.timestamp)(),
+        accessTokenVersion: (0, import_fields13.integer)({ defaultValue: 1, validation: { min: 1 } }),
+        status: (0, import_fields13.select)({
+          type: "enum",
+          defaultValue: "pending",
+          validation: { isRequired: true },
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Confirmed", value: "confirmed" },
+            { label: "Ticketed", value: "ticketed" },
+            { label: "In progress", value: "in_progress" },
+            { label: "Completed", value: "completed" },
+            { label: "Cancelled", value: "cancelled" }
+          ]
+        }),
+        paymentStatus: (0, import_fields13.select)({
+          type: "enum",
+          defaultValue: "unpaid",
+          options: [
+            { label: "Unpaid", value: "unpaid" },
+            { label: "Partially paid", value: "partially_paid" },
+            { label: "Paid", value: "paid" },
+            { label: "Partially refunded", value: "partially_refunded" },
+            { label: "Refunded", value: "refunded" },
+            { label: "Payment failed", value: "failed" }
+          ]
+        }),
+        ticketingStatus: (0, import_fields13.select)({
+          type: "enum",
+          defaultValue: "not_ticketed",
+          options: [
+            { label: "Not ticketed", value: "not_ticketed" },
+            { label: "Partially ticketed", value: "partially_ticketed" },
+            { label: "Ticketed", value: "ticketed" },
+            { label: "Voided", value: "voided" },
+            { label: "Exchanged", value: "exchanged" }
+          ]
+        }),
+        source: (0, import_fields13.select)({
+          type: "enum",
+          defaultValue: "direct",
+          options: [
+            { label: "Direct", value: "direct" },
+            { label: "Website", value: "website" },
+            { label: "Call center", value: "call_center" },
+            { label: "Approved agent", value: "agent" },
+            { label: "NDC", value: "ndc" },
+            { label: "GDS", value: "gds" },
+            { label: "Airport", value: "airport" }
+          ]
+        }),
+        contactEmail: (0, import_fields13.text)(),
+        contactPhone: (0, import_fields13.text)(),
+        preferredLanguage: (0, import_fields13.text)({ defaultValue: "en" }),
+        baseAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        taxAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        feeAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        discountAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        totalAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields13.text)({
+          defaultValue: "USD",
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        customer: (0, import_fields13.relationship)({ ref: "User.bookings" }),
+        approvedAgent: (0, import_fields13.relationship)({ ref: "ApprovedAgent.bookings" }),
+        sourceOffer: (0, import_fields13.relationship)({ ref: "Offer.booking" }),
+        passengers: (0, import_fields13.relationship)({ ref: "BookingPassenger.booking", many: true }),
+        journeys: (0, import_fields13.relationship)({ ref: "Journey.booking", many: true }),
+        segments: (0, import_fields13.relationship)({ ref: "BookingSegment.booking", many: true }),
+        lineItems: (0, import_fields13.relationship)({ ref: "BookingLineItem.booking", many: true }),
+        serviceRequests: (0, import_fields13.relationship)({ ref: "ServiceRequest.booking", many: true }),
+        tickets: (0, import_fields13.relationship)({ ref: "Ticket.booking", many: true }),
+        serviceObligations: (0, import_fields13.relationship)({ ref: "ServiceObligation.booking", many: true }),
+        electronicMiscDocuments: (0, import_fields13.relationship)({ ref: "ElectronicMiscDocument.booking", many: true }),
+        seatAssignments: (0, import_fields13.relationship)({ ref: "SeatAssignment.booking", many: true }),
+        paymentSessions: (0, import_fields13.relationship)({ ref: "PaymentSession.booking", many: true }),
+        payments: (0, import_fields13.relationship)({ ref: "Payment.booking", many: true }),
+        refunds: (0, import_fields13.relationship)({ ref: "Refund.booking", many: true }),
+        exchanges: (0, import_fields13.relationship)({ ref: "Exchange.booking", many: true }),
+        checkIns: (0, import_fields13.relationship)({ ref: "CheckIn.booking", many: true }),
+        bags: (0, import_fields13.relationship)({ ref: "Bag.booking", many: true }),
+        reaccommodations: (0, import_fields13.relationship)({ ref: "Reaccommodation.booking", many: true }),
+        manualPaymentEvidence: (0, import_fields13.relationship)({ ref: "ManualPaymentEvidence.booking", many: true }),
+        confirmedAt: (0, import_fields13.timestamp)(),
+        ticketedAt: (0, import_fields13.timestamp)(),
+        cancelledAt: (0, import_fields13.timestamp)(),
+        completedAt: (0, import_fields13.timestamp)(),
+        externalReferences: (0, import_fields13.json)({ defaultValue: {} }),
+        metadata: (0, import_fields13.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("bookingTicketing", "ticketingStatus"),
+        lifecycleHooks("bookingPayment", "paymentStatus"),
+        requiredRelationshipHooks(["carrier"]),
+        lifecycleHooks("booking"),
+        minorAmountHooks(["baseAmount", "taxAmount", "feeAmount", "discountAmount", "totalAmount"]),
+        bookingTotalHooks
+      )
+    });
   }
-};
-var Booking = (0, import_core8.list)({
-  access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "recordLocator",
-    listView: { initialColumns: ["recordLocator", "orderNumber", "status", "paymentStatus", "ticketingStatus", "totalAmount", "currencyCode"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields13.relationship)({ ref: "Carrier.bookings" }),
-    bookingKey: (0, import_fields13.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    recordLocator: (0, import_fields13.text)({
-      isIndexed: true,
-      validation: { isRequired: true, match: { regex: /^[A-Z0-9]{5,8}$/, explanation: "Use a five-to-eight character record locator." } }
-    }),
-    orderNumber: (0, import_fields13.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    idempotencyKey: (0, import_fields13.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    accessTokenHash: (0, import_fields13.text)({ isIndexed: true, db: { isNullable: true }, access: { read: import_access8.denyAll, create: import_access8.denyAll, update: import_access8.denyAll }, ui: { createView: { fieldMode: "hidden" }, itemView: { fieldMode: "hidden" }, listView: { fieldMode: "hidden" } } }),
-    accessTokenExpiresAt: (0, import_fields13.timestamp)(),
-    accessTokenVersion: (0, import_fields13.integer)({ defaultValue: 1, validation: { min: 1 } }),
-    status: (0, import_fields13.select)({
-      type: "enum",
-      defaultValue: "pending",
-      validation: { isRequired: true },
-      options: [
-        { label: "Pending", value: "pending" },
-        { label: "Confirmed", value: "confirmed" },
-        { label: "Ticketed", value: "ticketed" },
-        { label: "In progress", value: "in_progress" },
-        { label: "Completed", value: "completed" },
-        { label: "Cancelled", value: "cancelled" }
-      ]
-    }),
-    paymentStatus: (0, import_fields13.select)({
-      type: "enum",
-      defaultValue: "unpaid",
-      options: [
-        { label: "Unpaid", value: "unpaid" },
-        { label: "Partially paid", value: "partially_paid" },
-        { label: "Paid", value: "paid" },
-        { label: "Partially refunded", value: "partially_refunded" },
-        { label: "Refunded", value: "refunded" },
-        { label: "Payment failed", value: "failed" }
-      ]
-    }),
-    ticketingStatus: (0, import_fields13.select)({
-      type: "enum",
-      defaultValue: "not_ticketed",
-      options: [
-        { label: "Not ticketed", value: "not_ticketed" },
-        { label: "Partially ticketed", value: "partially_ticketed" },
-        { label: "Ticketed", value: "ticketed" },
-        { label: "Voided", value: "voided" },
-        { label: "Exchanged", value: "exchanged" }
-      ]
-    }),
-    source: (0, import_fields13.select)({
-      type: "enum",
-      defaultValue: "direct",
-      options: [
-        { label: "Direct", value: "direct" },
-        { label: "Website", value: "website" },
-        { label: "Call center", value: "call_center" },
-        { label: "Approved agent", value: "agent" },
-        { label: "NDC", value: "ndc" },
-        { label: "GDS", value: "gds" },
-        { label: "Airport", value: "airport" }
-      ]
-    }),
-    contactEmail: (0, import_fields13.text)(),
-    contactPhone: (0, import_fields13.text)(),
-    preferredLanguage: (0, import_fields13.text)({ defaultValue: "en" }),
-    baseAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    taxAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    feeAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    discountAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    totalAmount: (0, import_fields13.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields13.text)({
-      defaultValue: "USD",
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    customer: (0, import_fields13.relationship)({ ref: "User.bookings" }),
-    approvedAgent: (0, import_fields13.relationship)({ ref: "ApprovedAgent.bookings" }),
-    sourceOffer: (0, import_fields13.relationship)({ ref: "Offer.booking" }),
-    passengers: (0, import_fields13.relationship)({ ref: "BookingPassenger.booking", many: true }),
-    journeys: (0, import_fields13.relationship)({ ref: "Journey.booking", many: true }),
-    segments: (0, import_fields13.relationship)({ ref: "BookingSegment.booking", many: true }),
-    lineItems: (0, import_fields13.relationship)({ ref: "BookingLineItem.booking", many: true }),
-    serviceRequests: (0, import_fields13.relationship)({ ref: "ServiceRequest.booking", many: true }),
-    tickets: (0, import_fields13.relationship)({ ref: "Ticket.booking", many: true }),
-    serviceObligations: (0, import_fields13.relationship)({ ref: "ServiceObligation.booking", many: true }),
-    electronicMiscDocuments: (0, import_fields13.relationship)({ ref: "ElectronicMiscDocument.booking", many: true }),
-    seatAssignments: (0, import_fields13.relationship)({ ref: "SeatAssignment.booking", many: true }),
-    paymentSessions: (0, import_fields13.relationship)({ ref: "PaymentSession.booking", many: true }),
-    payments: (0, import_fields13.relationship)({ ref: "Payment.booking", many: true }),
-    refunds: (0, import_fields13.relationship)({ ref: "Refund.booking", many: true }),
-    exchanges: (0, import_fields13.relationship)({ ref: "Exchange.booking", many: true }),
-    checkIns: (0, import_fields13.relationship)({ ref: "CheckIn.booking", many: true }),
-    bags: (0, import_fields13.relationship)({ ref: "Bag.booking", many: true }),
-    reaccommodations: (0, import_fields13.relationship)({ ref: "Reaccommodation.booking", many: true }),
-    manualPaymentEvidence: (0, import_fields13.relationship)({ ref: "ManualPaymentEvidence.booking", many: true }),
-    confirmedAt: (0, import_fields13.timestamp)(),
-    ticketedAt: (0, import_fields13.timestamp)(),
-    cancelledAt: (0, import_fields13.timestamp)(),
-    completedAt: (0, import_fields13.timestamp)(),
-    externalReferences: (0, import_fields13.json)({ defaultValue: {} }),
-    metadata: (0, import_fields13.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    lifecycleHooks("booking"),
-    minorAmountHooks(["baseAmount", "taxAmount", "feeAmount", "discountAmount", "totalAmount"]),
-    bookingTotalHooks
-  )
 });
 
 // features/keystone/models/BookingLineItem.ts
-var import_core9 = require("@keystone-6/core");
-var import_fields14 = require("@keystone-6/core/fields");
-var lineTotalHooks = {
-  validate({ resolvedData, addValidationError }) {
-    const quantity = Number(resolvedData.quantity ?? 1);
-    const unit = Number(resolvedData.unitAmount ?? 0);
-    const base = Number(resolvedData.baseAmount ?? 0);
-    const tax = Number(resolvedData.taxAmount ?? 0);
-    const fee = Number(resolvedData.feeAmount ?? 0);
-    const total2 = Number(resolvedData.totalAmount ?? 0);
-    if (!Number.isSafeInteger(unit * quantity) || unit * quantity !== base) {
-      addValidationError("Booking line base amount must equal unit amount multiplied by quantity.");
-    }
-    if (base + tax + fee !== total2) {
-      addValidationError("Booking line total must equal base, tax, and fee amounts.");
-    }
+var import_core9, import_fields14, lineTotalHooks, BookingLineItem;
+var init_BookingLineItem = __esm({
+  "features/keystone/models/BookingLineItem.ts"() {
+    "use strict";
+    import_core9 = require("@keystone-6/core");
+    import_fields14 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    lineTotalHooks = {
+      validate({ resolvedData, addValidationError }) {
+        const quantity = Number(resolvedData.quantity ?? 1);
+        const unit = Number(resolvedData.unitAmount ?? 0);
+        const base = Number(resolvedData.baseAmount ?? 0);
+        const tax = Number(resolvedData.taxAmount ?? 0);
+        const fee = Number(resolvedData.feeAmount ?? 0);
+        const total2 = Number(resolvedData.totalAmount ?? 0);
+        if (!Number.isSafeInteger(unit * quantity) || unit * quantity !== base) {
+          addValidationError("Booking line base amount must equal unit amount multiplied by quantity.");
+        }
+        if (base + tax + fee !== total2) {
+          addValidationError("Booking line total must equal base, tax, and fee amounts.");
+        }
+      }
+    };
+    BookingLineItem = (0, import_core9.list)({
+      access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "description",
+        listView: { initialColumns: ["booking", "itemType", "description", "quantity", "totalAmount", "currencyCode"] },
+        hideCreate: true,
+        hideDelete: true,
+        itemView: { defaultFieldMode: "read" }
+      },
+      fields: {
+        carrier: (0, import_fields14.relationship)({ ref: "Carrier" }),
+        lineItemKey: (0, import_fields14.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        booking: (0, import_fields14.relationship)({ ref: "Booking.lineItems" }),
+        sourceOfferItem: (0, import_fields14.relationship)({ ref: "OfferItem.bookingLineItems" }),
+        bookingSegment: (0, import_fields14.relationship)({ ref: "BookingSegment" }),
+        bookingPassenger: (0, import_fields14.relationship)({ ref: "BookingPassenger.lineItems" }),
+        ancillaryProduct: (0, import_fields14.relationship)({ ref: "AncillaryProduct.bookingLineItems" }),
+        itemType: (0, import_fields14.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          options: [
+            { label: "Flight", value: "flight" },
+            { label: "Ancillary", value: "ancillary" },
+            { label: "Fee", value: "fee" },
+            { label: "Tax", value: "tax" },
+            { label: "Discount", value: "discount" },
+            { label: "Exchange", value: "exchange" }
+          ]
+        }),
+        description: (0, import_fields14.text)({ validation: { isRequired: true } }),
+        quantity: (0, import_fields14.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 } }),
+        unitAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        baseAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        taxAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        feeAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        totalAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        currencyCode: (0, import_fields14.text)({
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        sourceReference: (0, import_fields14.text)(),
+        productSnapshot: (0, import_fields14.json)({ defaultValue: {} }),
+        pricingSnapshot: (0, import_fields14.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking"]),
+        minorAmountHooks(["unitAmount", "baseAmount", "taxAmount", "feeAmount", "totalAmount"]),
+        lineTotalHooks
+      )
+    });
   }
-};
-var BookingLineItem = (0, import_core9.list)({
-  access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "description",
-    listView: { initialColumns: ["booking", "itemType", "description", "quantity", "totalAmount", "currencyCode"] },
-    hideCreate: true,
-    hideDelete: true,
-    itemView: { defaultFieldMode: "read" }
-  },
-  fields: {
-    carrier: (0, import_fields14.relationship)({ ref: "Carrier" }),
-    lineItemKey: (0, import_fields14.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    booking: (0, import_fields14.relationship)({ ref: "Booking.lineItems" }),
-    sourceOfferItem: (0, import_fields14.relationship)({ ref: "OfferItem.bookingLineItems" }),
-    bookingSegment: (0, import_fields14.relationship)({ ref: "BookingSegment" }),
-    bookingPassenger: (0, import_fields14.relationship)({ ref: "BookingPassenger.lineItems" }),
-    ancillaryProduct: (0, import_fields14.relationship)({ ref: "AncillaryProduct.bookingLineItems" }),
-    itemType: (0, import_fields14.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      options: [
-        { label: "Flight", value: "flight" },
-        { label: "Ancillary", value: "ancillary" },
-        { label: "Fee", value: "fee" },
-        { label: "Tax", value: "tax" },
-        { label: "Discount", value: "discount" },
-        { label: "Exchange", value: "exchange" }
-      ]
-    }),
-    description: (0, import_fields14.text)({ validation: { isRequired: true } }),
-    quantity: (0, import_fields14.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 } }),
-    unitAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    baseAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    taxAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    feeAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    totalAmount: (0, import_fields14.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    currencyCode: (0, import_fields14.text)({
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    sourceReference: (0, import_fields14.text)(),
-    productSnapshot: (0, import_fields14.json)({ defaultValue: {} }),
-    pricingSnapshot: (0, import_fields14.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking"]),
-    minorAmountHooks(["unitAmount", "baseAmount", "taxAmount", "feeAmount", "totalAmount"]),
-    lineTotalHooks
-  )
 });
 
 // features/keystone/models/BookingPassenger.ts
-var import_core10 = require("@keystone-6/core");
-var import_fields15 = require("@keystone-6/core/fields");
-var passengerSnapshotHooks = {
-  validate({ operation, resolvedData, addValidationError }) {
-    if (operation === "create" && !resolvedData.passengerSnapshot) {
-      addValidationError("passengerSnapshot is required and immutable.");
-    }
+var import_core10, import_fields15, passengerSnapshotHooks, BookingPassenger;
+var init_BookingPassenger = __esm({
+  "features/keystone/models/BookingPassenger.ts"() {
+    "use strict";
+    import_core10 = require("@keystone-6/core");
+    import_fields15 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    passengerSnapshotHooks = {
+      validate({ operation, resolvedData, addValidationError }) {
+        if (operation === "create" && !resolvedData.passengerSnapshot) {
+          addValidationError("passengerSnapshot is required and immutable.");
+        }
+      }
+    };
+    BookingPassenger = (0, import_core10.list)({
+      access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "bookingPassengerKey",
+        listView: { initialColumns: ["booking", "passenger", "passengerType", "status", "isPrimaryContact"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields15.relationship)({ ref: "Carrier" }),
+        bookingPassengerKey: (0, import_fields15.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields15.relationship)({ ref: "Booking.passengers", access: immutableFieldAccess }),
+        passenger: (0, import_fields15.relationship)({ ref: "Passenger.bookingPassengers", access: immutableFieldAccess }),
+        passengerType: (0, import_fields15.select)({
+          type: "enum",
+          defaultValue: "adult",
+          access: immutableFieldAccess,
+          options: [
+            { label: "Adult", value: "adult" },
+            { label: "Child", value: "child" },
+            { label: "Infant with seat", value: "infant_with_seat" },
+            { label: "Infant without seat", value: "infant_without_seat" }
+          ]
+        }),
+        status: (0, import_fields15.select)({
+          type: "enum",
+          defaultValue: "active",
+          options: [
+            { label: "Active", value: "active" },
+            { label: "Cancelled", value: "cancelled" },
+            { label: "Completed", value: "completed" }
+          ]
+        }),
+        isPrimaryContact: (0, import_fields15.checkbox)({ defaultValue: false }),
+        passengerSnapshot: (0, import_fields15.json)({ access: immutableFieldAccess }),
+        loyaltySnapshot: (0, import_fields15.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        lineItems: (0, import_fields15.relationship)({ ref: "BookingLineItem.bookingPassenger", many: true }),
+        tickets: (0, import_fields15.relationship)({ ref: "Ticket.bookingPassenger", many: true }),
+        serviceObligations: (0, import_fields15.relationship)({ ref: "ServiceObligation.bookingPassenger", many: true }),
+        ticketCouponLineages: (0, import_fields15.relationship)({ ref: "TicketCouponLineage.bookingPassenger", many: true }),
+        electronicMiscDocuments: (0, import_fields15.relationship)({ ref: "ElectronicMiscDocument.bookingPassenger", many: true }),
+        seatAssignments: (0, import_fields15.relationship)({ ref: "SeatAssignment.bookingPassenger", many: true }),
+        checkIns: (0, import_fields15.relationship)({ ref: "CheckIn.bookingPassenger", many: true }),
+        bags: (0, import_fields15.relationship)({ ref: "Bag.bookingPassenger", many: true }),
+        reaccommodations: (0, import_fields15.relationship)({ ref: "Reaccommodation.bookingPassenger", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "passenger"]),
+        passengerSnapshotHooks
+      )
+    });
   }
-};
-var BookingPassenger = (0, import_core10.list)({
-  access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "bookingPassengerKey",
-    listView: { initialColumns: ["booking", "passenger", "passengerType", "status", "isPrimaryContact"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields15.relationship)({ ref: "Carrier" }),
-    bookingPassengerKey: (0, import_fields15.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields15.relationship)({ ref: "Booking.passengers", access: immutableFieldAccess }),
-    passenger: (0, import_fields15.relationship)({ ref: "Passenger.bookingPassengers", access: immutableFieldAccess }),
-    passengerType: (0, import_fields15.select)({
-      type: "enum",
-      defaultValue: "adult",
-      access: immutableFieldAccess,
-      options: [
-        { label: "Adult", value: "adult" },
-        { label: "Child", value: "child" },
-        { label: "Infant with seat", value: "infant_with_seat" },
-        { label: "Infant without seat", value: "infant_without_seat" }
-      ]
-    }),
-    status: (0, import_fields15.select)({
-      type: "enum",
-      defaultValue: "active",
-      options: [
-        { label: "Active", value: "active" },
-        { label: "Cancelled", value: "cancelled" },
-        { label: "Completed", value: "completed" }
-      ]
-    }),
-    isPrimaryContact: (0, import_fields15.checkbox)({ defaultValue: false }),
-    passengerSnapshot: (0, import_fields15.json)({ access: immutableFieldAccess }),
-    loyaltySnapshot: (0, import_fields15.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    lineItems: (0, import_fields15.relationship)({ ref: "BookingLineItem.bookingPassenger", many: true }),
-    tickets: (0, import_fields15.relationship)({ ref: "Ticket.bookingPassenger", many: true }),
-    serviceObligations: (0, import_fields15.relationship)({ ref: "ServiceObligation.bookingPassenger", many: true }),
-    ticketCouponLineages: (0, import_fields15.relationship)({ ref: "TicketCouponLineage.bookingPassenger", many: true }),
-    electronicMiscDocuments: (0, import_fields15.relationship)({ ref: "ElectronicMiscDocument.bookingPassenger", many: true }),
-    seatAssignments: (0, import_fields15.relationship)({ ref: "SeatAssignment.bookingPassenger", many: true }),
-    checkIns: (0, import_fields15.relationship)({ ref: "CheckIn.bookingPassenger", many: true }),
-    bags: (0, import_fields15.relationship)({ ref: "Bag.bookingPassenger", many: true }),
-    reaccommodations: (0, import_fields15.relationship)({ ref: "Reaccommodation.bookingPassenger", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "passenger"]),
-    passengerSnapshotHooks
-  )
 });
 
 // features/keystone/models/BookingSegment.ts
-var import_core11 = require("@keystone-6/core");
-var import_fields17 = require("@keystone-6/core/fields");
-var BookingSegment = (0, import_core11.list)({
-  access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "segmentKey",
-    listView: { initialColumns: ["segmentKey", "booking", "sequence", "marketingFlightNumber", "originCode", "destinationCode", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields17.relationship)({ ref: "Carrier" }),
-    segmentKey: (0, import_fields17.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields17.relationship)({ ref: "Booking.segments", access: immutableFieldAccess }),
-    journey: (0, import_fields17.relationship)({ ref: "Journey.segments", access: immutableFieldAccess }),
-    sourceOfferItem: (0, import_fields17.relationship)({ ref: "OfferItem.bookingSegments", access: immutableFieldAccess }),
-    flightInstance: (0, import_fields17.relationship)({ ref: "FlightInstance.bookingSegments", access: immutableFieldAccess }),
-    inventoryBucket: (0, import_fields17.relationship)({ ref: "InventoryBucket.bookingSegments", access: immutableFieldAccess }),
-    sequence: (0, import_fields17.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    status: (0, import_fields17.select)({
-      type: "enum",
-      defaultValue: "confirmed",
-      options: [
-        { label: "Confirmed", value: "confirmed" },
-        { label: "Checked in", value: "checked_in" },
-        { label: "Boarded", value: "boarded" },
-        { label: "Flown", value: "flown" },
-        { label: "Offloaded", value: "offloaded" },
-        { label: "Disrupted", value: "disrupted" },
-        { label: "Reaccommodated", value: "reaccommodated" },
-        { label: "Cancelled", value: "cancelled" },
-        { label: "Refunded", value: "refunded" }
-      ]
-    }),
-    origin: (0, import_fields17.relationship)({ ref: "Airport", access: immutableFieldAccess }),
-    destination: (0, import_fields17.relationship)({ ref: "Airport", access: immutableFieldAccess }),
-    originCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    destinationCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    marketingCarrierCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    operatingCarrierCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    marketingFlightNumber: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    scheduledDepartureAt: (0, import_fields17.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    scheduledArrivalAt: (0, import_fields17.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    cabinCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    bookingClassCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    fareBrandCode: (0, import_fields17.text)({ access: immutableFieldAccess }),
-    fareBasisCode: (0, import_fields17.text)({ access: immutableFieldAccess }),
-    itinerarySnapshot: (0, import_fields17.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    includedBaggageSnapshot: (0, import_fields17.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    ticketCoupons: (0, import_fields17.relationship)({ ref: "TicketCoupon.bookingSegment", many: true }),
-    electronicMiscCoupons: (0, import_fields17.relationship)({ ref: "ElectronicMiscCoupon.bookingSegment", many: true }),
-    seatAssignments: (0, import_fields17.relationship)({ ref: "SeatAssignment.bookingSegment", many: true }),
-    serviceRequests: (0, import_fields17.relationship)({ ref: "ServiceRequest.bookingSegment", many: true }),
-    checkIns: (0, import_fields17.relationship)({ ref: "CheckIn.bookingSegment", many: true }),
-    documentVerifications: (0, import_fields17.relationship)({ ref: "DocumentVerification.bookingSegment", many: true }),
-    bags: (0, import_fields17.relationship)({ ref: "Bag.segments", many: true }),
-    primaryBags: (0, import_fields17.relationship)({ ref: "Bag.bookingSegment", many: true }),
-    disruptions: (0, import_fields17.relationship)({ ref: "Disruption.affectedSegments", many: true }),
-    exchangesAsOriginal: (0, import_fields17.relationship)({ ref: "Exchange.originalSegments", many: true }),
-    exchangesAsReplacement: (0, import_fields17.relationship)({ ref: "Exchange.replacementSegments", many: true }),
-    reaccommodationsAsOriginal: (0, import_fields17.relationship)({ ref: "Reaccommodation.originalSegments", many: true }),
-    reaccommodationsAsReplacement: (0, import_fields17.relationship)({ ref: "Reaccommodation.replacementSegments", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "journey", "origin", "destination"]),
-    chronologicalRangeHooks("scheduledDepartureAt", "scheduledArrivalAt", "Booked segment"),
-    lifecycleHooks("bookingSegment")
-  )
+var import_core11, import_fields17, BookingSegment;
+var init_BookingSegment = __esm({
+  "features/keystone/models/BookingSegment.ts"() {
+    "use strict";
+    import_core11 = require("@keystone-6/core");
+    import_fields17 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    BookingSegment = (0, import_core11.list)({
+      access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "segmentKey",
+        listView: { initialColumns: ["segmentKey", "booking", "sequence", "marketingFlightNumber", "originCode", "destinationCode", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields17.relationship)({ ref: "Carrier" }),
+        segmentKey: (0, import_fields17.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields17.relationship)({ ref: "Booking.segments", access: immutableFieldAccess }),
+        journey: (0, import_fields17.relationship)({ ref: "Journey.segments", access: immutableFieldAccess }),
+        sourceOfferItem: (0, import_fields17.relationship)({ ref: "OfferItem.bookingSegments", access: immutableFieldAccess }),
+        flightInstance: (0, import_fields17.relationship)({ ref: "FlightInstance.bookingSegments", access: immutableFieldAccess }),
+        inventoryBucket: (0, import_fields17.relationship)({ ref: "InventoryBucket.bookingSegments", access: immutableFieldAccess }),
+        sequence: (0, import_fields17.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        status: (0, import_fields17.select)({
+          type: "enum",
+          defaultValue: "confirmed",
+          options: [
+            { label: "Confirmed", value: "confirmed" },
+            { label: "Checked in", value: "checked_in" },
+            { label: "Boarded", value: "boarded" },
+            { label: "Flown", value: "flown" },
+            { label: "Offloaded", value: "offloaded" },
+            { label: "Disrupted", value: "disrupted" },
+            { label: "Reaccommodated", value: "reaccommodated" },
+            { label: "Cancelled", value: "cancelled" },
+            { label: "Refunded", value: "refunded" }
+          ]
+        }),
+        origin: (0, import_fields17.relationship)({ ref: "Airport", access: immutableFieldAccess }),
+        destination: (0, import_fields17.relationship)({ ref: "Airport", access: immutableFieldAccess }),
+        originCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        destinationCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        marketingCarrierCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        operatingCarrierCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        marketingFlightNumber: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        scheduledDepartureAt: (0, import_fields17.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        scheduledArrivalAt: (0, import_fields17.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        cabinCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        bookingClassCode: (0, import_fields17.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        fareBrandCode: (0, import_fields17.text)({ access: immutableFieldAccess }),
+        fareBasisCode: (0, import_fields17.text)({ access: immutableFieldAccess }),
+        itinerarySnapshot: (0, import_fields17.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        includedBaggageSnapshot: (0, import_fields17.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        ticketCoupons: (0, import_fields17.relationship)({ ref: "TicketCoupon.bookingSegment", many: true }),
+        electronicMiscCoupons: (0, import_fields17.relationship)({ ref: "ElectronicMiscCoupon.bookingSegment", many: true }),
+        seatAssignments: (0, import_fields17.relationship)({ ref: "SeatAssignment.bookingSegment", many: true }),
+        serviceRequests: (0, import_fields17.relationship)({ ref: "ServiceRequest.bookingSegment", many: true }),
+        checkIns: (0, import_fields17.relationship)({ ref: "CheckIn.bookingSegment", many: true }),
+        documentVerifications: (0, import_fields17.relationship)({ ref: "DocumentVerification.bookingSegment", many: true }),
+        bags: (0, import_fields17.relationship)({ ref: "Bag.segments", many: true }),
+        primaryBags: (0, import_fields17.relationship)({ ref: "Bag.bookingSegment", many: true }),
+        disruptions: (0, import_fields17.relationship)({ ref: "Disruption.affectedSegments", many: true }),
+        exchangesAsOriginal: (0, import_fields17.relationship)({ ref: "Exchange.originalSegments", many: true }),
+        exchangesAsReplacement: (0, import_fields17.relationship)({ ref: "Exchange.replacementSegments", many: true }),
+        reaccommodationsAsOriginal: (0, import_fields17.relationship)({ ref: "Reaccommodation.originalSegments", many: true }),
+        reaccommodationsAsReplacement: (0, import_fields17.relationship)({ ref: "Reaccommodation.replacementSegments", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "journey", "origin", "destination"]),
+        chronologicalRangeHooks("scheduledDepartureAt", "scheduledArrivalAt", "Booked segment"),
+        lifecycleHooks("bookingSegment")
+      )
+    });
+  }
 });
 
 // features/keystone/models/Cabin.ts
-var import_core12 = require("@keystone-6/core");
-var import_fields19 = require("@keystone-6/core/fields");
-var Cabin = (0, import_core12.list)({
-  access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
-  ui: {
-    labelField: "name",
-    listView: { initialColumns: ["name", "code", "cabinClass", "displayOrder", "carrier"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields19.relationship)({ ref: "Carrier" }),
-    code: (0, import_fields19.text)({ validation: { isRequired: true } }),
-    name: (0, import_fields19.text)({ validation: { isRequired: true } }),
-    cabinClass: (0, import_fields19.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      options: [
-        { label: "Economy", value: "economy" },
-        { label: "Premium economy", value: "premium_economy" },
-        { label: "Business", value: "business" },
-        { label: "First", value: "first" }
-      ]
-    }),
-    displayOrder: (0, import_fields19.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    fareBrands: (0, import_fields19.relationship)({ ref: "FareBrand.cabin", many: true }),
-    inventoryBuckets: (0, import_fields19.relationship)({ ref: "InventoryBucket.cabin", many: true }),
-    seats: (0, import_fields19.relationship)({ ref: "Seat.cabin", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    commandOwnedRelationshipHooks(["fareBrands", "inventoryBuckets", "seats"])
-  )
+var import_core12, import_fields19, Cabin;
+var init_Cabin = __esm({
+  "features/keystone/models/Cabin.ts"() {
+    "use strict";
+    import_core12 = require("@keystone-6/core");
+    import_fields19 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    Cabin = (0, import_core12.list)({
+      access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
+      ui: {
+        labelField: "name",
+        listView: { initialColumns: ["name", "code", "cabinClass", "displayOrder", "carrier"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields19.relationship)({ ref: "Carrier" }),
+        code: (0, import_fields19.text)({ validation: { isRequired: true } }),
+        name: (0, import_fields19.text)({ validation: { isRequired: true } }),
+        cabinClass: (0, import_fields19.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          options: [
+            { label: "Economy", value: "economy" },
+            { label: "Premium economy", value: "premium_economy" },
+            { label: "Business", value: "business" },
+            { label: "First", value: "first" }
+          ]
+        }),
+        displayOrder: (0, import_fields19.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        fareBrands: (0, import_fields19.relationship)({ ref: "FareBrand.cabin", many: true }),
+        inventoryBuckets: (0, import_fields19.relationship)({ ref: "InventoryBucket.cabin", many: true }),
+        seats: (0, import_fields19.relationship)({ ref: "Seat.cabin", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier"]),
+        commandOwnedRelationshipHooks(["fareBrands", "inventoryBuckets", "seats"])
+      )
+    });
+  }
 });
 
-// features/keystone/models/Carrier.ts
-var import_core13 = require("@keystone-6/core");
-var import_fields20 = require("@keystone-6/core/fields");
-
 // features/platform/onboarding/seed.json
-var seed_default = {
-  version: 2,
-  steps: [
-    { key: "carrier_profile", label: "Carrier identity", dependsOn: [] },
-    { key: "network_catalog", label: "Route and commercial catalog", dependsOn: ["carrier_profile"] },
-    { key: "dated_service", label: "Sellable dated service", dependsOn: ["network_catalog"] },
-    { key: "station_scope", label: "Station authorization", dependsOn: ["carrier_profile"] },
-    { key: "settlement_boundary", label: "External settlement evidence", dependsOn: ["carrier_profile"] },
-    { key: "launch_review", label: "Bounded launch review", dependsOn: ["dated_service", "station_scope", "settlement_boundary"] }
-  ],
-  supportedCurrencies: ["USD", "EUR", "GBP", "CAD", "AUD"],
-  timezoneExamples: ["America/New_York", "Europe/London", "Asia/Singapore"],
-  launchScope: "One carrier, direct-only, nonstop standard fares, externally evidenced manual settlement, internal ticketing, station-scoped passenger service, and operator-led same-route recovery."
-};
+var seed_default;
+var init_seed = __esm({
+  "features/platform/onboarding/seed.json"() {
+    seed_default = {
+      version: 2,
+      steps: [
+        { key: "carrier_profile", label: "Carrier identity", dependsOn: [] },
+        { key: "network_catalog", label: "Route and commercial catalog", dependsOn: ["carrier_profile"] },
+        { key: "dated_service", label: "Sellable dated service", dependsOn: ["network_catalog"] },
+        { key: "station_scope", label: "Station authorization", dependsOn: ["carrier_profile"] },
+        { key: "settlement_boundary", label: "External settlement evidence", dependsOn: ["carrier_profile"] },
+        { key: "launch_review", label: "Bounded launch review", dependsOn: ["dated_service", "station_scope", "settlement_boundary"] }
+      ],
+      supportedCurrencies: ["USD", "EUR", "GBP", "CAD", "AUD"],
+      timezoneExamples: ["America/New_York", "Europe/London", "Asia/Singapore"],
+      launchScope: "One carrier, direct-only, nonstop standard fares, externally evidenced manual settlement, internal ticketing, station-scoped passenger service, and operator-led same-route recovery."
+    };
+  }
+});
 
 // features/keystone/lib/currency-policy.ts
-var ONBOARDING_CURRENCIES = seed_default.supportedCurrencies;
 function supportedCurrencyCode(value) {
   const currency = String(value ?? "").trim().toUpperCase();
   if (!ONBOARDING_CURRENCIES.includes(currency)) throw new DomainError(`Currency must be one of ${ONBOARDING_CURRENCIES.join(", ")}.`);
   return currency;
 }
+var ONBOARDING_CURRENCIES;
+var init_currency_policy = __esm({
+  "features/keystone/lib/currency-policy.ts"() {
+    "use strict";
+    init_seed();
+    init_domain_error();
+    ONBOARDING_CURRENCIES = seed_default.supportedCurrencies;
+  }
+});
+
+// features/keystone/utils/storeLogo.ts
+function sanitizeStoreLogoSvg(svg) {
+  const source = svg.trim();
+  if (!source.startsWith("<svg") || !source.endsWith("</svg>") || source.length > 1e5) {
+    return "";
+  }
+  if (/<!|<\?|\b(?:javascript|data|vbscript):|\bon[a-z]+\s*=|\b(?:href|src|style)\s*=/i.test(source)) {
+    return "";
+  }
+  let tagCount = 0;
+  let match;
+  TAG_PATTERN.lastIndex = 0;
+  while (match = TAG_PATTERN.exec(source)) {
+    tagCount += 1;
+    const element = match[1].toLowerCase();
+    if (!ALLOWED_ELEMENTS.has(element)) return "";
+    if (match[0].startsWith("</")) continue;
+    const attributes = match[2];
+    let consumed = "";
+    ATTRIBUTE_PATTERN.lastIndex = 0;
+    let attributeMatch;
+    while (attributeMatch = ATTRIBUTE_PATTERN.exec(attributes)) {
+      consumed += attributeMatch[0];
+      const attribute = attributeMatch[1].toLowerCase();
+      const value = attributeMatch[2].slice(1, -1);
+      if (!ALLOWED_ATTRIBUTES.has(attribute)) return "";
+      if (attribute === "id" && !/^[A-Za-z_][\w:.-]*$/.test(value)) return "";
+      if (/url\(/i.test(value) && !/^url\(#[A-Za-z_][\w:.-]*\)$/.test(value)) return "";
+    }
+    const remainder = attributes.replace(consumed, "").replace(/\//g, "").trim();
+    if (remainder) return "";
+  }
+  TAG_PATTERN.lastIndex = 0;
+  if (tagCount === 0 || source.replace(TAG_PATTERN, "").trim()) return "";
+  return source;
+}
+var ALLOWED_ELEMENTS, ALLOWED_ATTRIBUTES, ATTRIBUTE_PATTERN, TAG_PATTERN;
+var init_storeLogo = __esm({
+  "features/keystone/utils/storeLogo.ts"() {
+    "use strict";
+    ALLOWED_ELEMENTS = /* @__PURE__ */ new Set([
+      "svg",
+      "g",
+      "path",
+      "defs",
+      "lineargradient",
+      "radialgradient",
+      "stop",
+      "clippath",
+      "rect",
+      "circle",
+      "ellipse",
+      "line",
+      "polyline",
+      "polygon",
+      "title",
+      "desc"
+    ]);
+    ALLOWED_ATTRIBUTES = /* @__PURE__ */ new Set([
+      "xmlns",
+      "fill",
+      "fill-rule",
+      "clip-rule",
+      "height",
+      "width",
+      "viewbox",
+      "d",
+      "clip-path",
+      "id",
+      "x1",
+      "x2",
+      "y1",
+      "y2",
+      "gradientunits",
+      "gradienttransform",
+      "offset",
+      "stop-color",
+      "stop-opacity",
+      "opacity",
+      "cx",
+      "cy",
+      "r",
+      "rx",
+      "ry",
+      "x",
+      "y",
+      "transform",
+      "stroke",
+      "stroke-width",
+      "stroke-linecap",
+      "stroke-linejoin",
+      "points",
+      "role",
+      "aria-hidden",
+      "aria-label",
+      "preserveaspectratio"
+    ]);
+    ATTRIBUTE_PATTERN = /\s+([A-Za-z_:][\w:.-]*)\s*=\s*("[^"]*"|'[^']*')/g;
+    TAG_PATTERN = /<\/?\s*([A-Za-z][\w:-]*)([^<>]*)>/g;
+  }
+});
+
+// features/platform/store-settings/lib/icon-registry.ts
+var LOGO_ICONS;
+var init_icon_registry = __esm({
+  "features/platform/store-settings/lib/icon-registry.ts"() {
+    "use strict";
+    LOGO_ICONS = [
+      {
+        id: "3portals",
+        name: "3Portals",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill-rule="evenodd"><path d="m34.5868 8.40061-9.6868-2.59556c-.6687-.17919-1.2108.23679-1.2108.92911v10.02854c0 .6923.5421 1.3988 1.2108 1.578l9.6868 2.5955c.6687.1792 1.2109-.2368 1.2109-.9291v-10.02848c0-.69232-.5422-1.39882-1.2109-1.57801zm-9.6868-6.35625c-2.6749-.71674-4.8434.94718-4.8434 3.71647v10.02847c0 2.7693 2.1685 5.5953 4.8434 6.312l9.6868 2.5956c2.6749.7168 4.8434-.9472 4.8434-3.7165v-10.0284c0-2.76934-2.1685-5.59533-4.8434-6.31207z" fill="#8098f9"/><path d="m26.9812 16.5707-12.1085-3.2444c-.6687-.1792-1.2109.2368-1.2109.9291v12.5356c0 .6923.5422 1.3988 1.2109 1.578l12.1085 3.2445c.6687.1792 1.2108-.2368 1.2108-.9291v-12.5356c0-.6924-.5421-1.3989-1.2108-1.5781zm-12.1085-7.0051c-2.6749-.71674-4.8434.9472-4.8434 3.7165v12.5356c0 2.7693 2.1685 5.5953 4.8434 6.312l12.1085 3.2445c2.6749.7167 4.8433-.9472 4.8433-3.7165v-12.5356c0-2.7693-2.1684-5.5953-4.8433-6.312z" fill="#6172f3"/><path d="m19.3736 24.7409-14.53021-3.8934c-.66873-.1792-1.21085.2368-1.21085.9291v15.0428c0 .6923.54212 1.3988 1.21085 1.578l14.53021 3.8933c.6687.1792 1.2108-.2368 1.2108-.9291v-15.0427c0-.6923-.5421-1.3988-1.2108-1.578zm-14.53021-7.6541c-2.67493-.7167-4.84339.9472-4.84339 3.7165v15.0427c0 2.7693 2.16846 5.5953 4.84339 6.3121l14.53021 3.8933c2.6749.7168 4.8433-.9472 4.8433-3.7164v-15.0428c0-2.7693-2.1684-5.5953-4.8433-6.312z" fill="#444ce7"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#fff" fill-rule="evenodd"><path d="m34.5868 8.40061-9.6868-2.59556c-.6687-.17919-1.2108.23679-1.2108.92911v10.02854c0 .6923.5421 1.3988 1.2108 1.578l9.6868 2.5955c.6687.1792 1.2109-.2368 1.2109-.9291v-10.02848c0-.69232-.5422-1.39882-1.2109-1.57801zm-9.6868-6.35625c-2.6749-.71674-4.8434.94718-4.8434 3.71647v10.02847c0 2.7693 2.1685 5.5953 4.8434 6.312l9.6868 2.5956c2.6749.7168 4.8434-.9472 4.8434-3.7165v-10.0284c0-2.76934-2.1685-5.59533-4.8434-6.31207z" opacity=".5"/><path d="m26.9812 16.5707-12.1085-3.2444c-.6687-.1792-1.2109.2368-1.2109.9291v12.5356c0 .6923.5422 1.3988 1.2109 1.578l12.1085 3.2445c.6687.1792 1.2108-.2368 1.2108-.9291v-12.5356c0-.6924-.5421-1.3989-1.2108-1.5781zm-12.1085-7.0051c-2.6749-.71674-4.8434.9472-4.8434 3.7165v12.5356c0 2.7693 2.1685 5.5953 4.8434 6.312l12.1085 3.2445c2.6749.7167 4.8433-.9472 4.8433-3.7165v-12.5356c0-2.7693-2.1684-5.5953-4.8433-6.312z" opacity=".7"/><path d="m19.3736 24.7409-14.53021-3.8934c-.66873-.1792-1.21085.2368-1.21085.9291v15.0428c0 .6923.54212 1.3988 1.21085 1.578l14.53021 3.8933c.6687.1792 1.2108-.2368 1.2108-.9291v-15.0427c0-.6923-.5421-1.3988-1.2108-1.578zm-14.53021-7.6541c-2.67493-.7167-4.84339.9472-4.84339 3.7165v15.0427c0 2.7693 2.16846 5.5953 4.84339 6.3121l14.53021 3.8933c2.6749.7168 4.8433-.9472 4.8433-3.7164v-15.0428c0-2.7693-2.1684-5.5953-4.8433-6.312z"/></g></svg>`
+      },
+      {
+        id: "45-degrees",
+        name: "45 Degrees",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 24 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 15.8981h17.3455l-17.061314 17.0613 2.756374 2.7564 17.06134-17.0613v17.3455h.1104l3.7877-3.7877v-15.9638l-4.2485-4.2485h-15.96596l-3.78553995 3.7855z" fill="#155eef"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 24 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 15.8981h17.3455l-17.061314 17.0613 2.756374 2.7564 17.06134-17.0613v17.3455h.1104l3.7877-3.7877v-15.9638l-4.2485-4.2485h-15.96596l-3.78553995 3.7855z" fill="#155eef"/></svg>`
+      },
+      {
+        id: "acme-corp",
+        name: "Acme Corp",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m0 24c15.2548 0 24-8.7452 24-24 0 15.2548 8.7452 24 24 24-15.2548 0-24 8.7452-24 24 0-15.2548-8.7452-24-24-24z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m0 24c15.2548 0 24-8.7452 24-24 0 15.2548 8.7452 24 24 24-15.2548 0-24 8.7452-24 24 0-15.2548-8.7452-24-24-24z" fill="#155eef" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "alphawave",
+        name: "AlphaWave",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 47 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m24.9706 7.03309c-3.1242-3.1242-8.1896-3.1242-11.3137 0l-11.31375 11.31371c-3.124199 3.1242-3.124199 8.1895 0 11.3137l11.31375 11.3137c3.1241 3.1242 8.1895 3.1242 11.3137 0l5.3982-5.3983c-4.4939-1.7337-7.682-6.0944-7.682-11.1997 0-5.3087 3.4472-9.8123 8.2254-11.3943-.0935-.0982-.1884-.1955-.2848-.292z" fill="#155eef"/><path d="m30.3691 35.5798c1.3398.5168 2.7955.8001 4.3174.8001 6.6274 0 12-5.3726 12-12s-5.3726-12-12-12c-1.3185 0-2.5873.2126-3.774.6055 5.9623 6.2681 5.8675 16.1836-.2846 22.3356z" fill="#155eef" opacity=".7"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 47 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m24.9706 7.03309c-3.1242-3.1242-8.1896-3.1242-11.3137 0l-11.31375 11.31371c-3.124199 3.1242-3.124199 8.1895 0 11.3137l11.31375 11.3137c3.1241 3.1242 8.1895 3.1242 11.3137 0l5.3982-5.3983c-4.4939-1.7337-7.682-6.0944-7.682-11.1997 0-5.3087 3.4472-9.8123 8.2254-11.3943-.0935-.0982-.1884-.1955-.2848-.292z" fill="#155eef"/><path d="m30.3691 35.5798c1.3398.5168 2.7955.8001 4.3174.8001 6.6274 0 12-5.3726 12-12s-5.3726-12-12-12c-1.3185 0-2.5873.2126-3.774.6055 5.9623 6.2681 5.8675 16.1836-.2846 22.3356z" fill="#155eef" opacity=".7"/></svg>`
+      },
+      {
+        id: "alt-shift",
+        name: "Alt+Shift",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m23.4538 34.7189c-3.1818-1.1818-6.4544-1.3636-9.4544-.5455-2.0909.5455-4.09082 1.6364-5.90897 3l-1.27273 1.0909-.36362.3636.81816.7273c.09091 0 .09092.0909.18183.1818.18181.1818.36364.2727.63636.4545l.54542.3636.54545-.4545c.09091-.0909.27273-.2727.45454-.3636 1.63636-1.3636 3.45446-2.2727 5.36356-2.7272 2.4545-.6364 5.0908-.5455 7.7271.4545 2.1818.8182 6.6363 1.8181 11.9998-.4545l.1818-.091.2728-.2727c0-.0909.0909-.0909.1818-.1818.4545-.5454.9091-1.0909 1.2727-1.7272l1.8181-2.8182-2.909 1.6363c-4.2727 2.3636-8.1817 2.8182-12.0907 1.3637z"/><path d="m10.9998 24.9011c2.4545-.6363 5.0908-.5454 7.7272.4546 2.909 1.0909 10.3634 2.6363 18.7269-4.909l1.8182-1.8182-.1819-.4545c-.0909-.3636-.2727-.8182-.4545-1.2727l-.4545-1.2727-.9091.909c-.0909.1819-.2727.2728-.4546.4546-3.9999 4.0908-10.1816 8.2726-17.2724 5.7272-3.1817-1.1818-6.4544-1.3637-9.4544-.5455-2.909.8182-5.45442 2.3636-7.81801 4.5454v-.0909l-1.363614 1.4545c0 .0909-.090891.0909-.181798.1818l-.27274.2727.090913.3637c.090908.4545.272717.909.363625 1.3636l.545454 1.4545.90907-1.1818c.09091-.1818.27272-.2727.36363-.4545 1.90905-1.7273 4.54538-4.1818 8.27257-5.1818z"/><path d="m2.1818 23.2646c2.09088-2.1818 4.45445-3.5454 6.99987-4.2727 2.45453-.6363 5.09083-.5454 7.72713.4546 8.1817 2.9999 15.2725-1.9091 18.3633-4.5454l1.1818-1.1818.4546-.3636-.3637-.5455c-.2727-.2727-.4545-.6363-.7272-1l-.5455-.7272-.6363.6363c-.0909.0909-.2727.2727-.3637.3637-3.8181 3.6363-9.7271 7.3635-16.4542 4.8181-3.1818-1.1818-6.4544-1.3637-9.4544-.5455-1.90906.5455-3.72721 1.4545-5.54536 2.6363l-1.909065 1.5455c-.181815.1818-.272722.2727-.454537.4545l-.181799.1818v.2727c-.090907.6364-.090918 1.2727-.1818259 1.8182l-.0909131 2.2727 1.54544-1.6364c.18181-.1818.36364-.4545.63636-.6363z"/><path d="m26.0908 40.9007c-.2727-.0909-.4545-.1819-.7272-.2728-3.1818-1.1818-6.4545-1.3636-9.4545-.5454-.6363.1818-1.2726.3636-1.909.6364l-2.1818.9999-.5454.2728 1.8181.6363c.5455.1818 1.0909.3637 1.6364.5455l.2727.0909.2727-.0909c.2727-.0909.5455-.2728.8182-.2728.1818 0 .3636-.0909.5454-.1818 2.1818-.5454 4.5454-.5454 7.0908.2727.2727.091.4546.1819.7273.2728l.4545.1818.2727-.0909c.6364-.1818 1.3636-.3636 1.9091-.6364l2.5454-.909-2.6363-.6364c-.2727-.0909-.6364-.1818-.9091-.2727z"/><path d="m40 22.0829-1.3636 1.3636c-.1818.1818-.3636.3636-.5454.5454-3.7272 3.5454-9.7271 7.3635-16.4543 4.8181-3.1818-1.1818-6.4544-1.3636-9.4544-.5454-2.81811.8182-5.36354 2.2727-7.63623 4.4545l-1.18179 1.2727-.36362.4545.36362.5454c.27273.3637.45455.6364.63637 1l.54542.8182.63636-.8182c.09091-.0909.27272-.2727.36363-.3636 2.18178-2.3636 4.54534-3.8181 7.27264-4.5454 2.4545-.6364 5.0908-.5454 7.7271.4545 2.2727.8182 4.6363 1.0909 6.9999.8182 4.1817-.4545 8.3635-2.8181 11.4543-5.4544.1819-.1818.3636-.2727.5455-.4546l.2727-.2727v-.2727c0-.5455.0909-1.1818.0909-1.7273z"/><path d="m5.45373 13.7196c.54545-.2728 1.18182-.4546 1.72726-.6364 2.45451-.6364 5.09081-.5455 7.72711.4545 1.7273.6364 3.4545.9091 5.3636.9091 3.8181 0 7.6362-1.3636 11.1816-3.9999l1.8181-1.45455-.8181-.63636c-.2727-.27273-.6364-.54544-1-.72725l-.5455-.36363-.4545.36363c-.1818.09091-.2727.27272-.4545.36362-4.8181 3.63634-9.6362 4.63634-14.1816 2.90904-3.2727-1.18178-6.54535-1.45451-9.81802-.4545-.27272.0909-.54544.1818-.90907.2727l-.1818.0909-.27274.2727c0 .0909-.09089.0909-.1818.1818-.36363.5455-.81818 1-1.18181 1.5455l-1.72724 2.6363 2.81814-1.4545c.45453 0 .81815-.1818 1.09087-.2727z"/><path d="m12.9089 7.53769.2727.09091c1.1818.45454 3 .90907 5.2726.90907 2.3636 0 4.6363-.54545 6.909-1.45452l2.8181-1.36361-1.909-.63634c-.5454-.18182-1.0909-.36363-1.7273-.45454h-.2727l-.2727.09089c-.2727.0909-.5455.27274-.8182.36365-2.7272.99998-5.4544 1.1818-8.0907.45454-.2728-.09091-.5455-.18183-.8182-.27274l-.2727-.09091-.2728.09091c-.5454.18181-1.0908.36364-1.6363.63636l-2.09087.90908 2.18177.63633c.1818-.0909.4546.00001.7273.09092z"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m23.4538 34.7189c-3.1818-1.1818-6.4544-1.3636-9.4544-.5455-2.0909.5455-4.09082 1.6364-5.90897 3l-1.27273 1.0909-.36362.3636.81816.7273c.09091 0 .09092.0909.18183.1818.18181.1818.36364.2727.63636.4545l.54542.3636.54545-.4545c.09091-.0909.27273-.2727.45454-.3636 1.63636-1.3636 3.45446-2.2727 5.36356-2.7272 2.4545-.6364 5.0908-.5455 7.7271.4545 2.1818.8182 6.6363 1.8181 11.9998-.4545l.1818-.091.2728-.2727c0-.0909.0909-.0909.1818-.1818.4545-.5454.9091-1.0909 1.2727-1.7272l1.8181-2.8182-2.909 1.6363c-4.2727 2.3636-8.1817 2.8182-12.0907 1.3637z"/><path d="m10.9998 24.9011c2.4545-.6363 5.0908-.5454 7.7272.4546 2.909 1.0909 10.3634 2.6363 18.7269-4.909l1.8182-1.8182-.1819-.4545c-.0909-.3636-.2727-.8182-.4545-1.2727l-.4545-1.2727-.9091.909c-.0909.1819-.2727.2728-.4546.4546-3.9999 4.0908-10.1816 8.2726-17.2724 5.7272-3.1817-1.1818-6.4544-1.3637-9.4544-.5455-2.909.8182-5.45442 2.3636-7.81801 4.5454v-.0909l-1.363614 1.4545c0 .0909-.090891.0909-.181798.1818l-.27274.2727.090913.3637c.090908.4545.272717.909.363625 1.3636l.545454 1.4545.90907-1.1818c.09091-.1818.27272-.2727.36363-.4545 1.90905-1.7273 4.54538-4.1818 8.27257-5.1818z"/><path d="m2.1818 23.2646c2.09088-2.1818 4.45445-3.5454 6.99987-4.2727 2.45453-.6363 5.09083-.5454 7.72713.4546 8.1817 2.9999 15.2725-1.9091 18.3633-4.5454l1.1818-1.1818.4546-.3636-.3637-.5455c-.2727-.2727-.4545-.6363-.7272-1l-.5455-.7272-.6363.6363c-.0909.0909-.2727.2727-.3637.3637-3.8181 3.6363-9.7271 7.3635-16.4542 4.8181-3.1818-1.1818-6.4544-1.3637-9.4544-.5455-1.90906.5455-3.72721 1.4545-5.54536 2.6363l-1.909065 1.5455c-.181815.1818-.272722.2727-.454537.4545l-.181799.1818v.2727c-.090907.6364-.090918 1.2727-.1818259 1.8182l-.0909131 2.2727 1.54544-1.6364c.18181-.1818.36364-.4545.63636-.6363z"/><path d="m26.0908 40.9007c-.2727-.0909-.4545-.1819-.7272-.2728-3.1818-1.1818-6.4545-1.3636-9.4545-.5454-.6363.1818-1.2726.3636-1.909.6364l-2.1818.9999-.5454.2728 1.8181.6363c.5455.1818 1.0909.3637 1.6364.5455l.2727.0909.2727-.0909c.2727-.0909.5455-.2728.8182-.2728.1818 0 .3636-.0909.5454-.1818 2.1818-.5454 4.5454-.5454 7.0908.2727.2727.091.4546.1819.7273.2728l.4545.1818.2727-.0909c.6364-.1818 1.3636-.3636 1.9091-.6364l2.5454-.909-2.6363-.6364c-.2727-.0909-.6364-.1818-.9091-.2727z"/><path d="m40 22.0829-1.3636 1.3636c-.1818.1818-.3636.3636-.5454.5454-3.7272 3.5454-9.7271 7.3635-16.4543 4.8181-3.1818-1.1818-6.4544-1.3636-9.4544-.5454-2.81811.8182-5.36354 2.2727-7.63623 4.4545l-1.18179 1.2727-.36362.4545.36362.5454c.27273.3637.45455.6364.63637 1l.54542.8182.63636-.8182c.09091-.0909.27272-.2727.36363-.3636 2.18178-2.3636 4.54534-3.8181 7.27264-4.5454 2.4545-.6364 5.0908-.5454 7.7271.4545 2.2727.8182 4.6363 1.0909 6.9999.8182 4.1817-.4545 8.3635-2.8181 11.4543-5.4544.1819-.1818.3636-.2727.5455-.4546l.2727-.2727v-.2727c0-.5455.0909-1.1818.0909-1.7273z"/><path d="m5.45373 13.7196c.54545-.2728 1.18182-.4546 1.72726-.6364 2.45451-.6364 5.09081-.5455 7.72711.4545 1.7273.6364 3.4545.9091 5.3636.9091 3.8181 0 7.6362-1.3636 11.1816-3.9999l1.8181-1.45455-.8181-.63636c-.2728-.27273-.6364-.54544-1-.72725l-.5455-.36363-.4545.36363c-.1818.09091-.2727.27272-.4545.36362-4.8181 3.63634-9.6362 4.63634-14.1816 2.90904-3.2727-1.18178-6.54535-1.45451-9.81802-.4545-.27272.0909-.54544.1818-.90907.2727l-.1818.0909-.27274.2727c0 .0909-.09089.0909-.1818.1818-.36363.5455-.81818 1-1.18181 1.5455l-1.72724 2.6363 2.81814-1.4545c.45453 0 .81815-.1818 1.09087-.2727z"/><path d="m12.9089 7.53769.2727.09091c1.1818.45454 3 .90907 5.2726.90907 2.3636 0 4.6363-.54545 6.909-1.45452l2.8181-1.36361-1.909-.63634c-.5454-.18182-1.0909-.36363-1.7273-.45454h-.2727l-.2727.09089c-.2727.0909-.5455.27274-.8182.36365-2.7272.99998-5.4544 1.1818-8.0907.45454-.2728-.09091-.5455-.18183-.8182-.27274l-.2727-.09091-.2728.09091c-.5454.18181-1.0908.36364-1.6363.63636l-2.09087.90908 2.18177.63633c.1818-.0909.4546.00001.7273.09092z"/></g></svg>`
+      },
+      {
+        id: "biosynthesis",
+        name: "Biosynthesis",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill-rule="evenodd"><path d="m4.29111 28.6025c.90712.9019.9071 2.3641-.00003 3.266l-.04646.0462c-.90713.9019-2.37788.9018-3.284994-.0001-.9071177-.9019-.9071038-2.3641.000031-3.266l.046453-.0462c.90714-.9019 2.37788-.9018 3.285.0001z" fill="#a4bcfd"/><path d="m15.2112 29.298c.9055.9035.9028 2.3658-.006 3.266l-6.43424 6.3741c-.90876.9002-2.3795.8976-3.28499-.0059-.90548-.9035-.90282-2.3658.00594-3.266l6.43429-6.3741c.9088-.9002 2.3795-.8976 3.285.0059z" fill="#6172f3"/><path d="m23.9431 40.2706c.7116-1.0613 2.1538-1.348 3.2212-.6405l.1394.0923c1.0674.7075 1.3558 2.1414.6442 3.2026-.7116 1.0613-2.1538 1.3481-3.2212.6406l-.1394-.0924c-1.0674-.7075-1.3558-2.1414-.6442-3.2026z" fill="#a4bcfd"/><path d="m39.2728 28.4638c.9072.9019.9072 2.3641 0 3.266l-3.159 3.1408c-.9072.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l3.1591-3.1408c.9071-.9019 2.3778-.9019 3.2849 0z" fill="#6172f3"/><g fill="#444ce7"><path d="m39.3197 16.8473c.9071.9019.9071 2.3642 0 3.266l-23.3446 23.2098c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l23.3446-23.2098c.9071-.9019 2.3778-.9019 3.285 0z"/><path d="m34.905 9.71133c.9072.90187.9072 2.36417 0 3.26607l-13.426 13.3485c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3642 0-3.2661l13.4261-13.34847c.9071-.90189 2.3778-.90189 3.2849 0z"/><path d="m27.8187 5.18362c.9077.90128.9087 2.36353.0022 3.26603l-17.2588 17.18215c-.90647.9025-2.37721.9035-3.28495.0022-.90773-.9013-.90872-2.3635-.00221-3.266l17.25876-17.18218c.9065-.9025 2.3772-.90348 3.285-.0022z"/></g><path d="m10.7276 10.6841c.9056.9035.9031 2.3657-.0056 3.266l-6.75949 6.6974c-.90869.9003-2.37943.8978-3.28499-.0056-.905563-.9035-.903032-2.3657.005654-3.2661l6.759476-6.6973c.90868-.90034 2.37942-.89783 3.28495.0056z" fill="#6172f3"/><path d="m14.8678 4.00024c1.2828 0 2.3228 1.03397 2.3228 2.30944v.23094c0 1.27546-1.04 2.30943-2.3228 2.30943-1.2829 0-2.3229-1.03397-2.3229-2.30943v-.23094c0-1.27547 1.04-2.30944 2.3229-2.30944z" fill="#a4bcfd"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#fff" fill-rule="evenodd"><path d="m4.29111 28.6025c.90712.9019.9071 2.3641-.00003 3.266l-.04646.0462c-.90713.9019-2.37788.9018-3.284994-.0001-.9071177-.9019-.9071038-2.3641.000031-3.266l.046453-.0462c.90714-.9019 2.37788-.9018 3.285.0001z" opacity=".5"/><path d="m15.2112 29.298c.9055.9035.9028 2.3658-.006 3.266l-6.43424 6.3741c-.90876.9002-2.3795.8976-3.28499-.0059-.90548-.9035-.90282-2.3658.00594-3.266l6.43429-6.3741c.9088-.9002 2.3795-.8976 3.285.0059z" opacity=".7"/><path d="m23.9431 40.2706c.7116-1.0613 2.1538-1.348 3.2212-.6405l.1394.0923c1.0674.7075 1.3558 2.1414.6442 3.2026-.7116 1.0613-2.1538 1.3481-3.2212.6406l-.1394-.0924c-1.0674-.7075-1.3558-2.1414-.6442-3.2026z" opacity=".5"/><path d="m39.2728 28.4638c.9072.9019.9072 2.3641 0 3.266l-3.159 3.1408c-.9072.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l3.1591-3.1408c.9071-.9019 2.3778-.9019 3.2849 0z" opacity=".7"/><path d="m39.3197 16.8473c.9071.9019.9071 2.3642 0 3.266l-23.3446 23.2098c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l23.3446-23.2098c.9071-.9019 2.3778-.9019 3.285 0z"/><path d="m34.905 9.71133c.9072.90187.9072 2.36417 0 3.26607l-13.426 13.3485c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3642 0-3.2661l13.4261-13.34847c.9071-.90189 2.3778-.90189 3.2849 0z"/><path d="m27.8187 5.18362c.9077.90128.9087 2.36353.0022 3.26603l-17.2588 17.18215c-.90647.9025-2.37721.9035-3.28495.0022-.90773-.9013-.90872-2.3635-.00221-3.266l17.25876-17.18218c.9065-.9025 2.3772-.90348 3.285-.0022z"/><path d="m10.7276 10.6841c.9056.9035.9031 2.3657-.0056 3.266l-6.75949 6.6974c-.90869.9003-2.37943.8978-3.28499-.0056-.905563-.9035-.903032-2.3657.005654-3.2661l6.759476-6.6973c.90868-.90034 2.37942-.89783 3.28495.0056z" opacity=".7"/><path d="m14.8678 4.00024c1.2828 0 2.3228 1.03397 2.3228 2.30944v.23094c0 1.27546-1.04 2.30943-2.3228 2.30943-1.2829 0-2.3229-1.03397-2.3229-2.30943v-.23094c0-1.27547 1.04-2.30944 2.3229-2.30944z" opacity=".5"/></g></svg>`
+      },
+      {
+        id: "boltshift",
+        name: "Boltshift",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 44c11.0457 0 20-8.9543 20-20s-8.9543-20-20-20c-11.04572 0-20 8.9543-20 20s8.95428 20 20 20zm6.2393-30.6832c.3037-1.0787-.7432-1.7167-1.6993-1.0355l-13.3469 9.5083c-1.0369.7387-.8738 2.2104.245 2.2104h3.5146v-.0272h6.8498l-5.5813 1.9693-2.4605 8.7411c-.3037 1.0788.7431 1.7167 1.6993 1.0355l13.3469-9.5082c1.0369-.7387.8737-2.2105-.245-2.2105h-5.3298z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 44c11.0457 0 20-8.9543 20-20s-8.9543-20-20-20c-11.04572 0-20 8.9543-20 20s8.95428 20 20 20zm6.2393-30.6832c.3037-1.0787-.7432-1.7167-1.6993-1.0355l-13.3469 9.5083c-1.0369.7387-.8738 2.2104.245 2.2104h3.5146v-.0272h6.8498l-5.5813 1.9693-2.4605 8.7411c-.3037 1.0788.7431 1.7167 1.6993 1.0355l13.3469-9.5082c1.0369-.7387.8737-2.2105-.245-2.2105h-5.3298z" fill="#fff" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "buildingblocks",
+        name: "BuildingBlocks",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 37 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.8841 4.30945-6.8842 3.97574 6.8891 3.97661 6.8862-3.97575zm8.8919 7.44025-6.887 3.9762-.0007 7.9532 6.8877-3.9771zm2 11.4164-6.8879 3.9772 6.8889 3.9765 6.8871-3.9763zm8.8879 7.4416-6.8868 3.9761v7.9522l6.8868-3.9761zm-10.8868 11.9287v-7.9525l-6.8891-3.9766v7.9525zm-10.8888-18.8569-6.8883-3.9775v-7.9526l6.889 3.9765zm-.0003 4.6187-9.38814-5.4209c-.928127-.5359-1.49986-1.5262-1.49986-2.598v-11.99368c0-.71444.381106-1.37463.999789-1.73193l10.383811-5.996798c.9281-.5359626 2.0716-.5361538 2.9998-.000505l10.3922 5.996973c.619.3572 1.0004 1.01758 1.0004 1.73226v11.41638l9.888 5.7096c.6188.3573.9999 1.0175.9999 1.732v11.9937c0 1.0718-.5718 2.0621-1.5 2.598l-10.3868 5.9969c-.6187.3572-1.381.3572-1.9998.0001l-10.3891-5.9969c-.9283-.5358-1.5002-1.5263-1.5002-2.5982z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 37 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.8841 4.30945-6.8842 3.97574 6.8891 3.97661 6.8862-3.97575zm8.8919 7.44025-6.887 3.9762-.0007 7.9532 6.8877-3.9771zm2 11.4164-6.8879 3.9772 6.8889 3.9765 6.8871-3.9763zm8.8879 7.4416-6.8868 3.9761v7.9522l6.8868-3.9761zm-10.8868 11.9287v-7.9525l-6.8891-3.9766v7.9525zm-10.8888-18.8569-6.8883-3.9775v-7.9526l6.889 3.9765zm-.0003 4.6187-9.38814-5.4209c-.928127-.5359-1.49986-1.5262-1.49986-2.598v-11.99368c0-.71444.381106-1.37463.999789-1.73193l10.383811-5.996798c.9281-.5359626 2.0716-.5361538 2.9998-.000505l10.3922 5.996973c.619.3572 1.0004 1.01758 1.0004 1.73226v11.41638l9.888 5.7096c.6188.3573.9999 1.0175.9999 1.732v11.9937c0 1.0718-.5718 2.0621-1.5 2.598l-10.3868 5.9969c-.6187.3572-1.381.3572-1.9998.0001l-10.3891-5.9969c-.9283-.5358-1.5002-1.5263-1.5002-2.5982z" fill="#155eef" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "calescence",
+        name: "Calescence",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#1570ef" fill-rule="evenodd"><path d="m35.3721 14v8.0492h-9.9698v-2.2927z"/><path d="m35.3699 14.0001-9.9698 5.7565-7.3513-4.2436v-11.513z" opacity=".9"/><path d="m18.0512 4v11.513l-7.349 4.2436-9.969778-5.7565z" opacity=".8"/><path d="m10.7002 19.7565v8.4868l-9.969731 5.756v-19.9993z" opacity=".7"/><path d="m18.0492 32.4871v11.5129l-17.318731-10.0006 9.969731-5.756z" opacity=".6"/><path d="m35.3699 33.9994-17.3211 10.0006v-11.5129l7.3513-4.2437z" opacity=".5"/><path d="m35.3721 25.9507v8.0487l-9.9698-5.756v-2.2927z" opacity=".4"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#fff" fill-rule="evenodd"><path d="m35.3721 14v8.0492h-9.9698v-2.2927z"/><path d="m35.3699 14.0001-9.9698 5.7565-7.3513-4.2436v-11.513z" opacity=".9"/><path d="m18.0512 4v11.513l-7.349 4.2436-9.969778-5.7565z" opacity=".8"/><path d="m10.7002 19.7565v8.4868l-9.969731 5.756v-19.9993z" opacity=".7"/><path d="m18.0492 32.4871v11.5129l-17.318731-10.0006 9.969731-5.756z" opacity=".6"/><path d="m35.3699 33.9994-17.3211 10.0006v-11.5129l7.3513-4.2437z" opacity=".5"/><path d="m35.3721 25.9507v8.0487l-9.9698-5.756v-2.2927z" opacity=".4"/></g></svg>`
+      },
+      {
+        id: "capsule",
+        name: "Capsule",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><circle cx="14" cy="18" fill="#1570ef" r="14"/><circle cx="26" cy="30" fill="#53b1fd" r="14"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><circle cx="14" cy="18" opacity=".7" r="14"/><circle cx="26" cy="30" opacity=".7" r="14"/></g></svg>`
+      },
+      {
+        id: "constellation",
+        name: "Constellation",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m16 8 5.0912 10.9088 10.9088 5.0912-10.9088 5.0912-5.0912 10.9088-5.0912-10.9088-10.9088-5.0912 10.9088-5.0912z"/><path d="m20.0469 31.3286 6.3539-1.0932 3.6 9.7646 3.6-9.7646 10.2565 1.7646-6.6564-8 6.6564-8-10.2565 1.7646-3.6-9.7646-3.6 9.7646-6.3539-1.0932 1.0442 2.2374 10.9088 5.0912-10.9088 5.0912z" opacity=".5"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m16 8 5.0912 10.9088 10.9088 5.0912-10.9088 5.0912-5.0912 10.9088-5.0912-10.9088-10.9088-5.0912 10.9088-5.0912z"/><path d="m20.0469 31.3286 6.3539-1.0932 3.6 9.7646 3.6-9.7646 10.2565 1.7646-6.6564-8 6.6564-8-10.2565 1.7646-3.6-9.7646-3.6 9.7646-6.3539-1.0932 1.0442 2.2374 10.9088 5.0912-10.9088 5.0912z" opacity=".5"/></g></svg>`
+      },
+      {
+        id: "codecraft",
+        name: "Codecraft",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 9c0-2.76142 2.23858-5 5-5h10c2.7614 0 5 2.23858 5 5v9.8192c.0002.06.0003.1203.0003.1808 0 2.7575 2.2322 4.9936 4.9881 5h.0116 10c2.7614 0 5 2.2386 5 5v10c0 2.7614-2.2386 5-5 5h-10c-2.7614 0-5-2.2386-5-5v-10c0-.0139.0001-.0277.0002-.0416-.0224-2.7422-2.2523-4.9584-4.9999-4.9584-.0129 0-.0258 0-.0387 0h-9.9616c-2.76142 0-5-2.2386-5-5z" fill="#155eef"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 9c0-2.76142 2.23858-5 5-5h10c2.7614 0 5 2.23858 5 5v9.8192c.0002.06.0003.1203.0003.1808 0 2.7575 2.2322 4.9936 4.9881 5h.0116 10c2.7614 0 5 2.2386 5 5v10c0 2.7614-2.2386 5-5 5h-10c-2.7614 0-5-2.2386-5-5v-10c0-.0139.0001-.0277.0002-.0416-.0224-2.7422-2.2523-4.9584-4.9999-4.9584-.0129 0-.0258 0-.0387 0h-9.9616c-2.76142 0-5-2.2386-5-5z" fill="#155eef"/></svg>`
+      },
+      {
+        id: "command-r",
+        name: "Command+R",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m18.6667 30.6667c7.3638 0 13.3333-5.9696 13.3333-13.3334 0-7.36376-5.9695-13.3333-13.3333-13.3333h-18.6667v26.6667z" fill="#155eef"/><path d="m0 4 32 40h-21.3333l-10.6667-13.3333z" fill="#2e90fa"/><path d="m21.1488 30.436c-.8042.1515-1.6339.2307-2.4821.2307h-18.6667v-26.6667z" fill="#53b1fd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m18.6667 30.6667c7.3638 0 13.3333-5.9696 13.3333-13.3334 0-7.36376-5.9695-13.3333-13.3333-13.3333h-18.6667v26.6667z" opacity=".7"/><path d="m0 4 32 40h-21.3333l-10.6667-13.3333z" opacity=".7"/><path d="m21.1488 30.436c-.8042.1515-1.6339.2307-2.4821.2307h-18.6667v-26.6667z" opacity=".7"/></g></svg>`
+      },
+      {
+        id: "contrast-ai",
+        name: "ContrastAI",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 4c11.0457 0 20 8.9543 20 20s-8.9543 20-20 20-20-8.9543-20-20 8.9543-20 20-20zm15 20c0 8.2843-6.7157 15-15 15v-30c8.2843 0 15 6.7157 15 15z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 4c11.0457 0 20 8.9543 20 20s-8.9543 20-20 20-20-8.9543-20-20 8.9543-20 20-20zm15 20c0 8.2843-6.7157 15-15 15v-30c8.2843 0 15 6.7157 15 15z" fill="#fff" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "convergence",
+        name: "Convergence",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m22.1017 20.8596 9.8995-9.8994-2.1213-2.12137-7.3389 7.33887v-13.1777h-3v13.1777l-7.3388-7.33887-2.1213 2.12137 9.8995 9.8994 1.0606 1.0607zm2.1207 2.1214 9.8995-9.8995 2.1213 2.1213-7.3388 7.3388h13.0956v3h-13.0956l7.3388 7.3389-2.1213 2.1213-9.8995-9.8995-1.0607-1.0607zm-16.26224 12.0208 9.89944-9.8995 1.0607-1.0607-1.0607-1.0606-9.89944-9.8995-2.12133 2.1213 7.33887 7.3388h-13.17574688v3h13.17574688l-7.33887 7.3389zm12.02024-7.7782-9.8995 9.8995 2.1213 2.1213 7.3388-7.3388v13.0944h3v-13.0944l7.3389 7.3388 2.1213-2.1213-9.8995-9.8995-1.0607-1.0607z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m22.1017 20.8596 9.8995-9.8994-2.1213-2.12137-7.3389 7.33887v-13.1777h-3v13.1777l-7.3388-7.33887-2.1213 2.12137 9.8995 9.8994 1.0606 1.0607zm2.1207 2.1214 9.8995-9.8995 2.1213 2.1213-7.3388 7.3388h13.0956v3h-13.0956l7.3388 7.3389-2.1213 2.1213-9.8995-9.8995-1.0607-1.0607zm-16.26224 12.0208 9.89944-9.8995 1.0607-1.0607-1.0607-1.0606-9.89944-9.8995-2.12133 2.1213 7.33887 7.3388h-13.17574688v3h13.17574688l-7.33887 7.3389zm12.02024-7.7782-9.8995 9.8995 2.1213 2.1213 7.3388-7.3388v13.0944h3v-13.0944l7.3389 7.3388 2.1213-2.1213-9.8995-9.8995-1.0607-1.0607z" fill="#155eef" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "core-os",
+        name: "CoreOS",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m15.2286 4.99951c-3.2154 0-6.18655 1.71539-7.79425 4.5l-5.7735 9.99999c-1.6076941 2.7846-1.607697 6.2154 0 9l5.7735 10c1.6077 2.7846 4.57885 4.5 7.79425 4.5h11.547c3.2154 0 6.1865-1.7154 7.7942-4.5l5.7735-10c1.6077-2.7846 1.6077-6.2154 0-9l-5.7735-9.99999c-1.6077-2.78461-4.5788-4.5-7.7942-4.5zm11.547 5.99999h-7.2169c-1.1547 0-1.8762 1.2499-1.298 2.2494 1.784 3.0838 3.5722 6.1653 5.3536 9.2506.5359.9282.5359 2.0718 0 3-1.7814 3.0854-3.5696 6.1668-5.3536 9.2506-.5782.9995.1433 2.2494 1.298 2.2494h7.2169c1.0718 0 2.0622-.5718 2.5981-1.5l5.7735-10c.5359-.9282.5359-2.0718 0-3l-5.7735-10c-.5359-.9282-1.5263-1.5-2.5981-1.5z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m15.2286 4.99951c-3.2154 0-6.18655 1.71539-7.79425 4.5l-5.7735 9.99999c-1.6076941 2.7846-1.607697 6.2154 0 9l5.7735 10c1.6077 2.7846 4.57885 4.5 7.79425 4.5h11.547c3.2154 0 6.1865-1.7154 7.7942-4.5l5.7735-10c1.6077-2.7846 1.6077-6.2154 0-9l-5.7735-9.99999c-1.6077-2.78461-4.5788-4.5-7.7942-4.5zm11.547 5.99999h-7.2169c-1.1547 0-1.8762 1.2499-1.298 2.2494 1.784 3.0838 3.5722 6.1653 5.3536 9.2506.5359.9282.5359 2.0718 0 3-1.7814 3.0854-3.5696 6.1668-5.3536 9.2506-.5782.9995.1433 2.2494 1.298 2.2494h7.2169c1.0718 0 2.0622-.5718 2.5981-1.5l5.7735-10c.5359-.9282.5359-2.0718 0-3l-5.7735-10c-.5359-.9282-1.5263-1.5-2.5981-1.5z" fill="#155eef" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "cubekit",
+        name: "Cubekit",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 14.5264v18.9473l17.8947-12.2437v-18.94741z" fill="#155eef" opacity=".5"/><path d="m0 33.4737v-18.9474l17.8947 12.2438v18.9474z" fill="#1570ef" opacity=".5"/><path d="m40 14.5263v18.9474l-17.8947-12.2438v-18.94737z" fill="#155eef" opacity=".5"/><path d="m40 33.4737v-18.9474l-17.8947 12.2438v18.9474z" fill="#1570ef" opacity=".5"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m0 14.5264v18.9473l17.8947-12.2437v-18.94741z" opacity=".5"/><path d="m0 33.4737v-18.9474l17.8947 12.2438v18.9474z" opacity=".5"/><path d="m40 14.5263v18.9474l-17.8947-12.2438v-18.94737z" opacity=".5"/><path d="m40 33.4737v-18.9474l-17.8947 12.2438v18.9474z" opacity=".5"/></g></svg>`
+      },
+      {
+        id: "europa",
+        name: "Europa",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m28.6446 39.168c-.6032 1.3404-1.353 2.6531-2.2519 3.7888 7.4581-2.5137 12.9483-9.3054 13.5527-17.4568h-2.6549c-3.2399 0-5.8424 2.5861-6.369 5.7829-.4855 2.9468-1.2621 5.6301-2.2769 7.8851z"/><path d="m22.7724 25.5c3.3921 0 6.167 2.8299 5.5439 6.1643-1.3533 7.2424-4.5667 12.3357-8.3155 12.3357-4.7435 0-8.6299-8.1549-8.975-18.5z"/><path d="m30.9904 17.1502c.4961 3.2267 3.1106 5.8498 6.3752 5.8498h2.6107c-.4123-8.3729-5.9735-15.39183-13.5836-17.95683.8989 1.13575 1.6487 2.44843 2.2519 3.78878 1.0643 2.36505 1.8666 5.20115 2.3458 8.31825z"/><path d="m28.4165 16.8957c.5674 3.3176-2.1954 6.1043-5.5612 6.1043h-11.8434c.2344-10.5811 4.1693-19 8.9889-19 3.8447 0 7.1263 5.35721 8.4157 12.8957z"/><path d="m8.51131 23c.11359-5.4083 1.14536-10.3894 2.84579-14.16805.6031-1.34035 1.3529-2.65303 2.2519-3.78878-7.61011 2.565-13.171316 9.58393-13.5836094 17.95683z"/><path d="m.0562286 25.5c.6043994 8.1514 6.0946514 14.9431 13.5527714 17.4568-.899-1.1357-1.6488-2.4484-2.2519-3.7888-1.6479-3.6619-2.66781-8.4531-2.83264-13.668z"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m28.6446 39.168c-.6032 1.3404-1.353 2.6531-2.2519 3.7888 7.4581-2.5137 12.9483-9.3054 13.5527-17.4568h-2.6549c-3.2399 0-5.8424 2.5861-6.369 5.7829-.4855 2.9468-1.2621 5.6301-2.2769 7.8851z"/><path d="m22.7724 25.5c3.3921 0 6.167 2.8299 5.5439 6.1643-1.3533 7.2424-4.5667 12.3357-8.3155 12.3357-4.7435 0-8.6299-8.1549-8.975-18.5z"/><path d="m30.9904 17.1502c.4961 3.2267 3.1106 5.8498 6.3752 5.8498h2.6107c-.4123-8.3729-5.9735-15.39183-13.5836-17.95683.8989 1.13575 1.6487 2.44843 2.2519 3.78878 1.0643 2.36505 1.8666 5.20115 2.3458 8.31825z"/><path d="m28.4165 16.8957c.5674 3.3176-2.1954 6.1043-5.5612 6.1043h-11.8434c.2344-10.5811 4.1693-19 8.9889-19 3.8447 0 7.1263 5.35721 8.4157 12.8957z"/><path d="m8.51131 23c.11359-5.4083 1.14536-10.3894 2.84579-14.16805.6031-1.34035 1.3529-2.65303 2.2519-3.78878-7.61011 2.565-13.171316 9.58393-13.5836094 17.95683z"/><path d="m.0562286 25.5c.6043994 8.1514 6.0946514 14.9431 13.5527714 17.4568-.899-1.1357-1.6488-2.4484-2.2519-3.7888-1.6479-3.6619-2.66781-8.4531-2.83264-13.668z"/></g></svg>`
+      },
+      {
+        id: "feather-dev",
+        name: "FeatherDev",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m36.3068 11.4224c-.4322-.4323-.8644-.8645-1.2967-1.2967-1.2966-1.38311-2.6797-2.76621-4.4086-3.63065-1.9882-1.03733-4.1493-.778-6.3104-.778-3.2849 0-11.4971 0-16.33798 0l3.28488 4.40865h19.6228c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.5186.0864.6051 0z" fill="#53b1fd"/><path d="m39.9368 18.511c-.4322-.4322-.8645-.8645-1.2967-1.2967-1.2967-1.3831-2.6797-2.7662-4.4086-3.6306-1.9882-1.0374-4.1494-.778-6.3105-.778-2.8526 0-9.6817 0-14.5226 0l3.2849 4.4086h17.8939c1.8154 0 3.3714.3458 4.8409 1.2967.1729.0864.3458.0864.5187 0z" fill="#2e90fa"/><path d="m44 25.4263c-.4322-.4323-.8645-.8645-1.2967-1.2967-1.2966-1.3831-2.6797-2.7662-4.4086-3.6307-1.9882-1.0373-4.1493-.7779-6.3104-.7779-2.6798 0-8.558 0-13.3124 0l3.2848 4.4086h16.5973c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.4322.1729.6051 0z" fill="#1570ef"/><path d="m7.60742 37.0961c.43222.4322.86444.8644 1.29666 1.2966 1.29662 1.3831 2.67972 2.7662 4.40862 3.6307 1.9882 1.0373 4.1493.778 6.3104.778h16.338l-3.2849-4.4087c-5.9646 0-15.3006 0-19.6228 0-1.8153 0-3.37132-.3457-4.84087-1.2966-.25933-.0865-.43222-.0865-.60511 0z" fill="#53b1fd"/><path d="m3.97656 30.0079c.43222.4323.86444.8645 1.29666 1.2967 1.29667 1.3831 2.67976 2.7662 4.40864 3.6307 1.98824 1.0373 4.14934.778 6.31044.778h14.5226l-3.2849-4.4087c-5.8782 0-13.9175 0-17.89391 0-1.81532 0-3.37132-.3458-4.84087-1.2967-.17289-.0864-.34577-.0864-.51866 0z" fill="#2e90fa"/><path d="m0 23.0058c.43222.4322.864441.8644 1.29666 1.2966 1.29666 1.3831 2.67977 2.7662 4.40866 3.6307 1.98821 1.0373 4.1493.778 6.31038.778h13.3124l-3.2849-4.4087c-5.7053 0-12.96657 0-16.59722 0-1.81533 0-3.37132-.3458-4.840874-1.2966-.259332-.0865-.432218-.0865-.605106 0z" fill="#1570ef"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m36.3068 11.4224c-.4322-.4323-.8644-.8645-1.2967-1.2967-1.2966-1.38311-2.6797-2.76621-4.4086-3.63065-1.9882-1.03733-4.1493-.778-6.3104-.778-3.2849 0-11.4971 0-16.33798 0l3.28488 4.40865h19.6228c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.5186.0864.6051 0z" opacity=".5"/><path d="m39.9368 18.511c-.4322-.4322-.8645-.8645-1.2967-1.2967-1.2967-1.3831-2.6797-2.7662-4.4086-3.6306-1.9882-1.0374-4.1494-.778-6.3105-.778-2.8526 0-9.6817 0-14.5226 0l3.2849 4.4086h17.8939c1.8154 0 3.3714.3458 4.8409 1.2967.1729.0864.3458.0864.5187 0z" opacity=".7"/><path d="m44 25.4263c-.4322-.4323-.8645-.8645-1.2967-1.2967-1.2966-1.3831-2.6797-2.7662-4.4086-3.6307-1.9882-1.0373-4.1493-.7779-6.3104-.7779-2.6798 0-8.558 0-13.3124 0l3.2848 4.4086h16.5973c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.4322.1729.6051 0z"/><path d="m7.60742 37.0961c.43222.4322.86444.8644 1.29666 1.2966 1.29662 1.3832 2.67972 2.7662 4.40862 3.6307 1.9882 1.0373 4.1493.778 6.3104.778h16.338l-3.2849-4.4087c-5.9646 0-15.3006 0-19.6228 0-1.8153 0-3.37132-.3457-4.84087-1.2966-.25933-.0865-.43222-.0865-.60511 0z" opacity=".5"/><path d="m3.97656 30.0079c.43222.4323.86444.8645 1.29666 1.2967 1.29667 1.3831 2.67976 2.7662 4.40864 3.6307 1.98824 1.0373 4.14934.778 6.31044.778h14.5226l-3.2849-4.4087c-5.8782 0-13.9175 0-17.89391 0-1.81532 0-3.37132-.3458-4.84087-1.2967-.17289-.0864-.34577-.0864-.51866 0z" opacity=".7"/><path d="m0 23.0058c.43222.4322.864441.8644 1.29666 1.2966 1.29666 1.3831 2.67977 2.7662 4.40866 3.6307 1.98821 1.0373 4.1493.778 6.31038.778h13.3124l-3.2849-4.4087c-5.7053 0-12.96657 0-16.59722 0-1.81533 0-3.37132-.3458-4.840874-1.2966-.259332-.0865-.432218-.0865-.605106 0z"/></g></svg>`
+      },
+      {
+        id: "flora-fauna",
+        name: "Flora&Fauna",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m13.7146 4c-2.2564 0-4.4203.89634-6.01579 2.49183l-7.69881 7.69877v3.524c0 2.4897 1.06944 4.7296 2.77401 6.2854-1.70457 1.5558-2.77401 3.7957-2.77401 6.2854v3.524l7.69881 7.6988c1.59549 1.5955 3.75939 2.4918 6.01579 2.4918 2.4897 0 4.7296-1.0694 6.2854-2.774 1.5558 1.7046 3.7957 2.774 6.2854 2.774 2.2564 0 4.4203-.8963 6.0158-2.4918l7.6988-7.6988v-3.524c0-2.4897-1.0694-4.7296-2.774-6.2854 1.7046-1.5558 2.774-3.7957 2.774-6.2854v-3.524l-7.6988-7.69877c-1.5955-1.59549-3.7594-2.49183-6.0158-2.49183-2.4897 0-4.7296 1.06944-6.2854 2.77401-1.5558-1.70457-3.7957-2.77401-6.2854-2.77401zm12.0442 20c-.0959-.0875-.19-.1774-.2822-.2696l-5.4766-5.4766-5.4766 5.4766c-.0922.0922-.1863.1821-.2822.2696.0959.0875.19.1774.2822.2696l5.4766 5.4766 5.4766-5.4766c.0922-.0922.1863-.1821.2822-.2696zm-3.5366 9.8094v1.683c0 2.244 1.8192 4.0632 4.0632 4.0632 1.0776 0 2.1111-.4281 2.8731-1.1901l6.3971-6.3971v-1.683c0-2.244-1.8192-4.0632-4.0632-4.0632-1.0776 0-2.1111.4281-2.8731 1.1901zm-4.4444 0-6.3971-6.3971c-.762-.762-1.79546-1.1901-2.87308-1.1901-2.24403 0-4.06318 1.8192-4.06318 4.0632v1.683l6.39706 6.3971c.762.762 1.7955 1.1901 2.8731 1.1901 2.244 0 4.0632-1.8192 4.0632-4.0632zm0-21.3018v1.683l-6.3971 6.3971c-.762.762-1.79546 1.1901-2.87308 1.1901-2.24403 0-4.06318-1.8192-4.06318-4.0632v-1.683l6.39706-6.39708c.762-.76199 1.7955-1.19007 2.8731-1.19007 2.244 0 4.0632 1.81915 4.0632 4.06315zm10.8415 8.0801-6.3971-6.3971v-1.683c0-2.244 1.8192-4.06315 4.0632-4.06315 1.0776 0 2.1111.42808 2.8731 1.19007l6.3971 6.39708v1.683c0 2.244-1.8192 4.0632-4.0632 4.0632-1.0776 0-2.1111-.4281-2.8731-1.1901z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m13.7146 4c-2.2564 0-4.4203.89634-6.01579 2.49183l-7.69881 7.69877v3.524c0 2.4897 1.06944 4.7296 2.77401 6.2854-1.70457 1.5558-2.77401 3.7957-2.77401 6.2854v3.524l7.69881 7.6988c1.59549 1.5955 3.75939 2.4918 6.01579 2.4918 2.4897 0 4.7296-1.0694 6.2854-2.774 1.5558 1.7046 3.7957 2.774 6.2854 2.774 2.2564 0 4.4203-.8963 6.0158-2.4918l7.6988-7.6988v-3.524c0-2.4897-1.0694-4.7296-2.774-6.2854 1.7046-1.5558 2.774-3.7957 2.774-6.2854v-3.524l-7.6988-7.69877c-1.5955-1.59549-3.7594-2.49183-6.0158-2.49183-2.4897 0-4.7296 1.06944-6.2854 2.77401-1.5558-1.70457-3.7957-2.77401-6.2854-2.77401zm12.0442 20c-.0959-.0875-.19-.1774-.2822-.2696l-5.4766-5.4766-5.4766 5.4766c-.0922.0922-.1863.1821-.2822.2696.0959.0875.19.1774.2822.2696l5.4766 5.4766 5.4766-5.4766c.0922-.0922.1863-.1821.2822-.2696zm-3.5366 9.8094v1.683c0 2.244 1.8192 4.0632 4.0632 4.0632 1.0776 0 2.1111-.4281 2.8731-1.1901l6.3971-6.3971v-1.683c0-2.244-1.8192-4.0632-4.0632-4.0632-1.0776 0-2.1111.4281-2.8731 1.1901zm-4.4444 0-6.3971-6.3971c-.762-.762-1.79546-1.1901-2.87308-1.1901-2.24403 0-4.06318 1.8192-4.06318 4.0632v1.683l6.39706 6.3971c.762.762 1.7955 1.1901 2.8731 1.1901 2.244 0 4.0632-1.8192 4.0632-4.0632zm0-21.3018v1.683l-6.3971 6.3971c-.762.762-1.79546 1.1901-2.87308 1.1901-2.24403 0-4.06318-1.8192-4.06318-4.0632v-1.683l6.39706-6.39708c.762-.76199 1.7955-1.19007 2.8731-1.19007 2.244 0 4.0632 1.81915 4.0632 4.06315zm10.8415 8.0801-6.3971-6.3971v-1.683c0-2.244 1.8192-4.06315 4.0632-4.06315 1.0776 0 2.1111.42808 2.8731 1.19007l6.3971 6.39708v1.683c0 2.244-1.8192 4.0632-4.0632 4.0632-1.0776 0-2.1111-.4281-2.8731-1.1901z" fill="#fff" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "focal-point",
+        name: "FocalPoint",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m10.7788 6.1817 4.6901 17.5036v-19.24382c.3719-.08679.7478-.16322 1.1273-.22897v19.47459l5.2752-19.6871c.3801.03442.7572.07945 1.1309.13479l-5.3176 19.84571 10.5701-18.30794c.3443.15492.6835.31927 1.0172.49274l-10.6095 18.3763 15.1464-15.1465c.2731.25824.5389.52407.7971.7972l-15.1486 15.1487 18.3784-10.6108c.1734.3337.3377.6729.4926 1.0173l-18.3034 10.5675 19.8403-5.3162c.0553.3737.1003.7508.1347 1.1309l-19.6869 5.2751h19.4741c-.0658.3796-.1422.7554-.229 1.1273h-19.2481l17.507 4.691c-.1798.3443-.3693.6827-.5681 1.0149l-17.2257-4.6156 14.3874 8.3066c-.2723.2801-.5528.5522-.8411.8161l-14.1087-8.1457 10.6759 10.6758c-.3377.1973-.6817.385-1.0316.5628l-10.4426-10.4426 6.8421 11.8508c-.3746.1059-.7537.2012-1.1368.2855l-6.6825-11.5744 3.2219 12.0243c-.2872.0122-.5759.0184-.8661.0184-.0991 0-.198-.0007-.2967-.0022l-3.1483-11.7497v11.4569c-.3795-.0657-.7554-.1421-1.1273-.2289v-11.2261l-2.7759 10.36c-.3541-.1396-.7033-.289-1.0471-.4478l2.7337-10.2024-5.13175 8.8884c-.3177-.2034-.62928-.4156-.9344-.6361l5.09135-8.8186-7.1301 7.1302c-.2731-.2583-.53893-.5241-.79717-.7971l7.12787-7.1279-8.81599 5.0899c-.22059-.3051-.4328-.6167-.6363-.9344l8.89259-5.1341-10.20737 2.735c-.15888-.3438-.3083-.693-.44793-1.047l10.3599-2.776h-11.226124c-.086806-.3719-.163256-.7477-.22903-1.1273h11.452154l-11.74511583-3.1471c-.00145443-.0995-.00218417-.1991-.00218417-.2989 0-.2894.00613487-.5774.0182816-.8639l12.0258184 3.2224-11.57621-6.6836c.084291-.3832.179549-.7623.285427-1.1369l11.855683 6.8449-10.44698-10.447c.17774-.3499.36544-.6939.56273-1.0315l10.68025 10.6802-8.14896-14.1144c.26387-.2882.53605-.56863.81617-.84096l8.30809 14.38996-4.61634-17.22828c.33214-.1988.67064-.38826 1.01484-.56802z" fill="#155eef"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m10.7788 6.1817 4.6901 17.5036v-19.24382c.3719-.08679.7478-.16322 1.1273-.22897v19.47459l5.2752-19.6871c.3801.03442.7572.07945 1.1309.13479l-5.3176 19.84571 10.5701-18.30794c.3443.15492.6835.31927 1.0172.49274l-10.6095 18.3763 15.1464-15.1465c.2731.25824.5389.52407.7971.7972l-15.1486 15.1487 18.3784-10.6108c.1734.3337.3377.6729.4926 1.0173l-18.3034 10.5675 19.8403-5.3162c.0553.3737.1003.7508.1347 1.1309l-19.6869 5.2751h19.4741c-.0658.3796-.1422.7554-.229 1.1273h-19.2481l17.507 4.691c-.1798.3443-.3693.6827-.5681 1.0149l-17.2257-4.6156 14.3874 8.3066c-.2723.2801-.5528.5522-.8411.8161l-14.1087-8.1457 10.6759 10.6758c-.3377.1973-.6817.385-1.0316.5628l-10.4426-10.4426 6.8421 11.8508c-.3746.1059-.7537.2012-1.1368.2855l-6.6825-11.5744 3.2219 12.0243c-.2872.0122-.5759.0184-.8661.0184-.0991 0-.198-.0007-.2967-.0022l-3.1483-11.7497v11.4569c-.3795-.0657-.7554-.1421-1.1273-.2289v-11.2261l-2.7759 10.36c-.3541-.1396-.7033-.289-1.0471-.4478l2.7337-10.2024-5.13174 8.8884c-.31771-.2034-.62929-.4156-.93441-.6361l5.09135-8.8186-7.1301 7.1302c-.2731-.2583-.53893-.5241-.79717-.7971l7.12787-7.1279-8.81599 5.0899c-.22059-.3051-.4328-.6167-.6363-.9344l8.89259-5.1341-10.20737 2.735c-.15888-.3438-.3083-.693-.44793-1.047l10.3599-2.776h-11.226124c-.086806-.3719-.163256-.7477-.22903-1.1273h11.452154l-11.74511583-3.1471c-.00145443-.0995-.00218417-.1991-.00218417-.2989 0-.2894.00613486-.5774.0182816-.8639l12.0258184 3.2224-11.57621-6.6836c.084291-.3832.179549-.7623.285427-1.1369l11.855683 6.8449-10.44698-10.447c.17774-.3499.36544-.6939.56273-1.0315l10.68025 10.6802-8.14896-14.1144c.26387-.2882.53605-.56863.81617-.84096l8.30809 14.38996-4.61634-17.22828c.33214-.1988.67064-.38826 1.01484-.56802z" fill="#fff"/></svg>`
+      },
+      {
+        id: "foresight",
+        name: "Foresight",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 31 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#444ce7"><path d="m-.00195312 17.8433 30.90545312-17.8433-.8189 12.6994-26.32058 15.1961z"/><path d="m3.76367 27.8951 21.73573-12.5492-.8189 12.6994-17.15086 9.902z" opacity=".5"/><path d="m7.52734 37.9477 12.56596-7.255-.8189 12.6994-7.9811 4.6079z" opacity=".25"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 31 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m-.00195312 17.8433 30.90545312-17.8433-.8189 12.6994-26.32058 15.1961z"/><path d="m3.76367 27.8951 21.73573-12.5492-.8189 12.6994-17.15086 9.902z" opacity=".5"/><path d="m7.52734 37.9477 12.56596-7.255-.8189 12.6994-7.9811 4.6079z" opacity=".25"/></g></svg>`
+      },
+      {
+        id: "galileo",
+        name: "Galileo",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m29.5411 6.41772c2.6913 5.27688 4.209 11.25228 4.209 17.58218s-1.5177 12.3054-4.2091 17.5823c6.2304-3.3881 10.4593-9.9914 10.4593-17.5823s-4.2289-14.19404-10.4592-17.58218z" fill="#6172f3"/><path d="m20.5481 5.99826c-.9047-1.28153-2.4457-1.9717-3.9913-1.70349-9.40496 1.63214-16.5568 9.83343-16.5568 19.70503 0 9.8717 7.1518 18.0729 16.5567 19.7051 1.5456.2682 3.0867-.4219 3.9913-1.7035 3.5923-5.0889 5.7025-11.2988 5.7025-18.0016 0-6.7027-2.1101-12.9126-5.7024-18.00154z" fill="#444ce7"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m29.5411 6.41772c2.6913 5.27688 4.209 11.25228 4.209 17.58218s-1.5177 12.3054-4.2091 17.5823c6.2304-3.3881 10.4593-9.9914 10.4593-17.5823s-4.2289-14.19404-10.4592-17.58218z" opacity=".7"/><path d="m20.5481 5.99826c-.9047-1.28153-2.4457-1.9717-3.9913-1.70349-9.40496 1.63214-16.5568 9.83343-16.5568 19.70503 0 9.8717 7.1518 18.0729 16.5567 19.7051 1.5456.2682 3.0867-.4219 3.9913-1.7035 3.5923-5.0889 5.7025-11.2988 5.7025-18.0016 0-6.7027-2.1101-12.9126-5.7024-18.00154z"/></g></svg>`
+      },
+      {
+        id: "global-bank",
+        name: "GlobalBank",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m27.6627 4h-15.3253l-12.3374 12.3373v15.3253l12.3374 12.3374h15.3253l12.3373-12.3374v-15.3253zm-13.2049 27.8554-7.90357-7.9036 7.90357-7.9036c2.988-2.988 7.9037-2.988 10.8916 0l7.9036 7.9036-7.9036 7.9036c-2.9879 2.988-7.8072 2.988-10.8916 0z" fill="#444ce7"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m27.6627 4h-15.3253l-12.3374 12.3373v15.3253l12.3374 12.3374h15.3253l12.3373-12.3374v-15.3253zm-13.2049 27.8554-7.90357-7.9036 7.90357-7.9036c2.988-2.988 7.9037-2.988 10.8916 0l7.9036 7.9036-7.9036 7.9036c-2.9879 2.988-7.8072 2.988-10.8916 0z" fill="#fff"/></svg>`
+      },
+      {
+        id: "hexsmith",
+        name: "Hexsmith",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m9.72461 41.7983h18.49589c1.2717 0 2.4469-.6785 3.0827-1.7798l4.1102-7.1191h-20.5481z" opacity=".7"/><path d="m25.1445 15.1015h-20.55661l4.11021-7.11909c.63585-1.10133 1.811-1.77977 3.0827-1.77977h18.4959z" opacity=".4"/><path d="m39.5272 25.7801c.6358-1.1014.6358-2.4582 0-3.5596l-4.1102-7.1191-5.1378 8.8989h-20.55068l5.13718 8.8989h20.5481l.0016-.0027.0016.0027z" opacity=".4"/><path d="m14.8634 32.8992-5.13775-8.8988-5.13776 8.8988 5.13776 8.8989z"/><path d="m25.1445 15.1014h-20.55593l-4.108166 7.1192c-.635516 1.1013-.635318 2.458.000521 3.5591l4.111125 7.1195 5.13775-8.8989h20.55l.0013-.0021z" opacity=".7"/><path d="m35.4181 15.1015-5.1378-8.89886-5.1377 8.89886 5.1377 8.8989z"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m9.72461 41.7983h18.49589c1.2717 0 2.4469-.6785 3.0827-1.7798l4.1102-7.1191h-20.5481z" opacity=".7"/><path d="m25.1445 15.1015h-20.55661l4.11021-7.11909c.63585-1.10133 1.811-1.77977 3.0827-1.77977h18.4959z" opacity=".4"/><path d="m39.5272 25.7801c.6358-1.1013.6358-2.4582 0-3.5596l-4.1102-7.1191-5.1378 8.8989h-20.55068l5.13718 8.8989h20.5481l.0016-.0027.0016.0027z" opacity=".4"/><path d="m14.8634 32.8992-5.13775-8.8988-5.13776 8.8988 5.13776 8.8989z"/><path d="m25.1445 15.1014h-20.55593l-4.108166 7.1192c-.635516 1.1013-.635318 2.458.000521 3.5591l4.111125 7.1195 5.13775-8.8989h20.55l.0013-.0022z" opacity=".7"/><path d="m35.4181 15.1015-5.1378-8.89886-5.1377 8.89886 5.1377 8.8989z"/></g></svg>`
+      },
+      {
+        id: "hourglass",
+        name: "Hourglass",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 30 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 41.2222c0 1.5341 1.24365 2.7778 2.77778 2.7778h24.44442c1.5341 0 2.7778-1.2437 2.7778-2.7778v-7.2222c0-8.2843-6.7157-15-15-15-8.28427 0-15 6.7157-15 15z" fill="#1570ef"/><path d="m0 6.77778c0-1.53413 1.24365-2.77778 2.77778-2.77778h24.44442c1.5341 0 2.7778 1.24365 2.7778 2.77778v7.22222c0 8.2843-6.7157 15-15 15-8.28427 0-15-6.7157-15-15z" fill="#53b1fd" opacity=".5"/></svg>`,
+        darkSvg: `<svg width="100%" height="100%" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.7" d="M0 41.2222C0 42.7563 1.24365 44 2.77778 44H27.2222C28.7563 44 30 42.7563 30 41.2222V34C30 25.7157 23.2843 19 15 19C6.71573 19 0 25.7157 0 34V41.2222Z" fill="white"/><path opacity="0.7" d="M0 6.77778C0 5.24365 1.24365 4 2.77778 4H27.2222C28.7563 4 30 5.24365 30 6.77778V14C30 22.2843 23.2843 29 15 29C6.71573 29 0 22.2843 0 14V6.77778Z" fill="white"/></svg>`
+      },
+      {
+        id: "kintsugi",
+        name: "Kintsugi",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m20 4 4.2861 9.6525 9.856-3.79464-3.7946 9.85604 9.6525 4.2861-9.6525 4.2861 3.7946 9.856-9.856-3.7946-4.2861 9.6525-4.2861-9.6525-9.85604 3.7946 3.79469-9.856-9.65255-4.2861 9.65255-4.2861-3.79469-9.85604 9.85604 3.79464z" fill="#155eef"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m20 4 4.2861 9.6525 9.856-3.79464-3.7946 9.85604 9.6525 4.2861-9.6525 4.2861 3.7946 9.856-9.856-3.7946-4.2861 9.6525-4.2861-9.6525-9.85604 3.7946 3.79469-9.856-9.65255-4.2861 9.65255-4.2861-3.79469-9.85604 9.85604 3.79464z" fill="#155eef"/></svg>`
+      },
+      {
+        id: "layers",
+        name: "Layers",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m5.03741 15.4637c.7506-2.8008 3.62961-5.67985 6.43049-6.43044l17.4617-4.67957c2.8009-.7506 4.4629.91146 3.7123 3.71231l-4.6795 17.4617c-.7506 2.8009-3.6297 5.6799-6.4305 6.4305l-17.46175 4.6796c-2.80085.7505-4.462904-.9115-3.712306-3.7124z" opacity=".7"/><path d="m12.0355 22.4642c.7506-2.8008 3.6296-5.6799 6.4304-6.4305l17.4617-4.6795c2.8009-.7506 4.4629.9114 3.7123 3.7123l-4.6795 17.4617c-.7506 2.8009-3.6296 5.6799-6.4305 6.4305l-17.4617 4.6795c-2.80085.7506-4.46291-.9114-3.71231-3.7123z" opacity=".7"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m5.03741 15.4637c.7506-2.8008 3.62961-5.67985 6.43049-6.43044l17.4617-4.67957c2.8009-.7506 4.4629.91146 3.7123 3.71231l-4.6795 17.4617c-.7506 2.8009-3.6297 5.6799-6.4305 6.4305l-17.46175 4.6795c-2.80085.7506-4.462904-.9114-3.712306-3.7123z" opacity=".7"/><path d="m12.0355 22.4642c.7506-2.8008 3.6296-5.6799 6.4304-6.4305l17.4617-4.6795c2.8009-.7506 4.4629.9114 3.7123 3.7123l-4.6795 17.4617c-.7506 2.8009-3.6296 5.6799-6.4305 6.4305l-17.4617 4.6795c-2.80085.7506-4.46291-.9114-3.71231-3.7123z" opacity=".7"/></g></svg>`
+      },
+      {
+        id: "lightspeed",
+        name: "Lightspeed",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 24c0 6.6274 5.37258 12 12 12v-12c0 6.6274 5.3726 12 12 12v-12c0 6.6274 5.3726 12 12 12s12-5.3726 12-12-5.3726-12-12-12-12 5.3726-12 12v-12c-6.6274 0-12 5.3726-12 12v-12c-6.62742 0-12 5.3726-12 12z" fill="#155eef"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 24c0 6.6274 5.37258 12 12 12v-12c0 6.6274 5.3726 12 12 12v-12c0 6.6274 5.3726 12 12 12s12-5.3726 12-12-5.3726-12-12-12-12 5.3726-12 12v-12c-6.6274 0-12 5.3726-12 12v-12c-6.62742 0-12 5.3726-12 12z" fill="#155eef"/></svg>`
+      },
+      {
+        id: "luminescence",
+        name: "Luminescence",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m32.3008 36h-.1015c-.0261.0402-.0523.0804-.0787.1204-2.7604 1.8201-6.0668 2.8794-9.6206 2.8794-9.665 0-17.5-7.835-17.5-17.5 0-3.5538 1.05931-6.8602 2.87939-9.6206.04009-.0264.08029-.0527.12061-.0788v-.1017c-.04056.0599-.08077.1201-.12061.1805-4.7469 3.1299-7.87939 8.5094-7.87939 14.6206 0 9.665 7.83502 17.5 17.5 17.5 6.1112 0 11.4907-3.1325 14.6206-7.8794.0603-.0398.1204-.0799.1802-.1204z"/><g opacity=".5"><path d="m40.0003 21.5c0 6.1112-3.1325 11.4907-7.8794 14.6206 1.8201-2.7604 2.8794-6.0668 2.8794-9.6206 0-9.665-7.835-17.5-17.5-17.5-3.5538 0-6.8602 1.0593-9.6206 2.8794 3.1299-4.74691 8.5094-7.8794 14.6206-7.8794 9.665 0 17.5 7.835 17.5 17.5z"/><path d="m32.0003 36.1994c.0403-.0261.0805-.0524.1206-.0788-.0398.0604-.08.1206-.1206.1805z"/><path d="m7.80088 12c.02611-.0403.05238-.0805.07882-.1206-.06043.0398-.12059.08-.18048.1206z"/></g></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m32.3008 36h-.1015c-.0261.0402-.0523.0804-.0787.1204-2.7604 1.8201-6.0668 2.8794-9.6206 2.8794-9.665 0-17.5-7.835-17.5-17.5 0-3.5538 1.05931-6.8602 2.87939-9.6206.04009-.0264.08029-.0527.12061-.0788v-.1017c-.04056.0599-.08077.1201-.12061.1805-4.7469 3.1299-7.87939 8.5094-7.87939 14.6206 0 9.665 7.83502 17.5 17.5 17.5 6.1112 0 11.4907-3.1325 14.6206-7.8794.0603-.0398.1204-.0799.1802-.1204z"/><g opacity=".5"><path d="m40.0003 21.5c0 6.1112-3.1325 11.4907-7.8794 14.6206 1.8201-2.7604 2.8794-6.0668 2.8794-9.6206 0-9.665-7.835-17.5-17.5-17.5-3.5538 0-6.8602 1.0593-9.6206 2.8794 3.1299-4.74691 8.5094-7.8794 14.6206-7.8794 9.665 0 17.5 7.835 17.5 17.5z"/><path d="m32.0003 36.1994c.0403-.0261.0805-.0524.1206-.0788-.0398.0604-.08.1206-.1206.1805z"/><path d="m7.80088 12c.02611-.0403.05238-.0805.07882-.1206-.06043.0398-.12059.08-.18048.1206z"/></g></g></svg>`
+      },
+      {
+        id: "luminous",
+        name: "Luminous",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m14.1061 19.6565c5.499-2.6299 9.8025-7.0929 12.2731-12.67168-1.5939-1.67362-3.666-2.86907-5.8975-3.58634l-1.1954-.39848c-.0797.15939-.1594.39849-.1594.55788-1.9127 5.41936-5.8178 9.80262-11.07766 12.27322-3.66599 1.7533-6.37564 4.9412-7.650763 8.7666l-.398477 1.1955c.159391.0797.39848.1593.557871.1593 1.514209.5579 3.028419 1.2752 4.462939 2.1519 1.99238-3.5864 5.18019-6.6148 9.08529-8.4479z"/><path d="m37.2173 19.9753c-2.9487 4.463-7.0132 8.0494-12.034 10.4403-4.0645 1.9127-7.1726 5.499-8.6071 9.8026l-.3985 1.3549c1.5142 1.3548 3.3472 2.3909 5.3396 3.0284l1.1955.3985c.0796-.1594.1593-.3985.1593-.5579 1.9127-5.4193 5.8178-9.8026 11.0777-12.2732 3.666-1.7533 6.4553-4.9412 7.6507-8.7666l.3985-1.1954c-1.6736-.4782-3.2675-1.2752-4.7817-2.2316z" opacity=".6"/><path d="m12.9903 37.4284c1.9924-4.7818 5.6584-8.6869 10.3604-10.9184 4.3035-2.0721 7.8898-5.26 10.3604-9.1651-1.833-1.7533-3.3472-3.7458-4.463-6.1366-2.9487 5.4193-7.571 9.8026-13.2294 12.5123-3.2675 1.5142-5.8974 4.1442-7.49136 7.3321 1.75326 1.6736 3.18786 3.7457 4.30356 6.0569 0 0 .0797.1594.1594.3188z" opacity=".8"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m14.1061 19.6565c5.499-2.6299 9.8025-7.0929 12.2731-12.67168-1.5939-1.67362-3.666-2.86907-5.8975-3.58634l-1.1954-.39848c-.0797.15939-.1594.39849-.1594.55788-1.9127 5.41936-5.8178 9.80262-11.07766 12.27322-3.66599 1.7533-6.37564 4.9412-7.650763 8.7666l-.398477 1.1955c.159391.0797.39848.1593.557871.1593 1.514209.5579 3.028419 1.2752 4.462939 2.1519 1.99238-3.5864 5.18019-6.6148 9.08529-8.4479z"/><path d="m37.2173 19.9753c-2.9487 4.463-7.0132 8.0494-12.034 10.4403-4.0645 1.9127-7.1726 5.499-8.6071 9.8026l-.3985 1.3549c1.5142 1.3548 3.3472 2.3909 5.3396 3.0284l1.1955.3985c.0796-.1594.1593-.3985.1593-.5579 1.9127-5.4193 5.8178-9.8026 11.0777-12.2732 3.666-1.7533 6.4553-4.9412 7.6507-8.7666l.3985-1.1954c-1.6736-.4782-3.2675-1.2752-4.7817-2.2316z" opacity=".5"/><path d="m12.9903 37.4284c1.9924-4.7818 5.6584-8.6869 10.3604-10.9184 4.3035-2.0721 7.8898-5.26 10.3604-9.1651-1.833-1.7533-3.3472-3.7458-4.463-6.1366-2.9487 5.4193-7.571 9.8026-13.2294 12.5123-3.2675 1.5142-5.8974 4.1442-7.49136 7.3321 1.75326 1.6736 3.18786 3.7457 4.30356 6.0569 0 0 .0797.1594.1594.3188z" opacity=".7"/></g></svg>`
+      },
+      {
+        id: "pollinate",
+        name: "Pollinate",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m25.0008 24c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m25.0008 10c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6c0-3.31371 2.6863-6 6-6s6 2.68629 6 6z"/><path d="m37.125 31c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m37.127 17.0002c0 3.3137-2.6863 6-6 6-3.3138 0-6-2.6863-6-6s2.6862-6 6-6c3.3137 0 6 2.6863 6 6z"/><path d="m25.0008 38c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m12.877 17c0 3.3137-2.6863 6-6.00005 6-3.31371 0-5.999997-2.6863-5.999997-6s2.686287-6 5.999997-6c3.31375 0 6.00005 2.6863 6.00005 6z"/><path d="m12.875 30.9997c0 3.3137-2.6863 6-6 6-3.31371 0-6-2.6863-6-6s2.68629-6 6-6c3.3137 0 6 2.6863 6 6z"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m25.0008 24c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m25.0008 10c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6c0-3.31371 2.6863-6 6-6s6 2.68629 6 6z"/><path d="m37.125 31c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m37.127 17.0002c0 3.3137-2.6863 6-6 6-3.3138 0-6-2.6863-6-6s2.6862-6 6-6c3.3137 0 6 2.6863 6 6z"/><path d="m25.0008 38c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m12.877 17c0 3.3137-2.6863 6-6.00005 6-3.31371 0-5.999997-2.6863-5.999997-6s2.686287-6 5.999997-6c3.31375 0 6.00005 2.6863 6.00005 6z"/><path d="m12.875 30.9997c0 3.3137-2.6863 6-6 6-3.31371 0-6-2.6863-6-6s2.68629-6 6-6c3.3137 0 6 2.6863 6 6z"/></g></svg>`
+      },
+      {
+        id: "polymath",
+        name: "Polymath",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><circle cx="19" cy="24" r="16" stroke="#155eef" stroke-width="6"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><circle cx="19" cy="24" r="16" stroke="#fff" stroke-width="6"/></svg>`
+      },
+      {
+        id: "prometheus",
+        name: "Prometheus",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m10.4993 16.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h19c2.2091 0 4-1.7909 4-4v-3h-22.5c-3.0376 0-5.5 2.46243-5.5 5.5 0 3.0376-2.4631 5.5-5.5007 5.5z"/><path d="m10.4993 26.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h13c2.2091 0 4-1.7909 4-4v-3h-16.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".7"/><path d="m10.4993 36.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h7.8c1.7673 0 3.2-1.4327 3.2-3.2v-3.8h-10.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".5"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m10.4993 16.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h19c2.2091 0 4-1.7909 4-4v-3h-22.5c-3.0376 0-5.5 2.46243-5.5 5.5 0 3.0376-2.4631 5.5-5.5007 5.5z"/><path d="m10.4993 26.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h13c2.2091 0 4-1.7909 4-4v-3h-16.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".75"/><path d="m10.4993 36.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h7.8c1.7673 0 3.2-1.4327 3.2-3.2v-3.8h-10.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".5"/></g></svg>`
+      },
+      {
+        id: "quantum",
+        name: "Quantum",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 39 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m9 23c0-5.5228 4.4772-10 10-10 5.5229 0 10 4.4772 10 10h9c0-10.4934-8.5066-19-19-19-10.49341 0-18.99999908 8.5066-19 19s8.50659 19 19 19v-9c-5.5228 0-10-4.4771-10-10z"/><path d="m29 23c0 5.5228 4.4772 10 10 10v9c-10.4934 0-19-8.5066-19-19z" opacity=".5"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 39 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m9 23c0-5.5228 4.4772-10 10-10 5.5229 0 10 4.4772 10 10h9c0-10.4934-8.5066-19-19-19-10.49341 0-18.99999908 8.5066-19 19s8.50659 19 19 19v-9c-5.5228 0-10-4.4771-10-10z"/><path d="m29 23c0 5.5228 4.4772 10 10 10v9c-10.4934 0-19-8.5066-19-19z" opacity=".5"/></g></svg>`
+      },
+      {
+        id: "quartz-ai",
+        name: "QuartzAI",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m17.6264 6.5h14.8017l11.4661 18.6661-15.7786 15.9489-22.68835-4.0459-5.157719-19.2098zm.5273 4.9692-6.816 15.105 6.4504 5.3411 8.8246-3.7975zm12.3276 15.3 9.2139-2.7073-7.1983-11.7184zm-.6163-17.2692h-9.3468l7.3309 14.4284zm6.9795 18.5263-6.779 1.9919-.5448 5.4109zm-10.5005 9.008.5824-5.7856-6.0573 2.6067zm-6.8394-.5022-10.91261-1.9459 1.64741-5.0264 6.438 5.3308zm-11.69782-9.1824-2.7037-3.0571 1.66868 6.215zm-3.53432-8.5248 4.81433 5.4437 5.50351-12.1963z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m17.6264 6.5h14.8017l11.4661 18.6661-15.7786 15.9489-22.68835-4.0459-5.157719-19.2098zm.5273 4.9692-6.816 15.105 6.4504 5.3411 8.8246-3.7975zm12.3276 15.3 9.2139-2.7073-7.1983-11.7184zm-.6163-17.2692h-9.3468l7.3309 14.4284zm6.9795 18.5263-6.779 1.9919-.5448 5.4109zm-10.5005 9.008.5824-5.7856-6.0573 2.6067zm-6.8394-.5022-10.91261-1.9459 1.64741-5.0264 6.438 5.3308zm-11.69782-9.1824-2.7037-3.0571 1.66868 6.215zm-3.53432-8.5248 4.81433 5.4437 5.50351-12.1963z" fill="#fff" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "radius",
+        name: "Radius",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#155eef" fill-rule="evenodd"><path d="m18.5 19v-15h3v15z"/><path d="m18.5 44v-15h3v15z"/><path d="m22.4754 19.404 10.6066-10.60664 2.1214 2.12134-8.4853 8.4853z"/><path d="m4.79776 37.0816 10.60664-10.6066 2.1213 2.1214-10.60662 10.6066z"/><path d="m26.7178 28.5963 8.4853 8.4852-2.1213 2.1214-10.6066-10.6066z"/><path d="m6.91885 8.79727 10.60665 10.60663-2.1214 2.1213-10.60657-10.6066z"/><path d="m18.5 22.5h21.5v3h-21.5z"/><path d="m.00000026 22.5h14.99999974v3h-15z"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#155eef" fill-rule="evenodd"><path d="m18.5 19v-15h3v15z"/><path d="m18.5 44v-15h3v15z"/><path d="m22.4754 19.404 10.6066-10.60664 2.1214 2.12134-8.4853 8.4853z"/><path d="m4.79776 37.0816 10.60664-10.6066 2.1213 2.1214-10.60662 10.6066z"/><path d="m26.7178 28.5963 8.4853 8.4852-2.1213 2.1214-10.6066-10.6066z"/><path d="m6.91885 8.79727 10.60665 10.60663-2.1214 2.1213-10.60657-10.6066z"/><path d="m18.5 22.5h21.5v3h-21.5z"/><path d="m.00000026 22.5h14.99999974v3h-15z"/></g></svg>`
+      },
+      {
+        id: "railspeed",
+        name: "Railspeed",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m0 7.5h28.8c2.5202 0 3.7804 0 4.743.49047.8467.43143 1.5351 1.11984 1.9665 1.96657.4905.96256.4905 2.22276.4905 4.74296v1.8h-28.8c-2.52024 0-3.78035 0-4.74296-.4905-.84673-.4314-1.535139-1.1198-1.966569-1.9665-.490471-.9626-.490471-2.2228-.490471-4.743z"/><path d="m0 28.5h28.8c2.5202 0 3.7804 0 4.743-.4905.8467-.4314 1.5351-1.1198 1.9665-1.9665.4905-.9626.4905-2.2228.4905-4.743v-1.8h-28.8c-2.52024 0-3.78035 0-4.74296.4905-.84673.4314-1.535139 1.1198-1.966569 1.9665-.490471.9626-.490471 2.2228-.490471 4.743z"/><path d="m14 31.5h14.8c2.5202 0 3.7804 0 4.743.4905.8467.4314 1.5351 1.1198 1.9665 1.9665.4905.9626.4905 2.2228.4905 4.743v1.8h-14.8c-2.5202 0-3.7804 0-4.743-.4905-.8467-.4314-1.5351-1.1198-1.9665-1.9665-.4905-.9626-.4905-2.2228-.4905-4.743z"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m0 7.5h28.8c2.5202 0 3.7804 0 4.743.49047.8467.43143 1.5351 1.11984 1.9665 1.96657.4905.96256.4905 2.22276.4905 4.74296v1.8h-28.8c-2.52024 0-3.78035 0-4.74296-.4905-.84673-.4314-1.535139-1.1198-1.966569-1.9665-.490471-.9626-.490471-2.2228-.490471-4.743z"/><path d="m0 28.5h28.8c2.5202 0 3.7804 0 4.743-.4905.8467-.4314 1.5351-1.1198 1.9665-1.9665.4905-.9626.4905-2.2228.4905-4.743v-1.8h-28.8c-2.52024 0-3.78035 0-4.74296.4905-.84673.4314-1.535139 1.1198-1.966569 1.9665-.490471.9626-.490471 2.2228-.490471 4.743z"/><path d="m14 31.5h14.8c2.5202 0 3.7804 0 4.743.4905.8467.4314 1.5351 1.1198 1.9665 1.9665.4905.9626.4905 2.2228.4905 4.743v1.8h-14.8c-2.5202 0-3.7804 0-4.743-.4905-.8467-.4314-1.5351-1.1198-1.9665-1.9665-.4905-.9626-.4905-2.2228-.4905-4.743z"/></g></svg>`
+      },
+      {
+        id: "refractional",
+        name: "Refractional",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m48 11h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z" fill="#444ce7"/><path d="m46 19h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z" fill="#155eef"/><path d="m44 27h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z" fill="#8098f9"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m48 11h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z"/><path d="m46 19h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z"/><path d="m44 27h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z"/></g></svg>`
+      },
+      {
+        id: "renaissance",
+        name: "Renaissance",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 35 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.7018 5c1.841 0 3.4172 1.31967 3.7408 3.13199l.4648 2.60271c.3236 1.8123 1.8998 3.132 3.7408 3.132h3.1518c4.8969 0 8.8667 3.9697 8.8667 8.8666 0 2.9333-1.4244 5.5339-3.6191 7.1479.92.3126 1.6466.809 2.1799 1.461.549.7191.9411 1.7411 1.1764 3.028.0392.3406.0883.6718.1373 1.003s.098.6624.1372 1.003c.0408.3538.0709.6566.096.9083.0232.233.042.4223.0609.5679.0784 1.0598.1961 1.9303.3529 2.5738.1655.9048.4994 1.7867.9727 2.5738h-6.6982c-.3137-.6056-.5098-1.3248-.6666-2.1196-.1349-.6836-.2408-1.5352-.3676-2.5548-.0207-.1659-.0418-.3362-.0638-.5111l-.2353-1.7411c-.1961-1.3247-.4314-2.271-.6667-2.8766-.2745-.5677-.7058-.9841-1.2941-1.2112-.6274-.2271-1.5686-.3856-2.9019-.3856h-.3018c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.68517v10.1334h-6.33333v-27.8667zm13.6315 17.7333c0 1.3992-1.1342 2.5334-2.5333 2.5334h-3.1518c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.36847v-5.0667h5.68517c1.841 0 3.4172 1.3197 3.7408 3.132l.4647 2.6027c.3237 1.8123 1.8999 3.132 3.7409 3.132h2.8351c1.3991 0 2.5333 1.1342 2.5333 2.5333z" fill="#1849a9" fill-rule="evenodd"/></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 35 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.7018 5c1.841 0 3.4172 1.31967 3.7408 3.13199l.4648 2.60271c.3236 1.8123 1.8998 3.132 3.7408 3.132h3.1518c4.8969 0 8.8667 3.9697 8.8667 8.8666 0 2.9333-1.4244 5.5339-3.6191 7.1479.92.3126 1.6466.809 2.1799 1.461.549.7191.9411 1.7411 1.1764 3.028.0392.3406.0883.6718.1373 1.003s.098.6624.1372 1.003c.0408.3538.0709.6566.096.9083.0232.233.042.4223.0609.5679.0784 1.0598.1961 1.9303.3529 2.5738.1655.9048.4994 1.7867.9727 2.5738h-6.6982c-.3137-.6056-.5098-1.3247-.6666-2.1196-.1349-.6836-.2408-1.5352-.3676-2.5548-.0207-.1659-.0418-.3362-.0638-.5111l-.2353-1.7411c-.1961-1.3247-.4314-2.271-.6667-2.8766-.2745-.5677-.7058-.9841-1.2941-1.2112-.6274-.2271-1.5686-.3856-2.9019-.3856h-.3018c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.68517v10.1334h-6.33333v-27.8667zm13.6315 17.7333c0 1.3992-1.1342 2.5334-2.5333 2.5334h-3.1518c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.36847v-5.0667h5.68517c1.841 0 3.4172 1.3197 3.7408 3.132l.4647 2.6027c.3237 1.8123 1.8999 3.132 3.7409 3.132h2.8351c1.3991 0 2.5333 1.1342 2.5333 2.5333z" fill="#fff" fill-rule="evenodd"/></svg>`
+      },
+      {
+        id: "sisyphus",
+        name: "Sisyphus",
+        lightSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m.599609 19.2002h9.59998v9.59999h-9.59998z"/><path d="m31.4004 28.7998h9.6v9.59999h-9.6z" transform="matrix(-1 0 -0 -1 62.8008 57.5996)"/><path d="m10.1992 19.2001 11.6-9.6v9.6l-11.6 9.6z" opacity=".2"/><path d="m21.7988 28.7999-11.6 9.6v-9.6l11.6-9.6z" opacity=".5"/><path d="m.599609 19.2 21.199991-19.2v9.59999l-11.6 9.60001z" opacity=".6"/><path d="m31.4004 28.8-21.2 19.2v-9.6l11.6-9.6z" opacity=".7"/></g></svg>`,
+        darkSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m.599609 19.2002h9.59998v9.59999h-9.59998z"/><path d="m31.4004 28.7998h9.6v9.59999h-9.6z" transform="matrix(-1 0 -0 -1 62.8008 57.5996)"/><path d="m10.1992 19.2001 11.6-9.6v9.6l-11.6 9.6z" opacity=".2"/><path d="m21.7988 28.7999-11.6 9.6v-9.6l11.6-9.6z" opacity=".5"/><path d="m.599609 19.2 21.199991-19.2v9.59999l-11.6 9.60001z" opacity=".6"/><path d="m31.4004 28.8-21.2 19.2v-9.6l11.6-9.6z" opacity=".7"/></g></svg>`
+      },
+      {
+        id: "solaris-energy",
+        name: "Solaris Energy",
+        lightSvg: `<svg width="100%" height="100%" viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 4V16.3604C20 19.087 16.6569 20.3998 14.8016 18.4017L7 10M40 24H27.6396C24.913 24 23.6002 20.6569 25.5983 18.8016L34 11M20 44V31.6396C20 28.913 23.3431 27.6002 25.1984 29.5983L33 38M0 24L12.3604 24C15.087 24 16.3998 27.3431 14.4017 29.1984L6 37" stroke="#175CD3" stroke-width="4"/></svg>`,
+        darkSvg: `<svg width="100%" height="100%" viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 4V16.3604C20 19.087 16.6569 20.3998 14.8016 18.4017L7 10M40 24H27.6396C24.913 24 23.6002 20.6569 25.5983 18.8016L34 11M20 44V31.6396C20 28.913 23.3431 27.6002 25.1984 29.5983L33 38M0 24L12.3604 24C15.087 24 16.3998 27.3431 14.4017 29.1984L6 37" stroke="white" stroke-width="4"/></svg>`
+      }
+    ];
+  }
+});
+
+// features/platform/store-settings/lib/store-logo.ts
+function normalizeStoreLogoColor(value) {
+  const numeric = Number.parseFloat(String(value ?? DEFAULT_STORE_LOGO_COLOR));
+  if (!Number.isFinite(numeric)) return DEFAULT_STORE_LOGO_COLOR;
+  return String((numeric % 360 + 360) % 360);
+}
+var DEFAULT_STORE_LOGO_ICON, DEFAULT_STORE_LOGO_COLOR;
+var init_store_logo = __esm({
+  "features/platform/store-settings/lib/store-logo.ts"() {
+    "use strict";
+    init_icon_registry();
+    DEFAULT_STORE_LOGO_ICON = LOGO_ICONS.find((icon) => icon.id === "foresight").lightSvg;
+    DEFAULT_STORE_LOGO_COLOR = "330";
+  }
+});
 
 // features/keystone/models/Carrier.ts
-var ownCarrierFilter = (args) => freshCarrierFilter(args, "");
-var Carrier = (0, import_core13.list)({
-  access: {
-    operation: {
-      query: isFreshSignedIn,
-      create: (args) => hasFreshPermission(args, "canManageCarriers"),
-      update: (args) => hasFreshPermission(args, "canManageCarriers"),
-      delete: () => false
-    },
-    filter: {
-      query: ownCarrierFilter,
-      update: ownCarrierFilter
-    }
-  },
-  ui: {
-    labelField: "name",
-    listView: { initialColumns: ["name", "code", "status", "defaultCurrencyCode"] },
-    hideDelete: true
-  },
-  fields: {
-    name: (0, import_fields20.text)({ validation: { isRequired: true } }),
-    legalName: (0, import_fields20.text)({ validation: { isRequired: true } }),
-    code: (0, import_fields20.text)({
-      isIndexed: "unique",
-      validation: {
-        isRequired: true,
-        match: { regex: /^[A-Z0-9]{2,3}$/, explanation: "Use a two or three character carrier designator." }
-      }
-    }),
-    icaoCode: (0, import_fields20.text)({
-      isIndexed: "unique",
-      db: { isNullable: true },
-      validation: { match: { regex: /^[A-Z]{3}$/, explanation: "Use a three-letter ICAO designator." } }
-    }),
-    callsign: (0, import_fields20.text)(),
-    defaultCurrencyCode: (0, import_fields20.text)({
-      defaultValue: "USD",
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    defaultTimezone: (0, import_fields20.text)({ defaultValue: "UTC", validation: { isRequired: true } }),
-    status: (0, import_fields20.select)({
-      type: "enum",
-      defaultValue: "active",
-      validation: { isRequired: true },
-      options: [
-        { label: "Active", value: "active" },
-        { label: "Suspended", value: "suspended" },
-        { label: "Archived", value: "archived" }
-      ]
-    }),
-    directSalesEnabled: (0, import_fields20.checkbox)({ defaultValue: true }),
-    storefrontBrandColor: (0, import_fields20.select)({
-      type: "string",
-      options: [
-        { label: "Slate", value: "slate" },
-        { label: "Blue", value: "blue" },
-        { label: "Indigo", value: "indigo" },
-        { label: "Violet", value: "violet" },
-        { label: "Rose", value: "rose" },
-        { label: "Emerald", value: "emerald" },
-        { label: "Amber", value: "amber" }
-      ],
-      db: { isNullable: true },
-      ui: { description: "Allowlisted public storefront accent color" }
-    }),
-    storefrontHomepageTitle: (0, import_fields20.text)({
-      db: { isNullable: true },
-      validation: { length: { max: 120 } },
-      ui: { description: "Public storefront homepage heading" }
-    }),
-    storefrontHomepageDescription: (0, import_fields20.text)({
-      db: { isNullable: true },
-      validation: { length: { max: 320 } },
-      ui: { displayMode: "textarea", description: "Public storefront homepage description" }
-    }),
-    storefrontContactEmail: (0, import_fields20.text)({ validation: { length: { max: 254 } }, ui: { description: "Public customer service email" } }),
-    storefrontContactPhone: (0, import_fields20.text)({ validation: { length: { max: 40 } }, ui: { description: "Public customer service phone" } }),
-    storefrontServiceHours: (0, import_fields20.text)({ validation: { length: { max: 200 } }, ui: { description: "Public customer service hours" } }),
-    users: (0, import_fields20.relationship)({ ref: "User.carrier", many: true, access: { create: () => false, update: () => false } }),
-    roles: (0, import_fields20.relationship)({ ref: "Role.carrier", many: true, access: { create: () => false, update: () => false } }),
-    approvedAgents: (0, import_fields20.relationship)({ ref: "ApprovedAgent.carrier", many: true, access: { create: () => false, update: () => false } }),
-    routes: (0, import_fields20.relationship)({ ref: "Route.carrier", many: true, access: { create: () => false, update: () => false } }),
-    schedules: (0, import_fields20.relationship)({ ref: "FlightSchedule.carrier", many: true, access: { create: () => false, update: () => false } }),
-    flightInstances: (0, import_fields20.relationship)({ ref: "FlightInstance.carrier", many: true, access: { create: () => false, update: () => false } }),
-    bookings: (0, import_fields20.relationship)({ ref: "Booking.carrier", many: true, access: { create: () => false, update: () => false } }),
-    serviceObligations: (0, import_fields20.relationship)({ ref: "ServiceObligation.carrier", many: true, access: { create: () => false, update: () => false } }),
-    ticketCouponLineages: (0, import_fields20.relationship)({ ref: "TicketCouponLineage.carrier", many: true, access: { create: () => false, update: () => false } }),
-    providerConnections: (0, import_fields20.relationship)({ ref: "ProviderConnection.carrier", many: true, access: { create: () => false, update: () => false } }),
-    stationAssignments: (0, import_fields20.relationship)({ ref: "StationAssignment.carrier", many: true, access: { create: () => false, update: () => false } }),
-    documentVerifications: (0, import_fields20.relationship)({ ref: "DocumentVerification.carrier", many: true, access: { create: () => false, update: () => false } }),
-    machineCredentials: (0, import_fields20.relationship)({ ref: "MachineCredential.carrier", many: true, access: { create: () => false, update: () => false } }),
-    outboxEvents: (0, import_fields20.relationship)({ ref: "OutboxEvent.carrier", many: true, access: { create: () => false, update: () => false } }),
-    manualPaymentEvidence: (0, import_fields20.relationship)({ ref: "ManualPaymentEvidence.carrier", many: true, access: { create: () => false, update: () => false } }),
-    settlementLedgerEntries: (0, import_fields20.relationship)({ ref: "SettlementLedgerEntry.carrier", many: true, access: { create: () => false, update: () => false } }),
-    onboardingSteps: (0, import_fields20.relationship)({ ref: "OnboardingStep.carrier", many: true, access: { create: () => false, update: () => false } }),
-    ...trackingFields
-  },
-  hooks: {
-    async validate({ operation, resolvedData, item, context, addValidationError }) {
-      const timezone = resolvedData.defaultTimezone;
-      if (resolvedData.defaultCurrencyCode !== void 0 && !ONBOARDING_CURRENCIES.includes(resolvedData.defaultCurrencyCode)) {
-        addValidationError(`Default currency must be one of ${ONBOARDING_CURRENCIES.join(", ")}.`);
-      }
-      if (timezone !== void 0) {
-        try {
-          new Intl.DateTimeFormat("en-US", { timeZone: String(timezone) });
-        } catch {
-          addValidationError("Default timezone must be an IANA timezone such as America/New_York.");
+var import_core13, import_fields20, ownCarrierFilter, Carrier;
+var init_Carrier = __esm({
+  "features/keystone/models/Carrier.ts"() {
+    "use strict";
+    init_lifecycle();
+    import_core13 = require("@keystone-6/core");
+    import_fields20 = require("@keystone-6/core/fields");
+    init_access();
+    init_currency_policy();
+    init_storeLogo();
+    init_store_logo();
+    init_trackingFields();
+    ownCarrierFilter = (args) => freshCarrierFilter(args, "");
+    Carrier = (0, import_core13.list)({
+      access: {
+        operation: {
+          query: isFreshSignedIn,
+          create: (args) => hasFreshPermission(args, "canManageCarriers"),
+          update: (args) => hasFreshPermission(args, "canManageCarriers"),
+          delete: () => false
+        },
+        filter: {
+          query: ownCarrierFilter,
+          update: ownCarrierFilter
+        }
+      },
+      ui: {
+        labelField: "name",
+        listView: { initialColumns: ["name", "code", "status", "defaultCurrencyCode"] },
+        hideDelete: true
+      },
+      fields: {
+        name: (0, import_fields20.text)({ validation: { isRequired: true } }),
+        legalName: (0, import_fields20.text)({ validation: { isRequired: true } }),
+        code: (0, import_fields20.text)({
+          isIndexed: "unique",
+          validation: {
+            isRequired: true,
+            match: { regex: /^[A-Z0-9]{2,3}$/, explanation: "Use a two or three character carrier designator." }
+          }
+        }),
+        icaoCode: (0, import_fields20.text)({
+          isIndexed: "unique",
+          db: { isNullable: true },
+          validation: { match: { regex: /^[A-Z]{3}$/, explanation: "Use a three-letter ICAO designator." } }
+        }),
+        callsign: (0, import_fields20.text)(),
+        defaultCurrencyCode: (0, import_fields20.text)({
+          defaultValue: "USD",
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        defaultTimezone: (0, import_fields20.text)({ defaultValue: "UTC", validation: { isRequired: true } }),
+        status: (0, import_fields20.select)({
+          type: "enum",
+          defaultValue: "active",
+          validation: { isRequired: true },
+          options: [
+            { label: "Active", value: "active" },
+            { label: "Suspended", value: "suspended" },
+            { label: "Archived", value: "archived" }
+          ]
+        }),
+        directSalesEnabled: (0, import_fields20.checkbox)({ defaultValue: true }),
+        storefrontBrandColor: (0, import_fields20.select)({
+          type: "string",
+          options: [
+            { label: "Navy", value: "navy" },
+            { label: "Slate", value: "slate" },
+            { label: "Blue", value: "blue" },
+            { label: "Rose", value: "rose" },
+            { label: "Emerald", value: "emerald" },
+            { label: "Amber", value: "amber" }
+          ],
+          db: { isNullable: true },
+          ui: { description: "Allowlisted public storefront accent color" }
+        }),
+        logoIcon: (0, import_fields20.text)({
+          defaultValue: DEFAULT_STORE_LOGO_ICON,
+          hooks: {
+            resolveInput: ({ resolvedData, fieldKey }) => {
+              const value = resolvedData[fieldKey];
+              if (value === void 0 || value === null || value === "") return value;
+              return typeof value === "string" ? sanitizeStoreLogoSvg(value) : "";
+            },
+            validate: ({ inputData, resolvedData, fieldKey, addValidationError }) => {
+              const submitted = inputData?.[fieldKey];
+              if (typeof submitted === "string" && submitted.trim() && !resolvedData?.[fieldKey]) {
+                addValidationError("Logo must be a valid, safe SVG document");
+              }
+            }
+          },
+          ui: { description: "Public storefront logo icon (sanitized SVG)" }
+        }),
+        logoColor: (0, import_fields20.text)({
+          defaultValue: DEFAULT_STORE_LOGO_COLOR,
+          hooks: {
+            resolveInput: ({ resolvedData, fieldKey }) => {
+              const value = resolvedData[fieldKey];
+              return value === void 0 ? value : normalizeStoreLogoColor(value);
+            }
+          },
+          ui: { description: "Logo hue rotation in degrees, 0 to 359" }
+        }),
+        storefrontHomepageTitle: (0, import_fields20.text)({
+          db: { isNullable: true },
+          validation: { length: { max: 120 } },
+          ui: { description: "Public storefront homepage heading" }
+        }),
+        storefrontHomepageDescription: (0, import_fields20.text)({
+          db: { isNullable: true },
+          validation: { length: { max: 320 } },
+          ui: { displayMode: "textarea", description: "Public storefront homepage description" }
+        }),
+        storefrontContactEmail: (0, import_fields20.text)({ validation: { length: { max: 254 } }, ui: { description: "Public customer service email" } }),
+        storefrontContactPhone: (0, import_fields20.text)({ validation: { length: { max: 40 } }, ui: { description: "Public customer service phone" } }),
+        storefrontServiceHours: (0, import_fields20.text)({ validation: { length: { max: 200 } }, ui: { description: "Public customer service hours" } }),
+        users: (0, import_fields20.relationship)({ ref: "User.carrier", many: true, access: { create: () => false, update: () => false } }),
+        roles: (0, import_fields20.relationship)({ ref: "Role.carrier", many: true, access: { create: () => false, update: () => false } }),
+        approvedAgents: (0, import_fields20.relationship)({ ref: "ApprovedAgent.carrier", many: true, access: { create: () => false, update: () => false } }),
+        routes: (0, import_fields20.relationship)({ ref: "Route.carrier", many: true, access: { create: () => false, update: () => false } }),
+        schedules: (0, import_fields20.relationship)({ ref: "FlightSchedule.carrier", many: true, access: { create: () => false, update: () => false } }),
+        flightInstances: (0, import_fields20.relationship)({ ref: "FlightInstance.carrier", many: true, access: { create: () => false, update: () => false } }),
+        bookings: (0, import_fields20.relationship)({ ref: "Booking.carrier", many: true, access: { create: () => false, update: () => false } }),
+        serviceObligations: (0, import_fields20.relationship)({ ref: "ServiceObligation.carrier", many: true, access: { create: () => false, update: () => false } }),
+        ticketCouponLineages: (0, import_fields20.relationship)({ ref: "TicketCouponLineage.carrier", many: true, access: { create: () => false, update: () => false } }),
+        providerConnections: (0, import_fields20.relationship)({ ref: "ProviderConnection.carrier", many: true, access: { create: () => false, update: () => false } }),
+        stationAssignments: (0, import_fields20.relationship)({ ref: "StationAssignment.carrier", many: true, access: { create: () => false, update: () => false } }),
+        documentVerifications: (0, import_fields20.relationship)({ ref: "DocumentVerification.carrier", many: true, access: { create: () => false, update: () => false } }),
+        machineCredentials: (0, import_fields20.relationship)({ ref: "MachineCredential.carrier", many: true, access: { create: () => false, update: () => false } }),
+        manualPaymentEvidence: (0, import_fields20.relationship)({ ref: "ManualPaymentEvidence.carrier", many: true, access: { create: () => false, update: () => false } }),
+        settlementLedgerEntries: (0, import_fields20.relationship)({ ref: "SettlementLedgerEntry.carrier", many: true, access: { create: () => false, update: () => false } }),
+        onboardingSteps: (0, import_fields20.relationship)({ ref: "OnboardingStep.carrier", many: true, access: { create: () => false, update: () => false } }),
+        ...trackingFields
+      },
+      hooks: {
+        async validate({ operation, resolvedData, item, context, addValidationError }) {
+          const timezone = resolvedData.defaultTimezone;
+          if (resolvedData.defaultCurrencyCode !== void 0 && !ONBOARDING_CURRENCIES.includes(resolvedData.defaultCurrencyCode)) {
+            addValidationError(`Default currency must be one of ${ONBOARDING_CURRENCIES.join(", ")}.`);
+          }
+          if (timezone !== void 0) {
+            try {
+              new Intl.DateTimeFormat("en-US", { timeZone: String(timezone) });
+            } catch {
+              addValidationError("Default timezone must be an IANA timezone such as America/New_York.");
+            }
+          }
+          if (operation !== "update") return;
+          lifecycleHooks("carrier").validate({ operation, item, resolvedData, addValidationError });
+          const changed = ["code", "defaultCurrencyCode", "defaultTimezone"].filter((field) => resolvedData[field] !== void 0 && resolvedData[field] !== item?.[field]);
+          if (!changed.length) return;
+          const carrierId = item?.id;
+          const [bookings, flights, offers, buckets] = await Promise.all([
+            context.prisma.booking.count({ where: { carrierId } }),
+            context.prisma.flightInstance.count({ where: { carrierId } }),
+            context.prisma.offer.count({ where: { carrierId } }),
+            context.prisma.inventoryBucket.count({ where: { carrierId } })
+          ]);
+          if (bookings + flights + offers + buckets > 0) addValidationError("Carrier code, currency, and timezone are immutable after commercial records exist.");
         }
       }
-      if (operation !== "update") return;
-      const changed = ["code", "defaultCurrencyCode", "defaultTimezone"].filter((field) => resolvedData[field] !== void 0 && resolvedData[field] !== item?.[field]);
-      if (!changed.length) return;
-      const carrierId = item?.id;
-      const [bookings, flights, offers, buckets] = await Promise.all([
-        context.prisma.booking.count({ where: { carrierId } }),
-        context.prisma.flightInstance.count({ where: { carrierId } }),
-        context.prisma.offer.count({ where: { carrierId } }),
-        context.prisma.inventoryBucket.count({ where: { carrierId } })
-      ]);
-      if (bookings + flights + offers + buckets > 0) addValidationError("Carrier code, currency, and timezone are immutable after commercial records exist.");
-    }
+    });
   }
 });
 
 // features/keystone/models/CheckIn.ts
-var import_core14 = require("@keystone-6/core");
-var import_fields21 = require("@keystone-6/core/fields");
-var CheckIn = (0, import_core14.list)({
-  access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "flightInstance.origin", "canCheckIn"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "checkInKey", listView: { initialColumns: ["booking", "passenger", "bookingSegment", "status", "channel", "checkedInAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields21.relationship)({ ref: "Carrier" }),
-    checkInKey: (0, import_fields21.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    booking: (0, import_fields21.relationship)({ ref: "Booking.checkIns" }),
-    bookingPassenger: (0, import_fields21.relationship)({ ref: "BookingPassenger.checkIns" }),
-    passenger: (0, import_fields21.relationship)({ ref: "Passenger.checkIns" }),
-    bookingSegment: (0, import_fields21.relationship)({ ref: "BookingSegment.checkIns" }),
-    flightInstance: (0, import_fields21.relationship)({ ref: "FlightInstance.checkIns" }),
-    ticketCoupon: (0, import_fields21.relationship)({ ref: "TicketCoupon.checkIns" }),
-    seatAssignment: (0, import_fields21.relationship)({ ref: "SeatAssignment" }),
-    status: (0, import_fields21.select)({ type: "enum", defaultValue: "not_started", options: [
-      { label: "Not started", value: "not_started" },
-      { label: "Eligible", value: "eligible" },
-      { label: "Checked in", value: "checked_in" },
-      { label: "Boarded", value: "boarded" },
-      { label: "Blocked", value: "blocked" },
-      { label: "Offloaded", value: "offloaded" },
-      { label: "Cancelled", value: "cancelled" }
-    ] }),
-    channel: (0, import_fields21.select)({ type: "enum", defaultValue: "web", options: [
-      { label: "Web", value: "web" },
-      { label: "Mobile", value: "mobile" },
-      { label: "Kiosk", value: "kiosk" },
-      { label: "Counter", value: "counter" },
-      { label: "Agent", value: "agent" },
-      { label: "System", value: "system" }
-    ] }),
-    travelDocumentsVerified: (0, import_fields21.checkbox)({ defaultValue: false }),
-    checkedBagCount: (0, import_fields21.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    eligibilityData: (0, import_fields21.json)({ defaultValue: {} }),
-    blockedReason: (0, import_fields21.text)(),
-    checkedInAt: (0, import_fields21.timestamp)(),
-    boardedAt: (0, import_fields21.timestamp)(),
-    offloadedAt: (0, import_fields21.timestamp)(),
-    boardingPasses: (0, import_fields21.relationship)({ ref: "BoardingPass.checkIn", many: true }),
-    bags: (0, import_fields21.relationship)({ ref: "Bag.checkIn", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger", "bookingSegment", "flightInstance"]),
-    lifecycleHooks("checkIn")
-  )
+var import_core14, import_fields21, CheckIn;
+var init_CheckIn = __esm({
+  "features/keystone/models/CheckIn.ts"() {
+    "use strict";
+    import_core14 = require("@keystone-6/core");
+    import_fields21 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    CheckIn = (0, import_core14.list)({
+      access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "flightInstance.origin", "canCheckIn"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "checkInKey", listView: { initialColumns: ["booking", "passenger", "bookingSegment", "status", "channel", "checkedInAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields21.relationship)({ ref: "Carrier" }),
+        checkInKey: (0, import_fields21.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        booking: (0, import_fields21.relationship)({ ref: "Booking.checkIns" }),
+        bookingPassenger: (0, import_fields21.relationship)({ ref: "BookingPassenger.checkIns" }),
+        passenger: (0, import_fields21.relationship)({ ref: "Passenger.checkIns" }),
+        bookingSegment: (0, import_fields21.relationship)({ ref: "BookingSegment.checkIns" }),
+        flightInstance: (0, import_fields21.relationship)({ ref: "FlightInstance.checkIns" }),
+        ticketCoupon: (0, import_fields21.relationship)({ ref: "TicketCoupon.checkIns" }),
+        seatAssignment: (0, import_fields21.relationship)({ ref: "SeatAssignment" }),
+        status: (0, import_fields21.select)({ type: "enum", defaultValue: "not_started", options: [
+          { label: "Not started", value: "not_started" },
+          { label: "Eligible", value: "eligible" },
+          { label: "Checked in", value: "checked_in" },
+          { label: "Boarded", value: "boarded" },
+          { label: "Blocked", value: "blocked" },
+          { label: "Offloaded", value: "offloaded" },
+          { label: "Cancelled", value: "cancelled" }
+        ] }),
+        channel: (0, import_fields21.select)({ type: "enum", defaultValue: "web", options: [
+          { label: "Web", value: "web" },
+          { label: "Mobile", value: "mobile" },
+          { label: "Kiosk", value: "kiosk" },
+          { label: "Counter", value: "counter" },
+          { label: "Agent", value: "agent" },
+          { label: "System", value: "system" }
+        ] }),
+        travelDocumentsVerified: (0, import_fields21.checkbox)({ defaultValue: false }),
+        checkedBagCount: (0, import_fields21.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        eligibilityData: (0, import_fields21.json)({ defaultValue: {} }),
+        blockedReason: (0, import_fields21.text)(),
+        checkedInAt: (0, import_fields21.timestamp)(),
+        boardedAt: (0, import_fields21.timestamp)(),
+        offloadedAt: (0, import_fields21.timestamp)(),
+        boardingPasses: (0, import_fields21.relationship)({ ref: "BoardingPass.checkIn", many: true }),
+        bags: (0, import_fields21.relationship)({ ref: "Bag.checkIn", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger", "bookingSegment", "flightInstance"]),
+        lifecycleHooks("checkIn")
+      )
+    });
+  }
 });
 
 // features/keystone/models/Disruption.ts
-var import_core15 = require("@keystone-6/core");
-var import_fields22 = require("@keystone-6/core/fields");
-var Disruption = (0, import_core15.list)({
-  access: commandOnlyCarrierAccess("canReadDisruptions", "canManageDisruptions"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "disruptionKey", listView: { initialColumns: ["disruptionKey", "flightInstance", "type", "severity", "status", "detectedAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields22.relationship)({ ref: "Carrier" }),
-    disruptionKey: (0, import_fields22.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    flightInstance: (0, import_fields22.relationship)({ ref: "FlightInstance.disruptions" }),
-    type: (0, import_fields22.select)({ type: "enum", validation: { isRequired: true }, options: [
-      { label: "Delay", value: "delay" },
-      { label: "Cancellation", value: "cancellation" },
-      { label: "Schedule change", value: "schedule_change" },
-      { label: "Misconnection", value: "misconnection" },
-      { label: "Diversion", value: "diversion" },
-      { label: "Equipment change", value: "equipment_change" },
-      { label: "Other", value: "other" }
-    ] }),
-    severity: (0, import_fields22.select)({ type: "enum", defaultValue: "medium", options: [
-      { label: "Low", value: "low" },
-      { label: "Medium", value: "medium" },
-      { label: "High", value: "high" },
-      { label: "Critical", value: "critical" }
-    ] }),
-    status: (0, import_fields22.select)({ type: "enum", defaultValue: "detected", options: [
-      { label: "Detected", value: "detected" },
-      { label: "Published", value: "published" },
-      { label: "Recovering", value: "recovering" },
-      { label: "Resolved", value: "resolved" },
-      { label: "Cancelled", value: "cancelled" }
-    ] }),
-    affectedSegments: (0, import_fields22.relationship)({ ref: "BookingSegment.disruptions", many: true }),
-    publicSummary: (0, import_fields22.text)({ ui: { displayMode: "textarea" } }),
-    internalDetails: (0, import_fields22.text)({ ui: { displayMode: "textarea" } }),
-    providerConnection: (0, import_fields22.relationship)({ ref: "ProviderConnection" }),
-    providerReference: (0, import_fields22.text)(),
-    detectedAt: (0, import_fields22.timestamp)({ defaultValue: { kind: "now" } }),
-    publishedAt: (0, import_fields22.timestamp)(),
-    resolvedAt: (0, import_fields22.timestamp)(),
-    impactSnapshot: (0, import_fields22.json)({ defaultValue: {} }),
-    reaccommodations: (0, import_fields22.relationship)({ ref: "Reaccommodation.disruption", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    lifecycleHooks("disruption")
-  )
+var import_core15, import_fields22, Disruption;
+var init_Disruption = __esm({
+  "features/keystone/models/Disruption.ts"() {
+    "use strict";
+    import_core15 = require("@keystone-6/core");
+    import_fields22 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    Disruption = (0, import_core15.list)({
+      access: commandOnlyCarrierAccess("canReadDisruptions", "canManageDisruptions"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "disruptionKey", listView: { initialColumns: ["disruptionKey", "flightInstance", "type", "severity", "status", "detectedAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields22.relationship)({ ref: "Carrier" }),
+        disruptionKey: (0, import_fields22.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        flightInstance: (0, import_fields22.relationship)({ ref: "FlightInstance.disruptions" }),
+        type: (0, import_fields22.select)({ type: "enum", validation: { isRequired: true }, options: [
+          { label: "Delay", value: "delay" },
+          { label: "Cancellation", value: "cancellation" },
+          { label: "Schedule change", value: "schedule_change" },
+          { label: "Misconnection", value: "misconnection" },
+          { label: "Diversion", value: "diversion" },
+          { label: "Equipment change", value: "equipment_change" },
+          { label: "Other", value: "other" }
+        ] }),
+        severity: (0, import_fields22.select)({ type: "enum", defaultValue: "medium", options: [
+          { label: "Low", value: "low" },
+          { label: "Medium", value: "medium" },
+          { label: "High", value: "high" },
+          { label: "Critical", value: "critical" }
+        ] }),
+        status: (0, import_fields22.select)({ type: "enum", defaultValue: "detected", options: [
+          { label: "Detected", value: "detected" },
+          { label: "Published", value: "published" },
+          { label: "Recovering", value: "recovering" },
+          { label: "Resolved", value: "resolved" },
+          { label: "Cancelled", value: "cancelled" }
+        ] }),
+        affectedSegments: (0, import_fields22.relationship)({ ref: "BookingSegment.disruptions", many: true }),
+        publicSummary: (0, import_fields22.text)({ ui: { displayMode: "textarea" } }),
+        internalDetails: (0, import_fields22.text)({ ui: { displayMode: "textarea" } }),
+        providerConnection: (0, import_fields22.relationship)({ ref: "ProviderConnection" }),
+        providerReference: (0, import_fields22.text)(),
+        detectedAt: (0, import_fields22.timestamp)({ defaultValue: { kind: "now" } }),
+        publishedAt: (0, import_fields22.timestamp)(),
+        resolvedAt: (0, import_fields22.timestamp)(),
+        impactSnapshot: (0, import_fields22.json)({ defaultValue: {} }),
+        reaccommodations: (0, import_fields22.relationship)({ ref: "Reaccommodation.disruption", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier"]),
+        lifecycleHooks("disruption")
+      )
+    });
+  }
 });
 
 // features/keystone/models/DocumentVerification.ts
-var import_core16 = require("@keystone-6/core");
-var import_fields23 = require("@keystone-6/core/fields");
-var DocumentVerification = (0, import_core16.list)({
-  access: commandOnlyCarrierAccess("canManageSecurePassengerData", "canManageSecurePassengerData"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "verificationKey", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["passenger", "bookingSegment", "status", "verifiedAt", "expiresAt"] } },
-  fields: {
-    carrier: (0, import_fields23.relationship)({ ref: "Carrier.documentVerifications", access: immutableFieldAccess }),
-    verificationKey: (0, import_fields23.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    passenger: (0, import_fields23.relationship)({ ref: "Passenger.documentVerifications", access: immutableFieldAccess }),
-    travelDocument: (0, import_fields23.relationship)({ ref: "TravelDocument.verifications", access: immutableFieldAccess }),
-    bookingSegment: (0, import_fields23.relationship)({ ref: "BookingSegment.documentVerifications", access: immutableFieldAccess }),
-    status: (0, import_fields23.select)({ type: "enum", defaultValue: "verified", options: [
-      { label: "Verified", value: "verified" },
-      { label: "Rejected", value: "rejected" },
-      { label: "Revoked", value: "revoked" },
-      { label: "Expired", value: "expired" }
-    ] }),
-    evidenceVersion: (0, import_fields23.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    providerReference: (0, import_fields23.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    verifiedBy: (0, import_fields23.relationship)({ ref: "User.documentVerifications", access: immutableFieldAccess }),
-    verifiedAt: (0, import_fields23.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
-    expiresAt: (0, import_fields23.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    revokedAt: (0, import_fields23.timestamp)(),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier", "passenger", "travelDocument", "bookingSegment", "verifiedBy"])
+var import_core16, import_fields23, DocumentVerification;
+var init_DocumentVerification = __esm({
+  "features/keystone/models/DocumentVerification.ts"() {
+    "use strict";
+    import_core16 = require("@keystone-6/core");
+    import_fields23 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    DocumentVerification = (0, import_core16.list)({
+      access: commandOnlyCarrierAccess("canManageSecurePassengerData", "canManageSecurePassengerData"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "verificationKey", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["passenger", "bookingSegment", "status", "verifiedAt", "expiresAt"] } },
+      fields: {
+        carrier: (0, import_fields23.relationship)({ ref: "Carrier.documentVerifications", access: immutableFieldAccess }),
+        verificationKey: (0, import_fields23.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        passenger: (0, import_fields23.relationship)({ ref: "Passenger.documentVerifications", access: immutableFieldAccess }),
+        travelDocument: (0, import_fields23.relationship)({ ref: "TravelDocument.verifications", access: immutableFieldAccess }),
+        bookingSegment: (0, import_fields23.relationship)({ ref: "BookingSegment.documentVerifications", access: immutableFieldAccess }),
+        status: (0, import_fields23.select)({ type: "enum", defaultValue: "verified", options: [
+          { label: "Verified", value: "verified" },
+          { label: "Rejected", value: "rejected" },
+          { label: "Revoked", value: "revoked" },
+          { label: "Expired", value: "expired" }
+        ] }),
+        evidenceVersion: (0, import_fields23.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        providerReference: (0, import_fields23.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        verifiedBy: (0, import_fields23.relationship)({ ref: "User.documentVerifications", access: immutableFieldAccess }),
+        verifiedAt: (0, import_fields23.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
+        expiresAt: (0, import_fields23.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        revokedAt: (0, import_fields23.timestamp)(),
+        ...trackingFields
+      },
+      hooks: requiredRelationshipHooks(["carrier", "passenger", "travelDocument", "bookingSegment", "verifiedBy"])
+    });
+  }
 });
 
 // features/keystone/models/ElectronicMiscCoupon.ts
-var import_core17 = require("@keystone-6/core");
-var import_fields25 = require("@keystone-6/core/fields");
-var ElectronicMiscCoupon = (0, import_core17.list)({
-  access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "couponKey",
-    listView: { initialColumns: ["document", "couponNumber", "bookingSegment", "ancillaryProduct", "status", "amount"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields25.relationship)({ ref: "Carrier" }),
-    couponKey: (0, import_fields25.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    document: (0, import_fields25.relationship)({ ref: "ElectronicMiscDocument.coupons", access: immutableFieldAccess }),
-    couponNumber: (0, import_fields25.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    bookingSegment: (0, import_fields25.relationship)({ ref: "BookingSegment.electronicMiscCoupons", access: immutableFieldAccess }),
-    ancillaryProduct: (0, import_fields25.relationship)({ ref: "AncillaryProduct.electronicMiscCoupons", access: immutableFieldAccess }),
-    bookingLineItem: (0, import_fields25.relationship)({ ref: "BookingLineItem", access: immutableFieldAccess }),
-    status: (0, import_fields25.select)({
-      type: "enum",
-      defaultValue: "open",
-      options: [
-        { label: "Open", value: "open" },
-        { label: "Used", value: "used" },
-        { label: "Voided", value: "voided" },
-        { label: "Refunded", value: "refunded" },
-        { label: "Exchanged", value: "exchanged" }
-      ]
-    }),
-    amount: (0, import_fields25.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields25.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    usedAt: (0, import_fields25.timestamp)(),
-    entitlementSnapshot: (0, import_fields25.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "document"]),
-    lifecycleHooks("electronicMiscCoupon"),
-    minorAmountHooks(["amount"])
-  )
+var import_core17, import_fields25, ElectronicMiscCoupon;
+var init_ElectronicMiscCoupon = __esm({
+  "features/keystone/models/ElectronicMiscCoupon.ts"() {
+    "use strict";
+    import_core17 = require("@keystone-6/core");
+    import_fields25 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    ElectronicMiscCoupon = (0, import_core17.list)({
+      access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "couponKey",
+        listView: { initialColumns: ["document", "couponNumber", "bookingSegment", "ancillaryProduct", "status", "amount"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields25.relationship)({ ref: "Carrier" }),
+        couponKey: (0, import_fields25.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        document: (0, import_fields25.relationship)({ ref: "ElectronicMiscDocument.coupons", access: immutableFieldAccess }),
+        couponNumber: (0, import_fields25.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        bookingSegment: (0, import_fields25.relationship)({ ref: "BookingSegment.electronicMiscCoupons", access: immutableFieldAccess }),
+        ancillaryProduct: (0, import_fields25.relationship)({ ref: "AncillaryProduct.electronicMiscCoupons", access: immutableFieldAccess }),
+        bookingLineItem: (0, import_fields25.relationship)({ ref: "BookingLineItem", access: immutableFieldAccess }),
+        status: (0, import_fields25.select)({
+          type: "enum",
+          defaultValue: "open",
+          options: [
+            { label: "Open", value: "open" },
+            { label: "Used", value: "used" },
+            { label: "Voided", value: "voided" },
+            { label: "Refunded", value: "refunded" },
+            { label: "Exchanged", value: "exchanged" }
+          ]
+        }),
+        amount: (0, import_fields25.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields25.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        usedAt: (0, import_fields25.timestamp)(),
+        entitlementSnapshot: (0, import_fields25.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "document"]),
+        lifecycleHooks("electronicMiscCoupon"),
+        minorAmountHooks(["amount"])
+      )
+    });
+  }
 });
 
 // features/keystone/models/ElectronicMiscDocument.ts
-var import_core18 = require("@keystone-6/core");
-var import_fields27 = require("@keystone-6/core/fields");
-var ElectronicMiscDocument = (0, import_core18.list)({
-  access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "documentNumber",
-    listView: { initialColumns: ["documentNumber", "booking", "passenger", "documentType", "status", "totalAmount"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields27.relationship)({ ref: "Carrier" }),
-    documentNumber: (0, import_fields27.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields27.relationship)({ ref: "Booking.electronicMiscDocuments", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields27.relationship)({ ref: "BookingPassenger.electronicMiscDocuments", access: immutableFieldAccess }),
-    passenger: (0, import_fields27.relationship)({ ref: "Passenger.electronicMiscDocuments", access: immutableFieldAccess }),
-    documentType: (0, import_fields27.select)({
-      type: "enum",
-      defaultValue: "associated",
-      access: immutableFieldAccess,
-      options: [
-        { label: "Associated", value: "associated" },
-        { label: "Standalone", value: "standalone" }
-      ]
-    }),
-    reasonForIssuanceCode: (0, import_fields27.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    serviceCode: (0, import_fields27.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    ancillaryProduct: (0, import_fields27.relationship)({ ref: "AncillaryProduct", access: immutableFieldAccess }),
-    status: (0, import_fields27.select)({
-      type: "enum",
-      defaultValue: "pending",
-      options: [
-        { label: "Pending", value: "pending" },
-        { label: "Issued", value: "issued" },
-        { label: "Partially used", value: "partially_used" },
-        { label: "Used", value: "used" },
-        { label: "Voided", value: "voided" },
-        { label: "Refunded", value: "refunded" },
-        { label: "Exchanged", value: "exchanged" }
-      ]
-    }),
-    totalAmount: (0, import_fields27.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields27.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    issuedAt: (0, import_fields27.timestamp)({ access: immutableFieldAccess }),
-    providerReference: (0, import_fields27.text)({ access: immutableFieldAccess }),
-    coupons: (0, import_fields27.relationship)({ ref: "ElectronicMiscCoupon.document", many: true }),
-    metadata: (0, import_fields27.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger"]),
-    lifecycleHooks("electronicMiscDocument"),
-    minorAmountHooks(["totalAmount"])
-  )
+var import_core18, import_fields27, ElectronicMiscDocument;
+var init_ElectronicMiscDocument = __esm({
+  "features/keystone/models/ElectronicMiscDocument.ts"() {
+    "use strict";
+    import_core18 = require("@keystone-6/core");
+    import_fields27 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    ElectronicMiscDocument = (0, import_core18.list)({
+      access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "documentNumber",
+        listView: { initialColumns: ["documentNumber", "booking", "passenger", "documentType", "status", "totalAmount"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields27.relationship)({ ref: "Carrier" }),
+        documentNumber: (0, import_fields27.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields27.relationship)({ ref: "Booking.electronicMiscDocuments", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields27.relationship)({ ref: "BookingPassenger.electronicMiscDocuments", access: immutableFieldAccess }),
+        passenger: (0, import_fields27.relationship)({ ref: "Passenger.electronicMiscDocuments", access: immutableFieldAccess }),
+        documentType: (0, import_fields27.select)({
+          type: "enum",
+          defaultValue: "associated",
+          access: immutableFieldAccess,
+          options: [
+            { label: "Associated", value: "associated" },
+            { label: "Standalone", value: "standalone" }
+          ]
+        }),
+        reasonForIssuanceCode: (0, import_fields27.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        serviceCode: (0, import_fields27.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        ancillaryProduct: (0, import_fields27.relationship)({ ref: "AncillaryProduct", access: immutableFieldAccess }),
+        status: (0, import_fields27.select)({
+          type: "enum",
+          defaultValue: "pending",
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Issued", value: "issued" },
+            { label: "Partially used", value: "partially_used" },
+            { label: "Used", value: "used" },
+            { label: "Voided", value: "voided" },
+            { label: "Refunded", value: "refunded" },
+            { label: "Exchanged", value: "exchanged" }
+          ]
+        }),
+        totalAmount: (0, import_fields27.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields27.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        issuedAt: (0, import_fields27.timestamp)({ access: immutableFieldAccess }),
+        providerReference: (0, import_fields27.text)({ access: immutableFieldAccess }),
+        coupons: (0, import_fields27.relationship)({ ref: "ElectronicMiscCoupon.document", many: true }),
+        metadata: (0, import_fields27.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger"]),
+        lifecycleHooks("electronicMiscDocument"),
+        minorAmountHooks(["totalAmount"])
+      )
+    });
+  }
 });
 
 // features/keystone/models/Exchange.ts
-var import_core19 = require("@keystone-6/core");
-var import_fields29 = require("@keystone-6/core/fields");
-var Exchange = (0, import_core19.list)({
-  access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "exchangeKey", listView: { initialColumns: ["exchangeKey", "booking", "status", "priceDifferenceAmount", "changeFeeAmount", "quoteExpiresAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields29.relationship)({ ref: "Carrier" }),
-    exchangeKey: (0, import_fields29.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    idempotencyKey: (0, import_fields29.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields29.relationship)({ ref: "Booking.exchanges", access: immutableFieldAccess }),
-    status: (0, import_fields29.select)({ type: "enum", defaultValue: "quoted", options: [
-      { label: "Quoted", value: "quoted" },
-      { label: "Accepted", value: "accepted" },
-      { label: "Processing", value: "processing" },
-      { label: "Completed", value: "completed" },
-      { label: "Failed", value: "failed" },
-      { label: "Cancelled", value: "cancelled" },
-      { label: "Expired", value: "expired" }
-    ] }),
-    originalSegments: (0, import_fields29.relationship)({ ref: "BookingSegment.exchangesAsOriginal", many: true, access: immutableFieldAccess }),
-    replacementSegments: (0, import_fields29.relationship)({ ref: "BookingSegment.exchangesAsReplacement", many: true }),
-    priceDifferenceAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
-    changeFeeAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
-    additionalCollectionAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    refundAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields29.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    quoteExpiresAt: (0, import_fields29.timestamp)({ access: immutableFieldAccess }),
-    acceptedAt: (0, import_fields29.timestamp)(),
-    completedAt: (0, import_fields29.timestamp)(),
-    reason: (0, import_fields29.text)(),
-    pricingSnapshot: (0, import_fields29.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    metadata: (0, import_fields29.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking"]),
-    lifecycleHooks("exchange"),
-    minorAmountHooks(["priceDifferenceAmount", "changeFeeAmount", "additionalCollectionAmount", "refundAmount"])
-  )
+var import_core19, import_fields29, Exchange;
+var init_Exchange = __esm({
+  "features/keystone/models/Exchange.ts"() {
+    "use strict";
+    import_core19 = require("@keystone-6/core");
+    import_fields29 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    Exchange = (0, import_core19.list)({
+      access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "exchangeKey", listView: { initialColumns: ["exchangeKey", "booking", "status", "priceDifferenceAmount", "changeFeeAmount", "quoteExpiresAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields29.relationship)({ ref: "Carrier" }),
+        exchangeKey: (0, import_fields29.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        idempotencyKey: (0, import_fields29.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields29.relationship)({ ref: "Booking.exchanges", access: immutableFieldAccess }),
+        status: (0, import_fields29.select)({ type: "enum", defaultValue: "quoted", options: [
+          { label: "Quoted", value: "quoted" },
+          { label: "Accepted", value: "accepted" },
+          { label: "Processing", value: "processing" },
+          { label: "Completed", value: "completed" },
+          { label: "Failed", value: "failed" },
+          { label: "Cancelled", value: "cancelled" },
+          { label: "Expired", value: "expired" }
+        ] }),
+        originalSegments: (0, import_fields29.relationship)({ ref: "BookingSegment.exchangesAsOriginal", many: true, access: immutableFieldAccess }),
+        replacementSegments: (0, import_fields29.relationship)({ ref: "BookingSegment.exchangesAsReplacement", many: true }),
+        priceDifferenceAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
+        changeFeeAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
+        additionalCollectionAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        refundAmount: (0, import_fields29.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields29.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        quoteExpiresAt: (0, import_fields29.timestamp)({ access: immutableFieldAccess }),
+        acceptedAt: (0, import_fields29.timestamp)(),
+        completedAt: (0, import_fields29.timestamp)(),
+        reason: (0, import_fields29.text)(),
+        pricingSnapshot: (0, import_fields29.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        metadata: (0, import_fields29.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking"]),
+        lifecycleHooks("exchange"),
+        minorAmountHooks(["priceDifferenceAmount", "changeFeeAmount", "additionalCollectionAmount", "refundAmount"])
+      )
+    });
+  }
 });
-
-// features/keystone/models/FareBrand.ts
-var import_core20 = require("@keystone-6/core");
-var import_fields31 = require("@keystone-6/core/fields");
 
 // features/keystone/lib/snapshots.ts
 function normalizeIncludedBaggageSnapshot(value) {
@@ -2159,716 +2866,1966 @@ function buildBookingSegmentSnapshot(input) {
     includedBaggage: normalizeIncludedBaggageSnapshot(input.includedBaggage)
   });
 }
+var init_snapshots = __esm({
+  "features/keystone/lib/snapshots.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/models/FareBrand.ts
-var FareBrand = (0, import_core20.list)({
-  access: carrierScopedAccess("canReadOffers", "canManageOffers"),
-  ui: {
-    labelField: "name",
-    listView: { initialColumns: ["name", "code", "cabin", "status", "displayOrder"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields31.relationship)({ ref: "Carrier" }),
-    code: (0, import_fields31.text)({ validation: { isRequired: true } }),
-    name: (0, import_fields31.text)({ validation: { isRequired: true } }),
-    description: (0, import_fields31.text)({ ui: { displayMode: "textarea" } }),
-    cabin: (0, import_fields31.relationship)({ ref: "Cabin.fareBrands" }),
-    status: (0, import_fields31.select)({
-      type: "enum",
-      defaultValue: "draft",
-      validation: { isRequired: true },
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Active", value: "active" },
-        { label: "Inactive", value: "inactive" },
-        { label: "Archived", value: "archived" }
-      ]
-    }),
-    displayOrder: (0, import_fields31.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    includedBaggage: (0, import_fields31.json)({ defaultValue: {} }),
-    benefits: (0, import_fields31.json)({ defaultValue: [] }),
-    refundabilitySummary: (0, import_fields31.text)(),
-    changeabilitySummary: (0, import_fields31.text)(),
-    seatSelectionSummary: (0, import_fields31.text)(),
-    rules: (0, import_fields31.relationship)({ ref: "FareRule.fareBrand", many: true }),
-    inventoryBuckets: (0, import_fields31.relationship)({ ref: "InventoryBucket.fareBrand", many: true }),
-    offerItems: (0, import_fields31.relationship)({ ref: "OfferItem.fareBrand", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "cabin"]),
-    carrierRelationshipHooks({ cabin: { model: "cabin" } }),
-    commandOwnedRelationshipHooks(["rules", "inventoryBuckets", "offerItems"]),
-    {
-      validate({ resolvedData, addValidationError }) {
-        if (resolvedData.includedBaggage !== void 0) {
-          try {
-            normalizeIncludedBaggageSnapshot(resolvedData.includedBaggage);
-          } catch (error) {
-            addValidationError(error instanceof Error ? error.message : "Included baggage policy is invalid.");
+var import_core20, import_fields31, FareBrand;
+var init_FareBrand = __esm({
+  "features/keystone/models/FareBrand.ts"() {
+    "use strict";
+    import_core20 = require("@keystone-6/core");
+    import_fields31 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_snapshots();
+    init_trackingFields();
+    FareBrand = (0, import_core20.list)({
+      access: carrierScopedAccess("canReadOffers", "canManageOffers"),
+      ui: {
+        labelField: "name",
+        listView: { initialColumns: ["name", "code", "cabin", "status", "displayOrder"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields31.relationship)({ ref: "Carrier" }),
+        code: (0, import_fields31.text)({ validation: { isRequired: true } }),
+        name: (0, import_fields31.text)({ validation: { isRequired: true } }),
+        description: (0, import_fields31.text)({ ui: { displayMode: "textarea" } }),
+        cabin: (0, import_fields31.relationship)({ ref: "Cabin.fareBrands" }),
+        status: (0, import_fields31.select)({
+          type: "enum",
+          defaultValue: "draft",
+          validation: { isRequired: true },
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Active", value: "active" },
+            { label: "Inactive", value: "inactive" },
+            { label: "Archived", value: "archived" }
+          ]
+        }),
+        displayOrder: (0, import_fields31.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        includedBaggage: (0, import_fields31.json)({ defaultValue: {} }),
+        benefits: (0, import_fields31.json)({ defaultValue: [] }),
+        refundabilitySummary: (0, import_fields31.text)(),
+        changeabilitySummary: (0, import_fields31.text)(),
+        seatSelectionSummary: (0, import_fields31.text)(),
+        rules: (0, import_fields31.relationship)({ ref: "FareRule.fareBrand", many: true }),
+        inventoryBuckets: (0, import_fields31.relationship)({ ref: "InventoryBucket.fareBrand", many: true }),
+        offerItems: (0, import_fields31.relationship)({ ref: "OfferItem.fareBrand", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("catalogProduct"),
+        requiredRelationshipHooks(["carrier", "cabin"]),
+        carrierRelationshipHooks({ cabin: { model: "cabin" } }),
+        commandOwnedRelationshipHooks(["rules", "inventoryBuckets", "offerItems"]),
+        {
+          validate({ resolvedData, addValidationError }) {
+            if (resolvedData.includedBaggage !== void 0) {
+              try {
+                normalizeIncludedBaggageSnapshot(resolvedData.includedBaggage);
+              } catch (error) {
+                addValidationError(error instanceof Error ? error.message : "Included baggage policy is invalid.");
+              }
+            }
           }
         }
-      }
-    }
-  )
+      )
+    });
+  }
 });
 
 // features/keystone/models/FareRule.ts
-var import_core21 = require("@keystone-6/core");
-var import_fields32 = require("@keystone-6/core/fields");
-var FareRule = (0, import_core21.list)({
-  access: carrierScopedAccess("canReadOffers", "canManageOffers"),
-  ui: {
-    labelField: "ruleKey",
-    listView: { initialColumns: ["ruleKey", "fareBrand", "route", "status", "effectiveFrom", "effectiveTo"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields32.relationship)({ ref: "Carrier" }),
-    ruleKey: (0, import_fields32.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    fareBrand: (0, import_fields32.relationship)({ ref: "FareBrand.rules" }),
-    route: (0, import_fields32.relationship)({ ref: "Route.fareRules" }),
-    fareBasisPattern: (0, import_fields32.text)(),
-    status: (0, import_fields32.select)({
-      type: "enum",
-      defaultValue: "draft",
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Active", value: "active" },
-        { label: "Inactive", value: "inactive" },
-        { label: "Archived", value: "archived" }
-      ]
-    }),
-    effectiveFrom: (0, import_fields32.timestamp)(),
-    effectiveTo: (0, import_fields32.timestamp)(),
-    travelFrom: (0, import_fields32.timestamp)(),
-    travelTo: (0, import_fields32.timestamp)(),
-    salesChannels: (0, import_fields32.json)({ defaultValue: [] }),
-    passengerTypes: (0, import_fields32.json)({ defaultValue: ["adult"] }),
-    minimumStayDays: (0, import_fields32.integer)({ validation: { min: 0 } }),
-    maximumStayDays: (0, import_fields32.integer)({ validation: { min: 0 } }),
-    minimumAdvancePurchaseHours: (0, import_fields32.integer)({ validation: { min: 0 } }),
-    isRefundable: (0, import_fields32.checkbox)({ defaultValue: false }),
-    isChangeable: (0, import_fields32.checkbox)({ defaultValue: false }),
-    changeFeeAmount: (0, import_fields32.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    cancellationFeeAmount: (0, import_fields32.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    noShowFeeAmount: (0, import_fields32.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields32.text)({
-      defaultValue: "USD",
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    restrictions: (0, import_fields32.json)({ defaultValue: {} }),
-    offerItems: (0, import_fields32.relationship)({ ref: "OfferItem.fareRule", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "fareBrand"]),
-    carrierRelationshipHooks({ fareBrand: { model: "fareBrand" }, route: { model: "route" } }),
-    commandOwnedRelationshipHooks(["offerItems"]),
-    chronologicalRangeHooks("effectiveFrom", "effectiveTo", "Fare-rule effective period"),
-    chronologicalRangeHooks("travelFrom", "travelTo", "Fare-rule travel period"),
-    minorAmountHooks(["changeFeeAmount", "cancellationFeeAmount", "noShowFeeAmount"])
-  )
+var import_core21, import_fields32, FareRule;
+var init_FareRule = __esm({
+  "features/keystone/models/FareRule.ts"() {
+    "use strict";
+    import_core21 = require("@keystone-6/core");
+    import_fields32 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_trackingFields();
+    FareRule = (0, import_core21.list)({
+      access: carrierScopedAccess("canReadOffers", "canManageOffers"),
+      ui: {
+        labelField: "ruleKey",
+        listView: { initialColumns: ["ruleKey", "fareBrand", "route", "status", "effectiveFrom", "effectiveTo"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields32.relationship)({ ref: "Carrier" }),
+        ruleKey: (0, import_fields32.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        fareBrand: (0, import_fields32.relationship)({ ref: "FareBrand.rules" }),
+        route: (0, import_fields32.relationship)({ ref: "Route.fareRules" }),
+        fareBasisPattern: (0, import_fields32.text)(),
+        status: (0, import_fields32.select)({
+          type: "enum",
+          defaultValue: "draft",
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Active", value: "active" },
+            { label: "Inactive", value: "inactive" },
+            { label: "Archived", value: "archived" }
+          ]
+        }),
+        effectiveFrom: (0, import_fields32.timestamp)(),
+        effectiveTo: (0, import_fields32.timestamp)(),
+        travelFrom: (0, import_fields32.timestamp)(),
+        travelTo: (0, import_fields32.timestamp)(),
+        salesChannels: (0, import_fields32.json)({ defaultValue: [] }),
+        passengerTypes: (0, import_fields32.json)({ defaultValue: ["adult"] }),
+        minimumStayDays: (0, import_fields32.integer)({ validation: { min: 0 } }),
+        maximumStayDays: (0, import_fields32.integer)({ validation: { min: 0 } }),
+        minimumAdvancePurchaseHours: (0, import_fields32.integer)({ validation: { min: 0 } }),
+        isRefundable: (0, import_fields32.checkbox)({ defaultValue: false }),
+        isChangeable: (0, import_fields32.checkbox)({ defaultValue: false }),
+        changeFeeAmount: (0, import_fields32.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        cancellationFeeAmount: (0, import_fields32.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        noShowFeeAmount: (0, import_fields32.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields32.text)({
+          defaultValue: "USD",
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        restrictions: (0, import_fields32.json)({ defaultValue: {} }),
+        offerItems: (0, import_fields32.relationship)({ ref: "OfferItem.fareRule", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("catalogProduct"),
+        requiredRelationshipHooks(["carrier", "fareBrand"]),
+        carrierRelationshipHooks({ fareBrand: { model: "fareBrand" }, route: { model: "route" } }),
+        commandOwnedRelationshipHooks(["offerItems"]),
+        chronologicalRangeHooks("effectiveFrom", "effectiveTo", "Fare-rule effective period"),
+        chronologicalRangeHooks("travelFrom", "travelTo", "Fare-rule travel period"),
+        minorAmountHooks(["changeFeeAmount", "cancellationFeeAmount", "noShowFeeAmount"])
+      )
+    });
+  }
 });
 
 // features/keystone/models/FlightInstance.ts
-var import_core22 = require("@keystone-6/core");
-var import_fields33 = require("@keystone-6/core/fields");
-var FlightInstance = (0, import_core22.list)({
-  access: commandOnlyCarrierAccess("canReadNetwork", "canManageNetwork"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "instanceKey",
-    listView: { initialColumns: ["flightNumber", "serviceDate", "origin", "destination", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields33.relationship)({ ref: "Carrier.flightInstances" }),
-    instanceKey: (0, import_fields33.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    schedule: (0, import_fields33.relationship)({ ref: "FlightSchedule.instances" }),
-    route: (0, import_fields33.relationship)({ ref: "Route.flightInstances" }),
-    origin: (0, import_fields33.relationship)({ ref: "Airport.departingFlights" }),
-    destination: (0, import_fields33.relationship)({ ref: "Airport.arrivingFlights" }),
-    operatingCarrier: (0, import_fields33.relationship)({ ref: "Carrier" }),
-    flightNumber: (0, import_fields33.text)({ validation: { isRequired: true } }),
-    serviceDate: (0, import_fields33.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    scheduledDepartureAt: (0, import_fields33.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    scheduledArrivalAt: (0, import_fields33.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    estimatedDepartureAt: (0, import_fields33.timestamp)(),
-    estimatedArrivalAt: (0, import_fields33.timestamp)(),
-    actualDepartureAt: (0, import_fields33.timestamp)(),
-    actualArrivalAt: (0, import_fields33.timestamp)(),
-    departureTerminal: (0, import_fields33.text)(),
-    departureGate: (0, import_fields33.text)(),
-    arrivalTerminal: (0, import_fields33.text)(),
-    arrivalGate: (0, import_fields33.text)(),
-    status: (0, import_fields33.select)({
-      type: "enum",
-      defaultValue: "scheduled",
-      validation: { isRequired: true },
-      options: [
-        { label: "Scheduled", value: "scheduled" },
-        { label: "Open for sale", value: "open_for_sale" },
-        { label: "Closed for sale", value: "closed_for_sale" },
-        { label: "Delayed", value: "delayed" },
-        { label: "Departed", value: "departed" },
-        { label: "Arrived", value: "arrived" },
-        { label: "Cancelled", value: "cancelled" }
-      ]
-    }),
-    inventoryBuckets: (0, import_fields33.relationship)({ ref: "InventoryBucket.flightInstance", many: true }),
-    seatMaps: (0, import_fields33.relationship)({ ref: "SeatMap.flightInstance", many: true }),
-    bookingSegments: (0, import_fields33.relationship)({ ref: "BookingSegment.flightInstance", many: true }),
-    checkIns: (0, import_fields33.relationship)({ ref: "CheckIn.flightInstance", many: true }),
-    bags: (0, import_fields33.relationship)({ ref: "Bag.flightInstance", many: true }),
-    disruptions: (0, import_fields33.relationship)({ ref: "Disruption.flightInstance", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "route", "origin", "destination"]),
-    carrierRelationshipHooks({ schedule: { model: "flightSchedule" }, route: { model: "route" }, operatingCarrier: { model: "carrier", carrierField: "id" } }),
-    chronologicalRangeHooks("scheduledDepartureAt", "scheduledArrivalAt", "Scheduled flight"),
-    lifecycleHooks("flightInstance")
-  )
+var import_core22, import_fields33, FlightInstance;
+var init_FlightInstance = __esm({
+  "features/keystone/models/FlightInstance.ts"() {
+    "use strict";
+    import_core22 = require("@keystone-6/core");
+    import_fields33 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    FlightInstance = (0, import_core22.list)({
+      access: commandOnlyCarrierAccess("canReadNetwork", "canManageNetwork"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "instanceKey",
+        listView: { initialColumns: ["flightNumber", "serviceDate", "origin", "destination", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields33.relationship)({ ref: "Carrier.flightInstances" }),
+        instanceKey: (0, import_fields33.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        schedule: (0, import_fields33.relationship)({ ref: "FlightSchedule.instances" }),
+        route: (0, import_fields33.relationship)({ ref: "Route.flightInstances" }),
+        origin: (0, import_fields33.relationship)({ ref: "Airport.departingFlights" }),
+        destination: (0, import_fields33.relationship)({ ref: "Airport.arrivingFlights" }),
+        operatingCarrier: (0, import_fields33.relationship)({ ref: "Carrier" }),
+        flightNumber: (0, import_fields33.text)({ validation: { isRequired: true } }),
+        serviceDate: (0, import_fields33.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+        scheduledDepartureAt: (0, import_fields33.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+        scheduledArrivalAt: (0, import_fields33.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+        estimatedDepartureAt: (0, import_fields33.timestamp)(),
+        estimatedArrivalAt: (0, import_fields33.timestamp)(),
+        actualDepartureAt: (0, import_fields33.timestamp)(),
+        actualArrivalAt: (0, import_fields33.timestamp)(),
+        departureTerminal: (0, import_fields33.text)(),
+        departureGate: (0, import_fields33.text)(),
+        arrivalTerminal: (0, import_fields33.text)(),
+        arrivalGate: (0, import_fields33.text)(),
+        status: (0, import_fields33.select)({
+          type: "enum",
+          defaultValue: "scheduled",
+          validation: { isRequired: true },
+          options: [
+            { label: "Scheduled", value: "scheduled" },
+            { label: "Open for sale", value: "open_for_sale" },
+            { label: "Closed for sale", value: "closed_for_sale" },
+            { label: "Delayed", value: "delayed" },
+            { label: "Departed", value: "departed" },
+            { label: "Arrived", value: "arrived" },
+            { label: "Cancelled", value: "cancelled" }
+          ]
+        }),
+        inventoryBuckets: (0, import_fields33.relationship)({ ref: "InventoryBucket.flightInstance", many: true }),
+        seatMaps: (0, import_fields33.relationship)({ ref: "SeatMap.flightInstance", many: true }),
+        bookingSegments: (0, import_fields33.relationship)({ ref: "BookingSegment.flightInstance", many: true }),
+        checkIns: (0, import_fields33.relationship)({ ref: "CheckIn.flightInstance", many: true }),
+        bags: (0, import_fields33.relationship)({ ref: "Bag.flightInstance", many: true }),
+        disruptions: (0, import_fields33.relationship)({ ref: "Disruption.flightInstance", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "route", "origin", "destination"]),
+        carrierRelationshipHooks({ schedule: { model: "flightSchedule" }, route: { model: "route" }, operatingCarrier: { model: "carrier", carrierField: "id" } }),
+        chronologicalRangeHooks("scheduledDepartureAt", "scheduledArrivalAt", "Scheduled flight"),
+        lifecycleHooks("flightInstance")
+      )
+    });
+  }
 });
 
 // features/keystone/models/FlightSchedule.ts
-var import_core23 = require("@keystone-6/core");
-var import_fields34 = require("@keystone-6/core/fields");
-var FlightSchedule = (0, import_core23.list)({
-  access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
-  ui: {
-    labelField: "scheduleKey",
-    listView: { initialColumns: ["flightNumber", "route", "effectiveFrom", "effectiveTo", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields34.relationship)({ ref: "Carrier.schedules" }),
-    scheduleKey: (0, import_fields34.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    route: (0, import_fields34.relationship)({ ref: "Route.schedules" }),
-    operatingCarrier: (0, import_fields34.relationship)({ ref: "Carrier" }),
-    flightNumber: (0, import_fields34.text)({
-      validation: { isRequired: true, match: { regex: /^[A-Z0-9]{2,3}\s?[0-9]{1,4}[A-Z]?$/, explanation: "Use a carrier designator and service number." } }
-    }),
-    serviceSuffix: (0, import_fields34.text)(),
-    departureLocalTime: (0, import_fields34.text)({
-      validation: { isRequired: true, match: { regex: /^([01]\d|2[0-3]):[0-5]\d$/, explanation: "Use 24-hour HH:mm." } }
-    }),
-    arrivalLocalTime: (0, import_fields34.text)({
-      validation: { isRequired: true, match: { regex: /^([01]\d|2[0-3]):[0-5]\d$/, explanation: "Use 24-hour HH:mm." } }
-    }),
-    arrivalDayOffset: (0, import_fields34.integer)({ defaultValue: 0, validation: { min: -1, max: 2 } }),
-    daysOfWeek: (0, import_fields34.json)({ defaultValue: [] }),
-    effectiveFrom: (0, import_fields34.timestamp)(),
-    effectiveTo: (0, import_fields34.timestamp)(),
-    status: (0, import_fields34.select)({
-      type: "enum",
-      defaultValue: "draft",
-      validation: { isRequired: true },
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Published", value: "published" },
-        { label: "Suspended", value: "suspended" },
-        { label: "Retired", value: "retired" }
-      ]
-    }),
-    instances: (0, import_fields34.relationship)({ ref: "FlightInstance.schedule", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    {
-      // Provisioning reads ISO weekdays (Monday 1 … Sunday 7) and treats an empty list as every day.
-      validate({ resolvedData, addValidationError }) {
-        const days = resolvedData.daysOfWeek;
-        if (days === void 0) return;
-        if (!Array.isArray(days) || days.some((day) => !Number.isInteger(day) || day < 1 || day > 7) || new Set(days).size !== days.length) {
-          addValidationError("Days of week must be unique ISO weekday numbers from 1 (Monday) to 7 (Sunday).");
-        }
-      }
-    },
-    requiredRelationshipHooks(["carrier", "route"]),
-    carrierRelationshipHooks({ route: { model: "route" }, operatingCarrier: { model: "carrier", carrierField: "id" } }),
-    commandOwnedRelationshipHooks(["instances"]),
-    chronologicalRangeHooks("effectiveFrom", "effectiveTo", "Schedule effective period")
-  )
+var import_core23, import_fields34, FlightSchedule;
+var init_FlightSchedule = __esm({
+  "features/keystone/models/FlightSchedule.ts"() {
+    "use strict";
+    import_core23 = require("@keystone-6/core");
+    import_fields34 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_trackingFields();
+    FlightSchedule = (0, import_core23.list)({
+      access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
+      ui: {
+        labelField: "scheduleKey",
+        listView: { initialColumns: ["flightNumber", "route", "effectiveFrom", "effectiveTo", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields34.relationship)({ ref: "Carrier.schedules" }),
+        scheduleKey: (0, import_fields34.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        route: (0, import_fields34.relationship)({ ref: "Route.schedules" }),
+        operatingCarrier: (0, import_fields34.relationship)({ ref: "Carrier" }),
+        flightNumber: (0, import_fields34.text)({
+          validation: { isRequired: true, match: { regex: /^[A-Z0-9]{2,3}\s?[0-9]{1,4}[A-Z]?$/, explanation: "Use a carrier designator and service number." } }
+        }),
+        serviceSuffix: (0, import_fields34.text)(),
+        departureLocalTime: (0, import_fields34.text)({
+          validation: { isRequired: true, match: { regex: /^([01]\d|2[0-3]):[0-5]\d$/, explanation: "Use 24-hour HH:mm." } }
+        }),
+        arrivalLocalTime: (0, import_fields34.text)({
+          validation: { isRequired: true, match: { regex: /^([01]\d|2[0-3]):[0-5]\d$/, explanation: "Use 24-hour HH:mm." } }
+        }),
+        arrivalDayOffset: (0, import_fields34.integer)({ defaultValue: 0, validation: { min: -1, max: 2 } }),
+        daysOfWeek: (0, import_fields34.json)({ defaultValue: [] }),
+        effectiveFrom: (0, import_fields34.timestamp)(),
+        effectiveTo: (0, import_fields34.timestamp)(),
+        status: (0, import_fields34.select)({
+          type: "enum",
+          defaultValue: "draft",
+          validation: { isRequired: true },
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Published", value: "published" },
+            { label: "Suspended", value: "suspended" },
+            { label: "Retired", value: "retired" }
+          ]
+        }),
+        instances: (0, import_fields34.relationship)({ ref: "FlightInstance.schedule", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("flightSchedule"),
+        {
+          // Provisioning reads ISO weekdays (Monday 1 … Sunday 7) and treats an empty list as every day.
+          validate({ resolvedData, addValidationError }) {
+            const days = resolvedData.daysOfWeek;
+            if (days === void 0) return;
+            if (!Array.isArray(days) || days.some((day) => !Number.isInteger(day) || day < 1 || day > 7) || new Set(days).size !== days.length) {
+              addValidationError("Days of week must be unique ISO weekday numbers from 1 (Monday) to 7 (Sunday).");
+            }
+          }
+        },
+        requiredRelationshipHooks(["carrier", "route"]),
+        carrierRelationshipHooks({ route: { model: "route" }, operatingCarrier: { model: "carrier", carrierField: "id" } }),
+        commandOwnedRelationshipHooks(["instances"]),
+        chronologicalRangeHooks("effectiveFrom", "effectiveTo", "Schedule effective period")
+      )
+    });
+  }
 });
 
 // features/keystone/models/InventoryBucket.ts
-var import_core24 = require("@keystone-6/core");
-var import_fields35 = require("@keystone-6/core/fields");
-var InventoryBucket = (0, import_core24.list)({
-  access: commandOnlyCarrierAccess("canReadInventory", "canManageInventory"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "bucketKey",
-    listView: { initialColumns: ["bucketKey", "flightInstance", "cabin", "bookingClassCode", "sold", "held", "authorized", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields35.relationship)({ ref: "Carrier" }),
-    bucketKey: (0, import_fields35.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    flightInstance: (0, import_fields35.relationship)({ ref: "FlightInstance.inventoryBuckets" }),
-    cabin: (0, import_fields35.relationship)({ ref: "Cabin.inventoryBuckets" }),
-    fareBrand: (0, import_fields35.relationship)({ ref: "FareBrand.inventoryBuckets" }),
-    bookingClassCode: (0, import_fields35.text)({
-      validation: { isRequired: true, match: { regex: /^[A-Z0-9]{1,4}$/, explanation: "Use a one-to-four character booking class." } }
-    }),
-    capacity: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    authorized: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    sold: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    held: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    blocked: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    baseAmount: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    taxAmount: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    currencyCode: (0, import_fields35.text)({
-      defaultValue: "USD",
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    status: (0, import_fields35.select)({
-      type: "enum",
-      defaultValue: "open",
-      validation: { isRequired: true },
-      options: [
-        { label: "Open", value: "open" },
-        { label: "Closed", value: "closed" },
-        { label: "Frozen", value: "frozen" }
-      ]
-    }),
-    holds: (0, import_fields35.relationship)({ ref: "InventoryHold.inventoryBucket", many: true }),
-    offerItems: (0, import_fields35.relationship)({ ref: "OfferItem.inventoryBucket", many: true }),
-    bookingSegments: (0, import_fields35.relationship)({ ref: "BookingSegment.inventoryBucket", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "flightInstance", "cabin"]),
-    carrierRelationshipHooks({ flightInstance: { model: "flightInstance" }, cabin: { model: "cabin" }, fareBrand: { model: "fareBrand" } }),
-    commandOwnedRelationshipHooks(["holds", "offerItems", "bookingSegments"]),
-    inventoryCountHooks(),
-    minorAmountHooks(["baseAmount", "taxAmount"])
-  )
+var import_core24, import_fields35, InventoryBucket;
+var init_InventoryBucket = __esm({
+  "features/keystone/models/InventoryBucket.ts"() {
+    "use strict";
+    import_core24 = require("@keystone-6/core");
+    import_fields35 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    InventoryBucket = (0, import_core24.list)({
+      access: commandOnlyCarrierAccess("canReadInventory", "canManageInventory"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "bucketKey",
+        listView: { initialColumns: ["bucketKey", "flightInstance", "cabin", "bookingClassCode", "sold", "held", "authorized", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields35.relationship)({ ref: "Carrier" }),
+        bucketKey: (0, import_fields35.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        flightInstance: (0, import_fields35.relationship)({ ref: "FlightInstance.inventoryBuckets" }),
+        cabin: (0, import_fields35.relationship)({ ref: "Cabin.inventoryBuckets" }),
+        fareBrand: (0, import_fields35.relationship)({ ref: "FareBrand.inventoryBuckets" }),
+        bookingClassCode: (0, import_fields35.text)({
+          validation: { isRequired: true, match: { regex: /^[A-Z0-9]{1,4}$/, explanation: "Use a one-to-four character booking class." } }
+        }),
+        capacity: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        authorized: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        sold: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        held: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        blocked: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        baseAmount: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        taxAmount: (0, import_fields35.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        currencyCode: (0, import_fields35.text)({
+          defaultValue: "USD",
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        status: (0, import_fields35.select)({
+          type: "enum",
+          defaultValue: "open",
+          validation: { isRequired: true },
+          options: [
+            { label: "Open", value: "open" },
+            { label: "Closed", value: "closed" },
+            { label: "Frozen", value: "frozen" }
+          ]
+        }),
+        holds: (0, import_fields35.relationship)({ ref: "InventoryHold.inventoryBucket", many: true }),
+        offerItems: (0, import_fields35.relationship)({ ref: "OfferItem.inventoryBucket", many: true }),
+        bookingSegments: (0, import_fields35.relationship)({ ref: "BookingSegment.inventoryBucket", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "flightInstance", "cabin"]),
+        carrierRelationshipHooks({ flightInstance: { model: "flightInstance" }, cabin: { model: "cabin" }, fareBrand: { model: "fareBrand" } }),
+        commandOwnedRelationshipHooks(["holds", "offerItems", "bookingSegments"]),
+        inventoryCountHooks(),
+        minorAmountHooks(["baseAmount", "taxAmount"])
+      )
+    });
+  }
 });
 
 // features/keystone/models/IdempotencyKey.ts
-var import_core25 = require("@keystone-6/core");
-var import_access26 = require("@keystone-6/core/access");
-var import_fields36 = require("@keystone-6/core/fields");
-var IdempotencyKey = (0, import_core25.list)({
-  access: {
-    operation: {
-      query: (args) => hasFreshPermission(args, "canReadAudit", "canManageIntegrations"),
-      create: () => false,
-      update: () => false,
-      delete: () => false
-    },
-    filter: { query: freshCarrierFilter }
-  },
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "key", listView: { initialColumns: ["key", "scope", "status", "resourceType", "resourceId", "createdAt"] }, hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" } },
-  fields: {
-    carrier: (0, import_fields36.relationship)({ ref: "Carrier" }),
-    key: (0, import_fields36.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    scope: (0, import_fields36.text)({ validation: { isRequired: true } }),
-    requestHash: (0, import_fields36.text)({ validation: { isRequired: true } }),
-    status: (0, import_fields36.select)({ type: "enum", defaultValue: "started", options: [
-      { label: "Started", value: "started" },
-      { label: "Completed", value: "completed" },
-      { label: "Failed", value: "failed" }
-    ] }),
-    actor: (0, import_fields36.relationship)({ ref: "User" }),
-    approvedAgent: (0, import_fields36.relationship)({ ref: "ApprovedAgent" }),
-    resourceType: (0, import_fields36.text)(),
-    resourceId: (0, import_fields36.text)(),
-    result: (0, import_fields36.json)({ access: { read: import_access26.denyAll, create: () => false, update: () => false }, ui: hiddenSensitiveUi }),
-    lockedAt: (0, import_fields36.timestamp)({ defaultValue: { kind: "now" } }),
-    completedAt: (0, import_fields36.timestamp)(),
-    expiresAt: (0, import_fields36.timestamp)(),
-    ...trackingFields
+var import_core25, import_access26, import_fields36, IdempotencyKey;
+var init_IdempotencyKey = __esm({
+  "features/keystone/models/IdempotencyKey.ts"() {
+    "use strict";
+    import_core25 = require("@keystone-6/core");
+    import_access26 = require("@keystone-6/core/access");
+    import_fields36 = require("@keystone-6/core/fields");
+    init_access();
+    init_fields();
+    init_trackingFields();
+    IdempotencyKey = (0, import_core25.list)({
+      access: {
+        operation: {
+          query: (args) => hasFreshPermission(args, "canReadAudit", "canManageIntegrations"),
+          create: () => false,
+          update: () => false,
+          delete: () => false
+        },
+        filter: { query: freshCarrierFilter }
+      },
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "key", listView: { initialColumns: ["key", "scope", "status", "resourceType", "resourceId", "createdAt"] }, hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" } },
+      fields: {
+        carrier: (0, import_fields36.relationship)({ ref: "Carrier" }),
+        key: (0, import_fields36.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        scope: (0, import_fields36.text)({ validation: { isRequired: true } }),
+        requestHash: (0, import_fields36.text)({ validation: { isRequired: true } }),
+        status: (0, import_fields36.select)({ type: "enum", defaultValue: "started", options: [
+          { label: "Started", value: "started" },
+          { label: "Completed", value: "completed" },
+          { label: "Failed", value: "failed" }
+        ] }),
+        actor: (0, import_fields36.relationship)({ ref: "User" }),
+        approvedAgent: (0, import_fields36.relationship)({ ref: "ApprovedAgent" }),
+        resourceType: (0, import_fields36.text)(),
+        resourceId: (0, import_fields36.text)(),
+        result: (0, import_fields36.json)({ access: { read: import_access26.denyAll, create: () => false, update: () => false }, ui: hiddenSensitiveUi }),
+        lockedAt: (0, import_fields36.timestamp)({ defaultValue: { kind: "now" } }),
+        completedAt: (0, import_fields36.timestamp)(),
+        expiresAt: (0, import_fields36.timestamp)(),
+        ...trackingFields
+      }
+    });
   }
 });
 
 // features/keystone/models/IntegrationProvider.ts
-var import_core26 = require("@keystone-6/core");
-var import_fields38 = require("@keystone-6/core/fields");
-var IntegrationProvider = (0, import_core26.list)({
-  access: carrierScopedAccess("canReadIntegrations", "canManageIntegrations"),
-  ui: { labelField: "name", listView: { initialColumns: ["name", "code", "type", "status", "carrier"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields38.relationship)({ ref: "Carrier" }),
-    providerKey: (0, import_fields38.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    name: (0, import_fields38.text)({ validation: { isRequired: true } }),
-    code: (0, import_fields38.text)({ validation: { isRequired: true } }),
-    type: (0, import_fields38.select)({ type: "enum", validation: { isRequired: true }, options: [
-      { label: "NDC", value: "ndc" },
-      { label: "GDS", value: "gds" },
-      { label: "DCS", value: "dcs" },
-      { label: "Identity", value: "identity" },
-      { label: "Baggage", value: "baggage" },
-      { label: "Notification", value: "notification" },
-      { label: "Loyalty", value: "loyalty" },
-      { label: "Other", value: "other" }
-    ] }),
-    status: (0, import_fields38.select)({ type: "enum", defaultValue: "active", options: [
-      { label: "Active", value: "active" },
-      { label: "Inactive", value: "inactive" },
-      { label: "Deprecated", value: "deprecated" }
-    ] }),
-    adapterModule: (0, import_fields38.text)({ validation: { isRequired: true } }),
-    capabilities: (0, import_fields38.json)({ defaultValue: [] }),
-    connections: (0, import_fields38.relationship)({ ref: "ProviderConnection.provider", many: true, access: { create: () => false, update: () => false } }),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier"])
+var import_core26, import_fields38, IntegrationProvider;
+var init_IntegrationProvider = __esm({
+  "features/keystone/models/IntegrationProvider.ts"() {
+    "use strict";
+    import_core26 = require("@keystone-6/core");
+    import_fields38 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    IntegrationProvider = (0, import_core26.list)({
+      access: carrierScopedAccess("canReadIntegrations", "canManageIntegrations"),
+      ui: { labelField: "name", listView: { initialColumns: ["name", "code", "type", "status", "carrier"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields38.relationship)({ ref: "Carrier" }),
+        providerKey: (0, import_fields38.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        name: (0, import_fields38.text)({ validation: { isRequired: true } }),
+        code: (0, import_fields38.text)({ validation: { isRequired: true } }),
+        type: (0, import_fields38.select)({ type: "enum", validation: { isRequired: true }, options: [
+          { label: "NDC", value: "ndc" },
+          { label: "GDS", value: "gds" },
+          { label: "DCS", value: "dcs" },
+          { label: "Identity", value: "identity" },
+          { label: "Baggage", value: "baggage" },
+          { label: "Notification", value: "notification" },
+          { label: "Loyalty", value: "loyalty" },
+          { label: "Other", value: "other" }
+        ] }),
+        status: (0, import_fields38.select)({ type: "enum", defaultValue: "active", options: [
+          { label: "Active", value: "active" },
+          { label: "Inactive", value: "inactive" },
+          { label: "Deprecated", value: "deprecated" }
+        ] }),
+        adapterModule: (0, import_fields38.text)({ validation: { isRequired: true } }),
+        capabilities: (0, import_fields38.json)({ defaultValue: [] }),
+        connections: (0, import_fields38.relationship)({ ref: "ProviderConnection.provider", many: true, access: { create: () => false, update: () => false } }),
+        ...trackingFields
+      },
+      hooks: requiredRelationshipHooks(["carrier"])
+    });
+  }
 });
 
 // features/keystone/models/InventoryHold.ts
-var import_core27 = require("@keystone-6/core");
-var import_fields39 = require("@keystone-6/core/fields");
-var holdExpiryHooks = {
-  validate({ operation, resolvedData, item, addValidationError }) {
-    const expiresAt = resolvedData.expiresAt ?? item?.expiresAt;
-    if (!expiresAt || Number.isNaN(new Date(expiresAt).getTime())) {
-      addValidationError("Hold expiry must be a valid timestamp.");
-      return;
-    }
-    if (operation === "create" && new Date(expiresAt) <= /* @__PURE__ */ new Date()) {
-      addValidationError("A new inventory hold must expire in the future.");
-    }
+var import_core27, import_fields39, holdExpiryHooks, InventoryHold;
+var init_InventoryHold = __esm({
+  "features/keystone/models/InventoryHold.ts"() {
+    "use strict";
+    import_core27 = require("@keystone-6/core");
+    import_fields39 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    holdExpiryHooks = {
+      validate({ operation, resolvedData, item, addValidationError }) {
+        const expiresAt = resolvedData.expiresAt ?? item?.expiresAt;
+        if (!expiresAt || Number.isNaN(new Date(expiresAt).getTime())) {
+          addValidationError("Hold expiry must be a valid timestamp.");
+          return;
+        }
+        if (operation === "create" && new Date(expiresAt) <= /* @__PURE__ */ new Date()) {
+          addValidationError("A new inventory hold must expire in the future.");
+        }
+      }
+    };
+    InventoryHold = (0, import_core27.list)({
+      access: commandOnlyCarrierAccess("canReadInventory", "canManageInventory"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "holdKey",
+        listView: { initialColumns: ["holdKey", "inventoryBucket", "offer", "quantity", "status", "expiresAt"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields39.relationship)({ ref: "Carrier" }),
+        holdKey: (0, import_fields39.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        inventoryBucket: (0, import_fields39.relationship)({ ref: "InventoryBucket.holds" }),
+        offer: (0, import_fields39.relationship)({ ref: "Offer.inventoryHolds" }),
+        quantity: (0, import_fields39.integer)({ validation: { isRequired: true, min: 1 } }),
+        status: (0, import_fields39.select)({
+          type: "enum",
+          defaultValue: "active",
+          validation: { isRequired: true },
+          options: [
+            { label: "Active", value: "active" },
+            { label: "Converted", value: "converted" },
+            { label: "Released", value: "released" },
+            { label: "Expired", value: "expired" }
+          ]
+        }),
+        expiresAt: (0, import_fields39.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+        convertedAt: (0, import_fields39.timestamp)(),
+        releasedAt: (0, import_fields39.timestamp)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "inventoryBucket", "offer"]),
+        lifecycleHooks("inventoryHold"),
+        holdExpiryHooks
+      )
+    });
   }
-};
-var InventoryHold = (0, import_core27.list)({
-  access: commandOnlyCarrierAccess("canReadInventory", "canManageInventory"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "holdKey",
-    listView: { initialColumns: ["holdKey", "inventoryBucket", "offer", "quantity", "status", "expiresAt"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields39.relationship)({ ref: "Carrier" }),
-    holdKey: (0, import_fields39.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    inventoryBucket: (0, import_fields39.relationship)({ ref: "InventoryBucket.holds" }),
-    offer: (0, import_fields39.relationship)({ ref: "Offer.inventoryHolds" }),
-    quantity: (0, import_fields39.integer)({ validation: { isRequired: true, min: 1 } }),
-    status: (0, import_fields39.select)({
-      type: "enum",
-      defaultValue: "active",
-      validation: { isRequired: true },
-      options: [
-        { label: "Active", value: "active" },
-        { label: "Converted", value: "converted" },
-        { label: "Released", value: "released" },
-        { label: "Expired", value: "expired" }
-      ]
-    }),
-    expiresAt: (0, import_fields39.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    convertedAt: (0, import_fields39.timestamp)(),
-    releasedAt: (0, import_fields39.timestamp)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "inventoryBucket", "offer"]),
-    lifecycleHooks("inventoryHold"),
-    holdExpiryHooks
-  )
 });
 
 // features/keystone/models/MachineCredential.ts
-var import_core28 = require("@keystone-6/core");
-var import_access30 = require("@keystone-6/core/access");
-var import_fields40 = require("@keystone-6/core/fields");
-var MachineCredential = (0, import_core28.list)({
-  access: commandOnlyCarrierAccess("canReadIntegrations", "canManageIntegrations"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "name", hideCreate: true, hideDelete: true, listView: { initialColumns: ["name", "keyId", "audience", "status", "expiresAt", "lastUsedAt"] } },
-  fields: {
-    carrier: (0, import_fields40.relationship)({ ref: "Carrier.machineCredentials", access: immutableFieldAccess }),
-    name: (0, import_fields40.text)({ validation: { isRequired: true } }),
-    keyId: (0, import_fields40.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    tokenHash: (0, import_fields40.text)({ isIndexed: "unique", validation: { isRequired: true }, access: { read: import_access30.denyAll, create: import_access30.denyAll, update: import_access30.denyAll }, ui: hiddenSensitiveUi }),
-    tokenPreview: (0, import_fields40.text)({ access: immutableFieldAccess }),
-    audience: (0, import_fields40.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    scopes: (0, import_fields40.json)({ defaultValue: [], access: immutableFieldAccess }),
-    status: (0, import_fields40.select)({ type: "enum", defaultValue: "active", options: [
-      { label: "Active", value: "active" },
-      { label: "Revoked", value: "revoked" },
-      { label: "Expired", value: "expired" }
-    ] }),
-    expiresAt: (0, import_fields40.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    lastUsedAt: (0, import_fields40.timestamp)(),
-    revokedAt: (0, import_fields40.timestamp)(),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier"])
+var import_core28, import_access30, import_fields40, MachineCredential;
+var init_MachineCredential = __esm({
+  "features/keystone/models/MachineCredential.ts"() {
+    "use strict";
+    import_core28 = require("@keystone-6/core");
+    import_access30 = require("@keystone-6/core/access");
+    import_fields40 = require("@keystone-6/core/fields");
+    init_access();
+    init_fields();
+    init_validation();
+    init_trackingFields();
+    MachineCredential = (0, import_core28.list)({
+      access: commandOnlyCarrierAccess("canReadIntegrations", "canManageIntegrations"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "name", hideCreate: true, hideDelete: true, listView: { initialColumns: ["name", "keyId", "audience", "status", "expiresAt", "lastUsedAt"] } },
+      fields: {
+        carrier: (0, import_fields40.relationship)({ ref: "Carrier.machineCredentials", access: immutableFieldAccess }),
+        name: (0, import_fields40.text)({ validation: { isRequired: true } }),
+        keyId: (0, import_fields40.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        tokenHash: (0, import_fields40.text)({ isIndexed: "unique", validation: { isRequired: true }, access: { read: import_access30.denyAll, create: import_access30.denyAll, update: import_access30.denyAll }, ui: hiddenSensitiveUi }),
+        tokenPreview: (0, import_fields40.text)({ access: immutableFieldAccess }),
+        audience: (0, import_fields40.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        scopes: (0, import_fields40.json)({ defaultValue: [], access: immutableFieldAccess }),
+        status: (0, import_fields40.select)({ type: "enum", defaultValue: "active", options: [
+          { label: "Active", value: "active" },
+          { label: "Revoked", value: "revoked" },
+          { label: "Expired", value: "expired" }
+        ] }),
+        expiresAt: (0, import_fields40.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        lastUsedAt: (0, import_fields40.timestamp)(),
+        revokedAt: (0, import_fields40.timestamp)(),
+        ...trackingFields
+      },
+      hooks: requiredRelationshipHooks(["carrier"])
+    });
+  }
 });
 
 // features/keystone/models/ManualPaymentEvidence.ts
-var import_core29 = require("@keystone-6/core");
-var import_fields42 = require("@keystone-6/core/fields");
-var ManualPaymentEvidence = (0, import_core29.list)({
-  access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "evidenceKey", hideCreate: true, hideDelete: true, listView: { initialColumns: ["booking", "purpose", "externalReference", "amount", "currencyCode", "status", "submittedBy", "approvedBy"] } },
-  fields: {
-    carrier: (0, import_fields42.relationship)({ ref: "Carrier.manualPaymentEvidence", access: immutableFieldAccess }),
-    evidenceKey: (0, import_fields42.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    purpose: (0, import_fields42.select)({ type: "enum", options: [{ label: "Capture", value: "capture" }, { label: "Refund", value: "refund" }], validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields42.relationship)({ ref: "Booking.manualPaymentEvidence", access: immutableFieldAccess }),
-    payment: (0, import_fields42.relationship)({ ref: "Payment.manualPaymentEvidence", access: immutableFieldAccess }),
-    ledgerEntry: (0, import_fields42.relationship)({ ref: "SettlementLedgerEntry.evidence", access: immutableFieldAccess }),
-    externalReference: (0, import_fields42.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    ledgerSource: (0, import_fields42.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    evidenceDigest: (0, import_fields42.text)({ isIndexed: true, validation: { isRequired: true, match: { regex: /^[a-f0-9]{64}$/i, explanation: "Use a SHA-256 evidence digest." } }, access: immutableFieldAccess }),
-    amount: (0, import_fields42.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields42.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    status: (0, import_fields42.select)({ type: "enum", defaultValue: "submitted", options: [
-      { label: "Submitted", value: "submitted" },
-      { label: "Approved", value: "approved" },
-      { label: "Rejected", value: "rejected" },
-      { label: "Consumed", value: "consumed" }
-    ] }),
-    submittedBy: (0, import_fields42.relationship)({ ref: "User.submittedPaymentEvidence", access: immutableFieldAccess }),
-    approvedBy: (0, import_fields42.relationship)({ ref: "User.approvedPaymentEvidence" }),
-    submittedAt: (0, import_fields42.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
-    approvedAt: (0, import_fields42.timestamp)(),
-    consumedAt: (0, import_fields42.timestamp)(),
-    rejectionReason: (0, import_fields42.text)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(requiredRelationshipHooks(["carrier", "booking", "ledgerEntry", "submittedBy"]), minorAmountHooks(["amount"]))
+var import_core29, import_fields42, ManualPaymentEvidence;
+var init_ManualPaymentEvidence = __esm({
+  "features/keystone/models/ManualPaymentEvidence.ts"() {
+    "use strict";
+    import_core29 = require("@keystone-6/core");
+    import_fields42 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    ManualPaymentEvidence = (0, import_core29.list)({
+      access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "evidenceKey", hideCreate: true, hideDelete: true, listView: { initialColumns: ["booking", "purpose", "externalReference", "amount", "currencyCode", "status", "submittedBy", "approvedBy"] } },
+      fields: {
+        carrier: (0, import_fields42.relationship)({ ref: "Carrier.manualPaymentEvidence", access: immutableFieldAccess }),
+        evidenceKey: (0, import_fields42.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        purpose: (0, import_fields42.select)({ type: "enum", options: [{ label: "Capture", value: "capture" }, { label: "Refund", value: "refund" }], validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields42.relationship)({ ref: "Booking.manualPaymentEvidence", access: immutableFieldAccess }),
+        payment: (0, import_fields42.relationship)({ ref: "Payment.manualPaymentEvidence", access: immutableFieldAccess }),
+        ledgerEntry: (0, import_fields42.relationship)({ ref: "SettlementLedgerEntry.evidence", access: immutableFieldAccess }),
+        externalReference: (0, import_fields42.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        ledgerSource: (0, import_fields42.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        evidenceDigest: (0, import_fields42.text)({ isIndexed: true, validation: { isRequired: true, match: { regex: /^[a-f0-9]{64}$/i, explanation: "Use a SHA-256 evidence digest." } }, access: immutableFieldAccess }),
+        amount: (0, import_fields42.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields42.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        status: (0, import_fields42.select)({ type: "enum", defaultValue: "submitted", options: [
+          { label: "Submitted", value: "submitted" },
+          { label: "Approved", value: "approved" },
+          { label: "Rejected", value: "rejected" },
+          { label: "Consumed", value: "consumed" }
+        ] }),
+        submittedBy: (0, import_fields42.relationship)({ ref: "User.submittedPaymentEvidence", access: immutableFieldAccess }),
+        approvedBy: (0, import_fields42.relationship)({ ref: "User.approvedPaymentEvidence" }),
+        submittedAt: (0, import_fields42.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
+        approvedAt: (0, import_fields42.timestamp)(),
+        consumedAt: (0, import_fields42.timestamp)(),
+        rejectionReason: (0, import_fields42.text)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(requiredRelationshipHooks(["carrier", "booking", "ledgerEntry", "submittedBy"]), minorAmountHooks(["amount"]))
+    });
+  }
 });
 
 // features/keystone/models/Journey.ts
-var import_core30 = require("@keystone-6/core");
-var import_fields44 = require("@keystone-6/core/fields");
-var Journey = (0, import_core30.list)({
-  access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "journeyKey",
-    listView: { initialColumns: ["journeyKey", "booking", "sequence", "origin", "destination", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields44.relationship)({ ref: "Carrier" }),
-    journeyKey: (0, import_fields44.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    booking: (0, import_fields44.relationship)({ ref: "Booking.journeys" }),
-    sequence: (0, import_fields44.integer)({ validation: { isRequired: true, min: 1 } }),
-    origin: (0, import_fields44.relationship)({ ref: "Airport" }),
-    destination: (0, import_fields44.relationship)({ ref: "Airport" }),
-    status: (0, import_fields44.select)({
-      type: "enum",
-      defaultValue: "planned",
-      options: [
-        { label: "Planned", value: "planned" },
-        { label: "In progress", value: "in_progress" },
-        { label: "Completed", value: "completed" },
-        { label: "Disrupted", value: "disrupted" },
-        { label: "Cancelled", value: "cancelled" }
-      ]
-    }),
-    segments: (0, import_fields44.relationship)({ ref: "BookingSegment.journey", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "origin", "destination"]),
-    lifecycleHooks("journey")
-  )
+var import_core30, import_fields44, Journey;
+var init_Journey = __esm({
+  "features/keystone/models/Journey.ts"() {
+    "use strict";
+    import_core30 = require("@keystone-6/core");
+    import_fields44 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    Journey = (0, import_core30.list)({
+      access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "journeyKey",
+        listView: { initialColumns: ["journeyKey", "booking", "sequence", "origin", "destination", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields44.relationship)({ ref: "Carrier" }),
+        journeyKey: (0, import_fields44.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        booking: (0, import_fields44.relationship)({ ref: "Booking.journeys" }),
+        sequence: (0, import_fields44.integer)({ validation: { isRequired: true, min: 1 } }),
+        origin: (0, import_fields44.relationship)({ ref: "Airport" }),
+        destination: (0, import_fields44.relationship)({ ref: "Airport" }),
+        status: (0, import_fields44.select)({
+          type: "enum",
+          defaultValue: "planned",
+          options: [
+            { label: "Planned", value: "planned" },
+            { label: "In progress", value: "in_progress" },
+            { label: "Completed", value: "completed" },
+            { label: "Disrupted", value: "disrupted" },
+            { label: "Cancelled", value: "cancelled" }
+          ]
+        }),
+        segments: (0, import_fields44.relationship)({ ref: "BookingSegment.journey", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "origin", "destination"]),
+        lifecycleHooks("journey")
+      )
+    });
+  }
 });
 
 // features/keystone/models/Offer.ts
-var import_core31 = require("@keystone-6/core");
-var import_access34 = require("@keystone-6/core/access");
-var import_fields45 = require("@keystone-6/core/fields");
-var offerInvariantHooks = {
-  validate({ operation, resolvedData, item, addValidationError }) {
-    const value = (key) => Number(resolvedData[key] ?? item?.[key] ?? 0);
-    const base = value("baseAmount");
-    const tax = value("taxAmount");
-    const fee = value("feeAmount");
-    const discount = value("discountAmount");
-    const total2 = value("totalAmount");
-    if (base + tax + fee - discount !== total2) {
-      addValidationError("Offer total must equal base plus tax and fees minus discounts.");
-    }
-    const expiresAt = resolvedData.expiresAt ?? item?.expiresAt;
-    const status = resolvedData.status ?? item?.status ?? "draft";
-    if (["available", "held"].includes(status)) {
-      const expiry = new Date(expiresAt);
-      if (!expiresAt || Number.isNaN(expiry.getTime())) {
-        addValidationError("A sellable offer requires a valid expiry timestamp.");
-      } else if (operation === "create" && expiry <= /* @__PURE__ */ new Date()) {
-        addValidationError("A sellable offer must expire in the future.");
+var import_core31, import_access34, import_fields45, offerInvariantHooks, Offer;
+var init_Offer = __esm({
+  "features/keystone/models/Offer.ts"() {
+    "use strict";
+    import_core31 = require("@keystone-6/core");
+    import_access34 = require("@keystone-6/core/access");
+    import_fields45 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    offerInvariantHooks = {
+      validate({ operation, resolvedData, item, addValidationError }) {
+        const value = (key) => Number(resolvedData[key] ?? item?.[key] ?? 0);
+        const base = value("baseAmount");
+        const tax = value("taxAmount");
+        const fee = value("feeAmount");
+        const discount = value("discountAmount");
+        const total2 = value("totalAmount");
+        if (base + tax + fee - discount !== total2) {
+          addValidationError("Offer total must equal base plus tax and fees minus discounts.");
+        }
+        const expiresAt = resolvedData.expiresAt ?? item?.expiresAt;
+        const status = resolvedData.status ?? item?.status ?? "draft";
+        if (["available", "held"].includes(status)) {
+          const expiry = new Date(expiresAt);
+          if (!expiresAt || Number.isNaN(expiry.getTime())) {
+            addValidationError("A sellable offer requires a valid expiry timestamp.");
+          } else if (operation === "create" && expiry <= /* @__PURE__ */ new Date()) {
+            addValidationError("A sellable offer must expire in the future.");
+          }
+        }
       }
-    }
+    };
+    Offer = (0, import_core31.list)({
+      access: commandOnlyCarrierAccess("canReadOffers", "canManageOffers"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "offerNumber",
+        listView: { initialColumns: ["offerNumber", "status", "source", "totalAmount", "currencyCode", "expiresAt"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields45.relationship)({ ref: "Carrier" }),
+        offerNumber: (0, import_fields45.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        shoppingSessionId: (0, import_fields45.text)({ isIndexed: true, access: { read: import_access34.denyAll, create: import_access34.denyAll, update: import_access34.denyAll } }),
+        idempotencyKey: (0, import_fields45.text)({ isIndexed: "unique" }),
+        status: (0, import_fields45.select)({
+          type: "enum",
+          defaultValue: "draft",
+          validation: { isRequired: true },
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Available", value: "available" },
+            { label: "Held", value: "held" },
+            { label: "Accepted", value: "accepted" },
+            { label: "Expired", value: "expired" },
+            { label: "Withdrawn", value: "withdrawn" }
+          ]
+        }),
+        source: (0, import_fields45.select)({
+          type: "enum",
+          defaultValue: "direct",
+          options: [
+            { label: "Direct", value: "direct" },
+            { label: "Website", value: "website" },
+            { label: "Call center", value: "call_center" },
+            { label: "Approved agent", value: "agent" },
+            { label: "NDC", value: "ndc" },
+            { label: "GDS", value: "gds" }
+          ]
+        }),
+        expiresAt: (0, import_fields45.timestamp)({ isIndexed: true }),
+        baseAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        taxAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        feeAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        discountAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        totalAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields45.text)({
+          defaultValue: "USD",
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        customer: (0, import_fields45.relationship)({ ref: "User.offers" }),
+        approvedAgent: (0, import_fields45.relationship)({ ref: "ApprovedAgent.offers" }),
+        passengers: (0, import_fields45.relationship)({ ref: "Passenger.offers", many: true }),
+        passengerCriteria: (0, import_fields45.json)({ defaultValue: [] }),
+        items: (0, import_fields45.relationship)({ ref: "OfferItem.offer", many: true }),
+        inventoryHolds: (0, import_fields45.relationship)({ ref: "InventoryHold.offer", many: true }),
+        booking: (0, import_fields45.relationship)({ ref: "Booking.sourceOffer" }),
+        externalReferences: (0, import_fields45.json)({ defaultValue: {} }),
+        metadata: (0, import_fields45.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier"]),
+        lifecycleHooks("offer"),
+        minorAmountHooks(["baseAmount", "taxAmount", "feeAmount", "discountAmount", "totalAmount"]),
+        offerInvariantHooks
+      )
+    });
   }
-};
-var Offer = (0, import_core31.list)({
-  access: commandOnlyCarrierAccess("canReadOffers", "canManageOffers"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "offerNumber",
-    listView: { initialColumns: ["offerNumber", "status", "source", "totalAmount", "currencyCode", "expiresAt"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields45.relationship)({ ref: "Carrier" }),
-    offerNumber: (0, import_fields45.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    shoppingSessionId: (0, import_fields45.text)({ isIndexed: true, access: { read: import_access34.denyAll, create: import_access34.denyAll, update: import_access34.denyAll } }),
-    idempotencyKey: (0, import_fields45.text)({ isIndexed: "unique" }),
-    status: (0, import_fields45.select)({
-      type: "enum",
-      defaultValue: "draft",
-      validation: { isRequired: true },
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Available", value: "available" },
-        { label: "Held", value: "held" },
-        { label: "Accepted", value: "accepted" },
-        { label: "Expired", value: "expired" },
-        { label: "Withdrawn", value: "withdrawn" }
-      ]
-    }),
-    source: (0, import_fields45.select)({
-      type: "enum",
-      defaultValue: "direct",
-      options: [
-        { label: "Direct", value: "direct" },
-        { label: "Website", value: "website" },
-        { label: "Call center", value: "call_center" },
-        { label: "Approved agent", value: "agent" },
-        { label: "NDC", value: "ndc" },
-        { label: "GDS", value: "gds" }
-      ]
-    }),
-    expiresAt: (0, import_fields45.timestamp)({ isIndexed: true }),
-    baseAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    taxAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    feeAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    discountAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    totalAmount: (0, import_fields45.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields45.text)({
-      defaultValue: "USD",
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    customer: (0, import_fields45.relationship)({ ref: "User.offers" }),
-    approvedAgent: (0, import_fields45.relationship)({ ref: "ApprovedAgent.offers" }),
-    passengers: (0, import_fields45.relationship)({ ref: "Passenger.offers", many: true }),
-    passengerCriteria: (0, import_fields45.json)({ defaultValue: [] }),
-    items: (0, import_fields45.relationship)({ ref: "OfferItem.offer", many: true }),
-    inventoryHolds: (0, import_fields45.relationship)({ ref: "InventoryHold.offer", many: true }),
-    booking: (0, import_fields45.relationship)({ ref: "Booking.sourceOffer" }),
-    externalReferences: (0, import_fields45.json)({ defaultValue: {} }),
-    metadata: (0, import_fields45.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    lifecycleHooks("offer"),
-    minorAmountHooks(["baseAmount", "taxAmount", "feeAmount", "discountAmount", "totalAmount"]),
-    offerInvariantHooks
-  )
 });
 
 // features/keystone/models/OfferItem.ts
-var import_core32 = require("@keystone-6/core");
-var import_fields46 = require("@keystone-6/core/fields");
-var offerItemTotalHooks = {
-  validate({ resolvedData, addValidationError }) {
-    const quantity = Number(resolvedData.quantity ?? 1);
-    const unit = Number(resolvedData.unitAmount ?? 0);
-    const base = Number(resolvedData.baseAmount ?? 0);
-    const tax = Number(resolvedData.taxAmount ?? 0);
-    const fee = Number(resolvedData.feeAmount ?? 0);
-    const total2 = Number(resolvedData.totalAmount ?? 0);
-    if (!Number.isSafeInteger(unit * quantity) || unit * quantity !== base) {
-      addValidationError("Offer item base amount must equal unit amount multiplied by quantity.");
-    }
-    if (base + tax + fee !== total2) {
-      addValidationError("Offer item total must equal base, tax, and fee amounts.");
-    }
+var import_core32, import_fields46, offerItemTotalHooks, OfferItem;
+var init_OfferItem = __esm({
+  "features/keystone/models/OfferItem.ts"() {
+    "use strict";
+    import_core32 = require("@keystone-6/core");
+    import_fields46 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    offerItemTotalHooks = {
+      validate({ resolvedData, addValidationError }) {
+        const quantity = Number(resolvedData.quantity ?? 1);
+        const unit = Number(resolvedData.unitAmount ?? 0);
+        const base = Number(resolvedData.baseAmount ?? 0);
+        const tax = Number(resolvedData.taxAmount ?? 0);
+        const fee = Number(resolvedData.feeAmount ?? 0);
+        const total2 = Number(resolvedData.totalAmount ?? 0);
+        if (!Number.isSafeInteger(unit * quantity) || unit * quantity !== base) {
+          addValidationError("Offer item base amount must equal unit amount multiplied by quantity.");
+        }
+        if (base + tax + fee !== total2) {
+          addValidationError("Offer item total must equal base, tax, and fee amounts.");
+        }
+      }
+    };
+    OfferItem = (0, import_core32.list)({
+      access: commandOnlyCarrierAccess("canReadOffers", "canManageOffers"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "itemKey",
+        listView: { initialColumns: ["itemKey", "offer", "itemType", "description", "quantity", "totalAmount", "currencyCode"] },
+        hideCreate: true,
+        hideDelete: true,
+        itemView: { defaultFieldMode: "read" }
+      },
+      fields: {
+        carrier: (0, import_fields46.relationship)({ ref: "Carrier" }),
+        itemKey: (0, import_fields46.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        offer: (0, import_fields46.relationship)({ ref: "Offer.items" }),
+        itemType: (0, import_fields46.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          options: [
+            { label: "Flight", value: "flight" },
+            { label: "Ancillary", value: "ancillary" },
+            { label: "Fee", value: "fee" },
+            { label: "Tax", value: "tax" },
+            { label: "Discount", value: "discount" }
+          ]
+        }),
+        description: (0, import_fields46.text)({ validation: { isRequired: true } }),
+        quantity: (0, import_fields46.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 } }),
+        unitAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        baseAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        taxAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        feeAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        totalAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
+        currencyCode: (0, import_fields46.text)({
+          validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
+        }),
+        flightInstance: (0, import_fields46.relationship)({ ref: "FlightInstance" }),
+        inventoryBucket: (0, import_fields46.relationship)({ ref: "InventoryBucket.offerItems" }),
+        fareBrand: (0, import_fields46.relationship)({ ref: "FareBrand.offerItems" }),
+        fareRule: (0, import_fields46.relationship)({ ref: "FareRule.offerItems" }),
+        ancillaryProduct: (0, import_fields46.relationship)({ ref: "AncillaryProduct.offerItems" }),
+        passengerReferences: (0, import_fields46.json)({ defaultValue: [] }),
+        segmentSnapshot: (0, import_fields46.json)({ defaultValue: {} }),
+        productSnapshot: (0, import_fields46.json)({ defaultValue: {} }),
+        bookingLineItems: (0, import_fields46.relationship)({ ref: "BookingLineItem.sourceOfferItem", many: true }),
+        bookingSegments: (0, import_fields46.relationship)({ ref: "BookingSegment.sourceOfferItem", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "offer"]),
+        minorAmountHooks(["unitAmount", "baseAmount", "taxAmount", "feeAmount", "totalAmount"]),
+        offerItemTotalHooks
+      )
+    });
   }
-};
-var OfferItem = (0, import_core32.list)({
-  access: commandOnlyCarrierAccess("canReadOffers", "canManageOffers"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "itemKey",
-    listView: { initialColumns: ["itemKey", "offer", "itemType", "description", "quantity", "totalAmount", "currencyCode"] },
-    hideCreate: true,
-    hideDelete: true,
-    itemView: { defaultFieldMode: "read" }
-  },
-  fields: {
-    carrier: (0, import_fields46.relationship)({ ref: "Carrier" }),
-    itemKey: (0, import_fields46.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    offer: (0, import_fields46.relationship)({ ref: "Offer.items" }),
-    itemType: (0, import_fields46.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      options: [
-        { label: "Flight", value: "flight" },
-        { label: "Ancillary", value: "ancillary" },
-        { label: "Fee", value: "fee" },
-        { label: "Tax", value: "tax" },
-        { label: "Discount", value: "discount" }
-      ]
-    }),
-    description: (0, import_fields46.text)({ validation: { isRequired: true } }),
-    quantity: (0, import_fields46.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 } }),
-    unitAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    baseAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    taxAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    feeAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    totalAmount: (0, import_fields46.integer)({ defaultValue: 0, validation: { isRequired: true, min: 0 } }),
-    currencyCode: (0, import_fields46.text)({
-      validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } }
-    }),
-    flightInstance: (0, import_fields46.relationship)({ ref: "FlightInstance" }),
-    inventoryBucket: (0, import_fields46.relationship)({ ref: "InventoryBucket.offerItems" }),
-    fareBrand: (0, import_fields46.relationship)({ ref: "FareBrand.offerItems" }),
-    fareRule: (0, import_fields46.relationship)({ ref: "FareRule.offerItems" }),
-    ancillaryProduct: (0, import_fields46.relationship)({ ref: "AncillaryProduct.offerItems" }),
-    passengerReferences: (0, import_fields46.json)({ defaultValue: [] }),
-    segmentSnapshot: (0, import_fields46.json)({ defaultValue: {} }),
-    productSnapshot: (0, import_fields46.json)({ defaultValue: {} }),
-    bookingLineItems: (0, import_fields46.relationship)({ ref: "BookingLineItem.sourceOfferItem", many: true }),
-    bookingSegments: (0, import_fields46.relationship)({ ref: "BookingSegment.sourceOfferItem", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "offer"]),
-    minorAmountHooks(["unitAmount", "baseAmount", "taxAmount", "feeAmount", "totalAmount"]),
-    offerItemTotalHooks
-  )
 });
 
 // features/keystone/models/OnboardingStep.ts
-var import_core33 = require("@keystone-6/core");
-var import_fields47 = require("@keystone-6/core/fields");
-var OnboardingStep = (0, import_core33.list)({
-  access: commandOnlyCarrierAccess("canManageOnboarding", "canManageOnboarding"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "step", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["step", "status", "attemptCount", "completedAt"] } },
-  fields: {
-    carrier: (0, import_fields47.relationship)({ ref: "Carrier.onboardingSteps", access: immutableFieldAccess }),
-    user: (0, import_fields47.relationship)({ ref: "User.onboardingSteps", access: immutableFieldAccess }),
-    progressKey: (0, import_fields47.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    step: (0, import_fields47.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    status: (0, import_fields47.select)({ type: "enum", defaultValue: "pending", options: [{ label: "Pending", value: "pending" }, { label: "Completed", value: "completed" }, { label: "Needs attention", value: "needs_attention" }] }),
-    attemptCount: (0, import_fields47.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    inputDigest: (0, import_fields47.text)({ access: immutableFieldAccess }),
-    requirements: (0, import_fields47.json)({ defaultValue: [] }),
-    completedAt: (0, import_fields47.timestamp)(),
-    lastAttemptedAt: (0, import_fields47.timestamp)(),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier", "user"])
+var import_core33, import_fields47, OnboardingStep;
+var init_OnboardingStep = __esm({
+  "features/keystone/models/OnboardingStep.ts"() {
+    "use strict";
+    import_core33 = require("@keystone-6/core");
+    import_fields47 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    OnboardingStep = (0, import_core33.list)({
+      access: commandOnlyCarrierAccess("canManageOnboarding", "canManageOnboarding"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "step", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["step", "status", "attemptCount", "completedAt"] } },
+      fields: {
+        carrier: (0, import_fields47.relationship)({ ref: "Carrier.onboardingSteps", access: immutableFieldAccess }),
+        user: (0, import_fields47.relationship)({ ref: "User.onboardingSteps", access: immutableFieldAccess }),
+        progressKey: (0, import_fields47.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        step: (0, import_fields47.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        status: (0, import_fields47.select)({ type: "enum", defaultValue: "pending", options: [{ label: "Pending", value: "pending" }, { label: "Completed", value: "completed" }, { label: "Needs attention", value: "needs_attention" }] }),
+        attemptCount: (0, import_fields47.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        inputDigest: (0, import_fields47.text)({ access: immutableFieldAccess }),
+        requirements: (0, import_fields47.json)({ defaultValue: [] }),
+        completedAt: (0, import_fields47.timestamp)(),
+        lastAttemptedAt: (0, import_fields47.timestamp)(),
+        ...trackingFields
+      },
+      hooks: requiredRelationshipHooks(["carrier", "user"])
+    });
+  }
 });
 
-// features/keystone/models/OutboxEvent.ts
-var import_core34 = require("@keystone-6/core");
-var import_fields49 = require("@keystone-6/core/fields");
+// features/keystone/models/Passenger.ts
+var import_core34, import_fields49, Passenger;
+var init_Passenger = __esm({
+  "features/keystone/models/Passenger.ts"() {
+    "use strict";
+    import_core34 = require("@keystone-6/core");
+    import_fields49 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_trackingFields();
+    Passenger = (0, import_core34.list)({
+      access: carrierScopedAccess("canReadPassengers", "canManagePassengers"),
+      ui: {
+        labelField: "familyName",
+        listView: { initialColumns: ["givenName", "familyName", "dateOfBirth", "email", "status", "carrier"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields49.relationship)({ ref: "Carrier" }),
+        passengerKey: (0, import_fields49.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        title: (0, import_fields49.text)(),
+        givenName: (0, import_fields49.text)({ validation: { isRequired: true } }),
+        middleNames: (0, import_fields49.text)(),
+        familyName: (0, import_fields49.text)({ validation: { isRequired: true } }),
+        suffix: (0, import_fields49.text)(),
+        dateOfBirth: (0, import_fields49.timestamp)(),
+        genderMarker: (0, import_fields49.select)({
+          type: "enum",
+          options: [
+            { label: "Female", value: "female" },
+            { label: "Male", value: "male" },
+            { label: "Unspecified", value: "unspecified" },
+            { label: "Undisclosed", value: "undisclosed" }
+          ]
+        }),
+        nationalityCode: (0, import_fields49.text)({
+          db: { isNullable: true },
+          validation: { match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 code." } }
+        }),
+        email: (0, import_fields49.text)(),
+        phone: (0, import_fields49.text)(),
+        preferredLanguage: (0, import_fields49.text)({ defaultValue: "en" }),
+        status: (0, import_fields49.select)({
+          type: "enum",
+          defaultValue: "active",
+          options: [
+            { label: "Active", value: "active" },
+            { label: "Merged", value: "merged" },
+            { label: "Restricted", value: "restricted" },
+            { label: "Archived", value: "archived" }
+          ]
+        }),
+        loyaltyPrograms: (0, import_fields49.json)({ defaultValue: [] }),
+        preferences: (0, import_fields49.json)({ defaultValue: {} }),
+        userAccount: (0, import_fields49.relationship)({ ref: "User.passengerProfile" }),
+        travelDocuments: (0, import_fields49.relationship)({ ref: "TravelDocument.passenger", many: true }),
+        documentVerifications: (0, import_fields49.relationship)({ ref: "DocumentVerification.passenger", many: true }),
+        bookingPassengers: (0, import_fields49.relationship)({ ref: "BookingPassenger.passenger", many: true }),
+        offers: (0, import_fields49.relationship)({ ref: "Offer.passengers", many: true }),
+        serviceRequests: (0, import_fields49.relationship)({ ref: "ServiceRequest.passenger", many: true }),
+        tickets: (0, import_fields49.relationship)({ ref: "Ticket.passenger", many: true }),
+        electronicMiscDocuments: (0, import_fields49.relationship)({ ref: "ElectronicMiscDocument.passenger", many: true }),
+        seatAssignments: (0, import_fields49.relationship)({ ref: "SeatAssignment.passenger", many: true }),
+        checkIns: (0, import_fields49.relationship)({ ref: "CheckIn.passenger", many: true }),
+        boardingPasses: (0, import_fields49.relationship)({ ref: "BoardingPass.passenger", many: true }),
+        bags: (0, import_fields49.relationship)({ ref: "Bag.passenger", many: true }),
+        reaccommodations: (0, import_fields49.relationship)({ ref: "Reaccommodation.passenger", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier"]),
+        carrierRelationshipHooks({ userAccount: { model: "user" } }),
+        commandOwnedRelationshipHooks(["travelDocuments", "documentVerifications", "bookingPassengers", "offers", "serviceRequests", "tickets", "electronicMiscDocuments", "seatAssignments", "checkIns", "boardingPasses", "bags", "reaccommodations"])
+      )
+    });
+  }
+});
+
+// features/keystone/models/Payment.ts
+var import_core35, import_fields50, import_access39, managePayments, Payment;
+var init_Payment = __esm({
+  "features/keystone/models/Payment.ts"() {
+    "use strict";
+    import_core35 = require("@keystone-6/core");
+    import_fields50 = require("@keystone-6/core/fields");
+    import_access39 = require("@keystone-6/core/access");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    managePayments = (args) => hasFreshPermission(args, "canManagePayments");
+    Payment = (0, import_core35.list)({
+      access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "paymentKey",
+        listView: { initialColumns: ["paymentKey", "booking", "provider", "status", "amount", "capturedAmount", "refundedAmount"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields50.relationship)({ ref: "Carrier" }),
+        paymentKey: (0, import_fields50.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        idempotencyKey: (0, import_fields50.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields50.relationship)({ ref: "Booking.payments", access: immutableFieldAccess }),
+        provider: (0, import_fields50.relationship)({ ref: "PaymentProvider.payments", access: immutableFieldAccess }),
+        session: (0, import_fields50.relationship)({ ref: "PaymentSession.payment", access: immutableFieldAccess }),
+        status: (0, import_fields50.select)({
+          type: "enum",
+          defaultValue: "pending",
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Authorized", value: "authorized" },
+            { label: "Captured", value: "captured" },
+            { label: "Partially refunded", value: "partially_refunded" },
+            { label: "Refunded", value: "refunded" },
+            { label: "Failed", value: "failed" },
+            { label: "Cancelled", value: "cancelled" }
+          ]
+        }),
+        amount: (0, import_fields50.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
+        authorizedAmount: (0, import_fields50.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        capturedAmount: (0, import_fields50.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        refundedAmount: (0, import_fields50.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields50.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        providerPaymentId: (0, import_fields50.text)({ isIndexed: true, access: immutableFieldAccess }),
+        providerCaptureId: (0, import_fields50.text)(),
+        instrumentBrand: (0, import_fields50.text)(),
+        instrumentLast4: (0, import_fields50.text)({
+          db: { isNullable: true },
+          validation: { match: { regex: /^\d{4}$/, explanation: "Store only four digits." } }
+        }),
+        rawProviderData: (0, import_fields50.json)({ access: { read: import_access39.denyAll, create: managePayments, update: managePayments }, ui: hiddenSensitiveUi }),
+        failureCode: (0, import_fields50.text)(),
+        failureMessage: (0, import_fields50.text)(),
+        authorizedAt: (0, import_fields50.timestamp)(),
+        capturedAt: (0, import_fields50.timestamp)(),
+        cancelledAt: (0, import_fields50.timestamp)(),
+        refunds: (0, import_fields50.relationship)({ ref: "Refund.payment", many: true }),
+        manualPaymentEvidence: (0, import_fields50.relationship)({ ref: "ManualPaymentEvidence.payment", many: true }),
+        metadata: (0, import_fields50.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "provider"]),
+        lifecycleHooks("payment"),
+        minorAmountHooks(["amount", "authorizedAmount", "capturedAmount", "refundedAmount"])
+      )
+    });
+  }
+});
+
+// features/keystone/lib/bounded-payment-policy.ts
+function isEvidenceOnlyManualProvider(provider) {
+  if (provider.adapterType !== "manual") return false;
+  if (!provider.configuration || typeof provider.configuration !== "object" || Array.isArray(provider.configuration)) return false;
+  const configuration = provider.configuration;
+  return configuration.providerExecution === false && configuration.requiresIndependentApproval === true;
+}
+var init_bounded_payment_policy = __esm({
+  "features/keystone/lib/bounded-payment-policy.ts"() {
+    "use strict";
+  }
+});
+
+// features/keystone/context.ts
+var context_exports = {};
+__export(context_exports, {
+  keystoneContext: () => keystoneContext
+});
+var import_context, PrismaModule, keystoneContext;
+var init_context = __esm({
+  "features/keystone/context.ts"() {
+    "use strict";
+    import_context = require("@keystone-6/core/context");
+    init_keystone();
+    PrismaModule = __toESM(require("@prisma/client"));
+    keystoneContext = globalThis.keystoneContext ?? (0, import_context.getContext)(keystone_default, PrismaModule);
+    globalThis.keystoneContext = keystoneContext;
+  }
+});
+
+// features/integrations/payment/stripe.ts
+function stripeSecretKey(credentials) {
+  const key = credentials && typeof credentials === "object" && !Array.isArray(credentials) ? credentials.secretKey : null;
+  return typeof key === "string" && /^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/.test(key.trim()) ? key.trim() : null;
+}
+function form(values) {
+  const body = new URLSearchParams();
+  for (const [name, value] of Object.entries(values)) if (value !== void 0) body.append(name, String(value));
+  return body;
+}
+async function stripeRequest(secretKey, path, init = {}) {
+  const response = await fetch(`${STRIPE_API}${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      authorization: `Bearer ${secretKey}`,
+      ...init.body ? { "content-type": "application/x-www-form-urlencoded" } : {},
+      ...init.idempotencyKey ? { "idempotency-key": init.idempotencyKey } : {}
+    },
+    body: init.body,
+    signal: AbortSignal.timeout(2e4)
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(`Stripe request failed: ${payload?.error?.message ?? response.status}`);
+  return payload;
+}
+function createStripeCheckoutSession(secretKey, input) {
+  return stripeRequest(secretKey, "/checkout/sessions", {
+    method: "POST",
+    idempotencyKey: input.idempotencyKey,
+    body: form({
+      mode: "payment",
+      client_reference_id: input.bookingId,
+      "metadata[bookingId]": input.bookingId,
+      "metadata[recordLocator]": input.recordLocator,
+      "payment_intent_data[metadata][bookingId]": input.bookingId,
+      "line_items[0][quantity]": 1,
+      "line_items[0][price_data][currency]": input.currencyCode.toLowerCase(),
+      "line_items[0][price_data][unit_amount]": input.amount,
+      "line_items[0][price_data][product_data][name]": input.description,
+      customer_email: input.customerEmail || void 0,
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl
+    })
+  });
+}
+function retrieveStripeCheckoutSession(secretKey, sessionId) {
+  if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) throw new Error("Checkout session is invalid.");
+  return stripeRequest(secretKey, `/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=payment_intent.latest_charge`);
+}
+async function providerSecretKey(provider) {
+  const { keystoneContext: keystoneContext2 } = await Promise.resolve().then(() => (init_context(), context_exports));
+  const record2 = await keystoneContext2.prisma.paymentProvider.findUnique({ where: { providerKey: provider.providerKey }, select: { credentials: true } });
+  const key = stripeSecretKey(record2?.credentials);
+  if (!key) throw new Error("Stripe secret key is not configured for this provider.");
+  return key;
+}
+var STRIPE_API, stripeAdapter;
+var init_stripe = __esm({
+  "features/integrations/payment/stripe.ts"() {
+    "use strict";
+    STRIPE_API = "https://api.stripe.com/v1";
+    stripeAdapter = {
+      async capture(_provider, _input) {
+        throw new Error("Stripe payments are captured at checkout.");
+      },
+      // The attempt key is the stored command identity, so a retried transaction repeats the same Stripe refund.
+      async refund(provider, input) {
+        const refund = await stripeRequest(await providerSecretKey(provider), "/refunds", {
+          method: "POST",
+          idempotencyKey: input.attemptKey,
+          body: form({ payment_intent: input.paymentReference, amount: input.amount, "metadata[reference]": input.refundReference })
+        });
+        if (!["succeeded", "pending"].includes(refund.status)) throw new Error(`Stripe refund ${refund.id} is ${refund.status}.`);
+        return { providerRefundId: refund.id, providerData: { id: refund.id, status: refund.status } };
+      }
+    };
+  }
+});
+
+// features/keystone/models/PaymentProvider.ts
+var import_core36, import_access41, import_fields52, managePaymentSecrets, legacySelectorUi, INSTALLED_ADAPTER_TYPES, PaymentProvider;
+var init_PaymentProvider = __esm({
+  "features/keystone/models/PaymentProvider.ts"() {
+    "use strict";
+    import_core36 = require("@keystone-6/core");
+    import_access41 = require("@keystone-6/core/access");
+    import_fields52 = require("@keystone-6/core/fields");
+    init_access();
+    init_bounded_payment_policy();
+    init_stripe();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    managePaymentSecrets = (args) => hasFreshPermission(args, "canManagePayments");
+    legacySelectorUi = { createView: { fieldMode: "hidden" }, itemView: { fieldMode: "read" }, listView: { fieldMode: "hidden" } };
+    INSTALLED_ADAPTER_TYPES = ["manual", "stripe"];
+    PaymentProvider = (0, import_core36.list)({
+      access: carrierScopedAccess("canReadPayments", "canManagePayments"),
+      ui: {
+        labelField: "name",
+        listView: { initialColumns: ["name", "code", "adapterType", "status", "carrier"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields52.relationship)({ ref: "Carrier" }),
+        providerKey: (0, import_fields52.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        name: (0, import_fields52.text)({ validation: { isRequired: true } }),
+        code: (0, import_fields52.text)({ validation: { isRequired: true } }),
+        adapterType: (0, import_fields52.select)({
+          type: "enum",
+          defaultValue: "manual",
+          options: [
+            { label: "Stripe", value: "stripe" },
+            { label: "PayPal", value: "paypal" },
+            { label: "Manual", value: "manual" },
+            { label: "Custom", value: "custom" }
+          ]
+        }),
+        status: (0, import_fields52.select)({
+          type: "enum",
+          defaultValue: "inactive",
+          options: [
+            { label: "Inactive", value: "inactive" },
+            { label: "Active", value: "active" },
+            { label: "Degraded", value: "degraded" },
+            { label: "Disabled", value: "disabled" }
+          ]
+        }),
+        credentials: (0, import_fields52.json)({
+          defaultValue: {},
+          access: { read: import_access41.denyAll, create: managePaymentSecrets, update: managePaymentSecrets },
+          ui: hiddenSensitiveUi
+        }),
+        configuration: (0, import_fields52.json)({ defaultValue: {} }),
+        // Legacy selector columns: the dispatcher (integrations/payment/index.ts) selects only by adapterType, so these are
+        // kept for retained records but are neither required nor offered when configuring a provider.
+        createPaymentFunction: (0, import_fields52.text)({ ui: legacySelectorUi }),
+        capturePaymentFunction: (0, import_fields52.text)({ ui: legacySelectorUi }),
+        refundPaymentFunction: (0, import_fields52.text)({ ui: legacySelectorUi }),
+        getPaymentStatusFunction: (0, import_fields52.text)({ ui: legacySelectorUi }),
+        handleWebhookFunction: (0, import_fields52.text)({ ui: legacySelectorUi }),
+        sessions: (0, import_fields52.relationship)({ ref: "PaymentSession.provider", many: true, access: { create: () => false, update: () => false } }),
+        payments: (0, import_fields52.relationship)({ ref: "Payment.provider", many: true, access: { create: () => false, update: () => false } }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier"]),
+        { validate({ resolvedData, item, addValidationError }) {
+          if (resolvedData.adapterType !== void 0 && resolvedData.adapterType !== item?.adapterType && !INSTALLED_ADAPTER_TYPES.includes(resolvedData.adapterType)) {
+            addValidationError("Only the manual (evidence-only) and Stripe payment adapters are installed.");
+          }
+          const adapterType = resolvedData.adapterType ?? item?.adapterType ?? null;
+          const status = resolvedData.status ?? item?.status;
+          const provider = {
+            adapterType: resolvedData.adapterType ?? item?.adapterType ?? null,
+            configuration: resolvedData.configuration ?? item?.configuration ?? null
+          };
+          if (status === "active" && adapterType === "stripe") {
+            if (!stripeSecretKey(resolvedData.credentials ?? item?.credentials)) addValidationError("Active Stripe providers need a secret key (sk_test_\u2026 or sk_live_\u2026).");
+          } else if (status === "active" && !isEvidenceOnlyManualProvider(provider)) addValidationError("Active payment providers must be configured for evidence-only manual settlement with independent approval.");
+        } }
+      )
+    });
+  }
+});
+
+// features/keystone/models/PaymentSession.ts
+var import_core37, import_fields54, canManagePayments, PaymentSession;
+var init_PaymentSession = __esm({
+  "features/keystone/models/PaymentSession.ts"() {
+    "use strict";
+    import_core37 = require("@keystone-6/core");
+    import_fields54 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    canManagePayments = (args) => hasFreshPermission(args, "canManagePayments");
+    PaymentSession = (0, import_core37.list)({
+      access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "sessionKey",
+        listView: { initialColumns: ["sessionKey", "booking", "provider", "status", "amount", "currencyCode", "expiresAt"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields54.relationship)({ ref: "Carrier" }),
+        sessionKey: (0, import_fields54.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        idempotencyKey: (0, import_fields54.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        booking: (0, import_fields54.relationship)({ ref: "Booking.paymentSessions" }),
+        provider: (0, import_fields54.relationship)({ ref: "PaymentProvider.sessions" }),
+        payment: (0, import_fields54.relationship)({ ref: "Payment.session" }),
+        status: (0, import_fields54.select)({
+          type: "enum",
+          defaultValue: "created",
+          options: [
+            { label: "Created", value: "created" },
+            { label: "Pending", value: "pending" },
+            { label: "Authorized", value: "authorized" },
+            { label: "Captured", value: "captured" },
+            { label: "Failed", value: "failed" },
+            { label: "Cancelled", value: "cancelled" },
+            { label: "Expired", value: "expired" }
+          ]
+        }),
+        amount: (0, import_fields54.integer)({ validation: { isRequired: true, min: 0 } }),
+        currencyCode: (0, import_fields54.text)({ validation: { isRequired: true } }),
+        providerSessionId: (0, import_fields54.text)({ isIndexed: true }),
+        providerData: (0, import_fields54.json)({
+          defaultValue: {},
+          access: { read: canManagePayments, create: canManagePayments, update: canManagePayments },
+          ui: hiddenSensitiveUi
+        }),
+        expiresAt: (0, import_fields54.timestamp)(),
+        authorizedAt: (0, import_fields54.timestamp)(),
+        completedAt: (0, import_fields54.timestamp)(),
+        failureCode: (0, import_fields54.text)(),
+        failureMessage: (0, import_fields54.text)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "provider"]),
+        lifecycleHooks("paymentSession"),
+        minorAmountHooks(["amount"])
+      )
+    });
+  }
+});
+
+// features/keystone/models/ProviderConnection.ts
+var import_core38, import_access44, import_fields56, manageIntegrations, ProviderConnection;
+var init_ProviderConnection = __esm({
+  "features/keystone/models/ProviderConnection.ts"() {
+    "use strict";
+    import_core38 = require("@keystone-6/core");
+    import_access44 = require("@keystone-6/core/access");
+    import_fields56 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    manageIntegrations = (args) => hasFreshPermission(args, "canManageIntegrations");
+    ProviderConnection = (0, import_core38.list)({
+      access: commandOnlyCarrierAccess("canReadIntegrations", "canManageIntegrations"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "name", listView: { initialColumns: ["name", "provider", "status", "externalAccountId", "lastSucceededAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields56.relationship)({ ref: "Carrier.providerConnections" }),
+        connectionKey: (0, import_fields56.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        provider: (0, import_fields56.relationship)({ ref: "IntegrationProvider.connections" }),
+        name: (0, import_fields56.text)({ validation: { isRequired: true } }),
+        status: (0, import_fields56.select)({ type: "enum", defaultValue: "pending", options: [
+          { label: "Pending", value: "pending" },
+          { label: "Active", value: "active" },
+          { label: "Paused", value: "paused" },
+          { label: "Failed", value: "failed" },
+          { label: "Revoked", value: "revoked" }
+        ] }),
+        credentials: (0, import_fields56.json)({
+          defaultValue: {},
+          access: { read: import_access44.denyAll, create: manageIntegrations, update: manageIntegrations },
+          ui: hiddenSensitiveUi
+        }),
+        configuration: (0, import_fields56.json)({ defaultValue: {} }),
+        capabilities: (0, import_fields56.json)({ defaultValue: [] }),
+        externalAccountId: (0, import_fields56.text)(),
+        lastAttemptedAt: (0, import_fields56.timestamp)(),
+        lastSucceededAt: (0, import_fields56.timestamp)(),
+        lastErrorCode: (0, import_fields56.text)(),
+        lastErrorMessage: (0, import_fields56.text)(),
+        webhookEndpoints: (0, import_fields56.relationship)({ ref: "WebhookEndpoint.connection", many: true }),
+        webhookEvents: (0, import_fields56.relationship)({ ref: "WebhookEvent.connection", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "provider"]),
+        lifecycleHooks("providerConnection")
+      )
+    });
+  }
+});
+
+// features/keystone/models/Reaccommodation.ts
+var import_core39, import_fields58, Reaccommodation;
+var init_Reaccommodation = __esm({
+  "features/keystone/models/Reaccommodation.ts"() {
+    "use strict";
+    import_core39 = require("@keystone-6/core");
+    import_fields58 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    Reaccommodation = (0, import_core39.list)({
+      access: commandOnlyCarrierAccess("canReadDisruptions", "canManageDisruptions"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "reaccommodationKey", listView: { initialColumns: ["booking", "passenger", "disruption", "status", "optionExpiresAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields58.relationship)({ ref: "Carrier" }),
+        reaccommodationKey: (0, import_fields58.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        idempotencyKey: (0, import_fields58.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields58.relationship)({ ref: "Booking.reaccommodations", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields58.relationship)({ ref: "BookingPassenger.reaccommodations", access: immutableFieldAccess }),
+        passenger: (0, import_fields58.relationship)({ ref: "Passenger.reaccommodations", access: immutableFieldAccess }),
+        disruption: (0, import_fields58.relationship)({ ref: "Disruption.reaccommodations", access: immutableFieldAccess }),
+        status: (0, import_fields58.select)({ type: "enum", defaultValue: "proposed", options: [
+          { label: "Proposed", value: "proposed" },
+          { label: "Accepted", value: "accepted" },
+          { label: "Confirmed", value: "confirmed" },
+          { label: "Declined", value: "declined" },
+          { label: "Failed", value: "failed" },
+          { label: "Expired", value: "expired" },
+          { label: "Cancelled", value: "cancelled" }
+        ] }),
+        originalSegments: (0, import_fields58.relationship)({ ref: "BookingSegment.reaccommodationsAsOriginal", many: true, access: immutableFieldAccess }),
+        replacementSegments: (0, import_fields58.relationship)({ ref: "BookingSegment.reaccommodationsAsReplacement", many: true }),
+        replacementOffer: (0, import_fields58.relationship)({ ref: "Offer" }),
+        optionExpiresAt: (0, import_fields58.timestamp)({ access: immutableFieldAccess }),
+        priceDifferenceAmount: (0, import_fields58.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
+        additionalCollectionAmount: (0, import_fields58.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        refundAmount: (0, import_fields58.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields58.text)({ defaultValue: "USD", access: immutableFieldAccess }),
+        acceptedAt: (0, import_fields58.timestamp)(),
+        confirmedAt: (0, import_fields58.timestamp)(),
+        reason: (0, import_fields58.text)(),
+        optionSnapshot: (0, import_fields58.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "disruption"]),
+        lifecycleHooks("reaccommodation"),
+        minorAmountHooks(["priceDifferenceAmount", "additionalCollectionAmount", "refundAmount"])
+      )
+    });
+  }
+});
+
+// features/keystone/models/Refund.ts
+var import_core40, import_fields60, Refund;
+var init_Refund = __esm({
+  "features/keystone/models/Refund.ts"() {
+    "use strict";
+    import_core40 = require("@keystone-6/core");
+    import_fields60 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    Refund = (0, import_core40.list)({
+      access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "refundKey", listView: { initialColumns: ["refundKey", "booking", "payment", "status", "amount", "reason"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields60.relationship)({ ref: "Carrier" }),
+        refundKey: (0, import_fields60.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        idempotencyKey: (0, import_fields60.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields60.relationship)({ ref: "Booking.refunds", access: immutableFieldAccess }),
+        payment: (0, import_fields60.relationship)({ ref: "Payment.refunds", access: immutableFieldAccess }),
+        status: (0, import_fields60.select)({ type: "enum", defaultValue: "requested", options: [
+          { label: "Requested", value: "requested" },
+          { label: "Approved", value: "approved" },
+          { label: "Processing", value: "processing" },
+          { label: "Succeeded", value: "succeeded" },
+          { label: "Failed", value: "failed" },
+          { label: "Cancelled", value: "cancelled" }
+        ] }),
+        reason: (0, import_fields60.select)({ type: "enum", defaultValue: "customer_request", options: [
+          { label: "Customer request", value: "customer_request" },
+          { label: "Disruption", value: "disruption" },
+          { label: "Schedule change", value: "schedule_change" },
+          { label: "Duplicate", value: "duplicate" },
+          { label: "Fraud", value: "fraud" },
+          { label: "Other", value: "other" }
+        ] }),
+        amount: (0, import_fields60.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields60.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        providerRefundId: (0, import_fields60.text)({ isIndexed: true }),
+        note: (0, import_fields60.text)({ ui: { displayMode: "textarea" } }),
+        requestedAt: (0, import_fields60.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
+        approvedAt: (0, import_fields60.timestamp)(),
+        processedAt: (0, import_fields60.timestamp)(),
+        errorMessage: (0, import_fields60.text)(),
+        metadata: (0, import_fields60.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "payment"]),
+        lifecycleHooks("refund"),
+        minorAmountHooks(["amount"])
+      )
+    });
+  }
+});
+
+// features/keystone/models/RateLimitBucket.ts
+var import_core41, import_fields62, RateLimitBucket;
+var init_RateLimitBucket = __esm({
+  "features/keystone/models/RateLimitBucket.ts"() {
+    "use strict";
+    import_core41 = require("@keystone-6/core");
+    import_fields62 = require("@keystone-6/core/fields");
+    init_trackingFields();
+    RateLimitBucket = (0, import_core41.list)({
+      access: { operation: { query: () => false, create: () => false, update: () => false, delete: () => false } },
+      graphql: { omit: true },
+      ui: { isHidden: true },
+      fields: {
+        key: (0, import_fields62.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        scope: (0, import_fields62.text)({ validation: { isRequired: true } }),
+        count: (0, import_fields62.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        windowStartedAt: (0, import_fields62.timestamp)({ validation: { isRequired: true } }),
+        expiresAt: (0, import_fields62.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+        ...trackingFields
+      }
+    });
+  }
+});
+
+// features/keystone/models/Role.ts
+async function roleReadFilter(args) {
+  if (!await isFreshSignedIn(args)) return false;
+  if (await hasFreshPermission(args, "canReadRoles", "canManageRoles")) return freshCarrierFilter(args);
+  return { assignedTo: { some: { id: { equals: args.session.itemId } } } };
+}
+var import_core42, import_fields63, canReadRolesAccess, canReadRolesUi, Role;
+var init_Role = __esm({
+  "features/keystone/models/Role.ts"() {
+    "use strict";
+    import_core42 = require("@keystone-6/core");
+    import_fields63 = require("@keystone-6/core/fields");
+    init_access();
+    init_fields();
+    init_trackingFields();
+    canReadRolesAccess = (args) => isFreshSignedIn(args);
+    canReadRolesUi = (args) => hasPermission(args, "canReadRoles") || hasPermission(args, "canManageRoles");
+    Role = (0, import_core42.list)({
+      access: {
+        operation: {
+          query: canReadRolesAccess,
+          create: (args) => hasFreshPermission(args, "canManageRoles"),
+          update: (args) => hasFreshPermission(args, "canManageRoles"),
+          delete: (args) => hasFreshPermission(args, "canManageRoles")
+        },
+        filter: {
+          query: roleReadFilter,
+          update: freshCarrierFilter,
+          delete: freshCarrierFilter
+        },
+        item: {
+          create: canCreateForSessionCarrier,
+          update: canUpdateForSessionCarrier
+        }
+      },
+      ui: {
+        hideCreate: (args) => !hasPermission(args, "canManageRoles"),
+        hideDelete: (args) => !hasPermission(args, "canManageRoles"),
+        isHidden: (args) => !canReadRolesUi(args),
+        listView: { initialColumns: ["name", "carrier", "assignedTo"] }
+      },
+      fields: {
+        name: (0, import_fields63.text)({ validation: { isRequired: true } }),
+        carrier: (0, import_fields63.relationship)({ ref: "Carrier.roles" }),
+        ...permissionFields,
+        assignedTo: (0, import_fields63.relationship)({ ref: "User.role", many: true, access: { create: () => false, update: () => false } }),
+        ...trackingFields
+      }
+    });
+  }
+});
+
+// features/keystone/models/Route.ts
+var import_core43, import_fields65, routeIdentityHooks, Route;
+var init_Route = __esm({
+  "features/keystone/models/Route.ts"() {
+    "use strict";
+    import_core43 = require("@keystone-6/core");
+    import_fields65 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_trackingFields();
+    routeIdentityHooks = {
+      async validate({ operation, resolvedData, item, context, addValidationError }) {
+        if (operation !== "update") return;
+        const relationChanged = (field) => resolvedData[field] !== void 0 && resolvedData[field]?.connect?.id !== item?.[`${field}Id`];
+        if (!(resolvedData.routeKey !== void 0 && resolvedData.routeKey !== item?.routeKey || relationChanged("origin") || relationChanged("destination"))) return;
+        const [schedules, flights] = await Promise.all([
+          context.prisma.flightSchedule.count({ where: { routeId: item.id } }),
+          context.prisma.flightInstance.count({ where: { routeId: item.id } })
+        ]);
+        if (schedules + flights > 0) addValidationError("Route key, origin, and destination are fixed once schedules or dated flights use the route.");
+      }
+    };
+    Route = (0, import_core43.list)({
+      access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
+      ui: {
+        labelField: "routeKey",
+        listView: { initialColumns: ["routeKey", "origin", "destination", "status", "distanceKilometers"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields65.relationship)({ ref: "Carrier.routes" }),
+        routeKey: (0, import_fields65.text)({
+          isIndexed: "unique",
+          validation: { isRequired: true, match: { regex: /^[A-Z0-9]{2,3}:[A-Z0-9]{3}:[A-Z0-9]{3}$/, explanation: "Use CARRIER:ORIGIN:DESTINATION." } }
+        }),
+        origin: (0, import_fields65.relationship)({ ref: "Airport.departingRoutes" }),
+        destination: (0, import_fields65.relationship)({ ref: "Airport.arrivingRoutes" }),
+        status: (0, import_fields65.select)({
+          type: "enum",
+          defaultValue: "active",
+          validation: { isRequired: true },
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Active", value: "active" },
+            { label: "Suspended", value: "suspended" },
+            { label: "Archived", value: "archived" }
+          ]
+        }),
+        distanceKilometers: (0, import_fields65.integer)({ validation: { min: 0 } }),
+        minimumConnectionMinutes: (0, import_fields65.integer)({ validation: { min: 0 } }),
+        isInternational: (0, import_fields65.checkbox)({ defaultValue: false }),
+        schedules: (0, import_fields65.relationship)({ ref: "FlightSchedule.route", many: true }),
+        flightInstances: (0, import_fields65.relationship)({ ref: "FlightInstance.route", many: true }),
+        fareRules: (0, import_fields65.relationship)({ ref: "FareRule.route", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("route"),
+        requiredRelationshipHooks(["carrier", "origin", "destination"]),
+        commandOwnedRelationshipHooks(["schedules", "flightInstances", "fareRules"]),
+        routeIdentityHooks
+      )
+    });
+  }
+});
+
+// features/keystone/models/Seat.ts
+var import_core44, import_fields66, Seat;
+var init_Seat = __esm({
+  "features/keystone/models/Seat.ts"() {
+    "use strict";
+    import_core44 = require("@keystone-6/core");
+    import_fields66 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    Seat = (0, import_core44.list)({
+      access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
+      ui: {
+        labelField: "designator",
+        listView: { initialColumns: ["designator", "seatMap", "cabin", "status", "surchargeAmount"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields66.relationship)({ ref: "Carrier" }),
+        seatKey: (0, import_fields66.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        // Seat-map structure is fixed at creation (SeatMap itself is command-only); status, type, and surcharge stay editable.
+        seatMap: (0, import_fields66.relationship)({ ref: "SeatMap.seats", access: immutableFieldAccess }),
+        cabin: (0, import_fields66.relationship)({ ref: "Cabin.seats", access: immutableFieldAccess }),
+        designator: (0, import_fields66.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        rowNumber: (0, import_fields66.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        columnCode: (0, import_fields66.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        status: (0, import_fields66.select)({
+          type: "enum",
+          defaultValue: "available",
+          options: [
+            { label: "Available", value: "available" },
+            { label: "Blocked", value: "blocked" },
+            { label: "Unavailable", value: "unavailable" }
+          ]
+        }),
+        seatType: (0, import_fields66.select)({
+          type: "enum",
+          defaultValue: "standard",
+          options: [
+            { label: "Standard", value: "standard" },
+            { label: "Preferred", value: "preferred" },
+            { label: "Extra legroom", value: "extra_legroom" },
+            { label: "Bassinet", value: "bassinet" },
+            { label: "Restricted", value: "restricted" }
+          ]
+        }),
+        characteristics: (0, import_fields66.json)({ defaultValue: [] }),
+        surchargeAmount: (0, import_fields66.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        currencyCode: (0, import_fields66.text)({ defaultValue: "USD", validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } } }),
+        assignments: (0, import_fields66.relationship)({ ref: "SeatAssignment.seat", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "seatMap", "cabin"]),
+        carrierRelationshipHooks({ seatMap: { model: "seatMap" }, cabin: { model: "cabin" } }),
+        commandOwnedRelationshipHooks(["assignments"]),
+        minorAmountHooks(["surchargeAmount"])
+      )
+    });
+  }
+});
+
+// features/keystone/models/SeatAssignment.ts
+var import_core45, import_fields68, SeatAssignment;
+var init_SeatAssignment = __esm({
+  "features/keystone/models/SeatAssignment.ts"() {
+    "use strict";
+    import_core45 = require("@keystone-6/core");
+    import_fields68 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    SeatAssignment = (0, import_core45.list)({
+      access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "bookingSegment.flightInstance.origin", "canCheckIn"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "assignmentKey",
+        listView: { initialColumns: ["booking", "passenger", "bookingSegment", "seat", "status", "assignedAt"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields68.relationship)({ ref: "Carrier" }),
+        assignmentKey: (0, import_fields68.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        occupancyKey: (0, import_fields68.text)({ isIndexed: "unique", db: { isNullable: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields68.relationship)({ ref: "Booking.seatAssignments", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields68.relationship)({ ref: "BookingPassenger.seatAssignments", access: immutableFieldAccess }),
+        passenger: (0, import_fields68.relationship)({ ref: "Passenger.seatAssignments", access: immutableFieldAccess }),
+        bookingSegment: (0, import_fields68.relationship)({ ref: "BookingSegment.seatAssignments", access: immutableFieldAccess }),
+        seat: (0, import_fields68.relationship)({ ref: "Seat.assignments", access: immutableFieldAccess }),
+        status: (0, import_fields68.select)({
+          type: "enum",
+          defaultValue: "held",
+          options: [
+            { label: "Held", value: "held" },
+            { label: "Assigned", value: "assigned" },
+            { label: "Confirmed", value: "confirmed" },
+            { label: "Boarded", value: "boarded" },
+            { label: "Released", value: "released" },
+            { label: "Cancelled", value: "cancelled" }
+          ]
+        }),
+        seatDesignatorSnapshot: (0, import_fields68.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        cabinCodeSnapshot: (0, import_fields68.text)({ access: immutableFieldAccess }),
+        characteristicsSnapshot: (0, import_fields68.json)({ defaultValue: [], access: immutableFieldAccess }),
+        amount: (0, import_fields68.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields68.text)({ defaultValue: "USD", access: immutableFieldAccess }),
+        assignedAt: (0, import_fields68.timestamp)(),
+        confirmedAt: (0, import_fields68.timestamp)(),
+        releasedAt: (0, import_fields68.timestamp)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger", "bookingSegment", "seat"]),
+        lifecycleHooks("seatAssignment"),
+        minorAmountHooks(["amount"])
+      )
+    });
+  }
+});
+
+// features/keystone/models/SeatMap.ts
+var import_core46, import_fields70, SeatMap;
+var init_SeatMap = __esm({
+  "features/keystone/models/SeatMap.ts"() {
+    "use strict";
+    import_core46 = require("@keystone-6/core");
+    import_fields70 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    SeatMap = (0, import_core46.list)({
+      access: commandOnlyCarrierAccess("canReadNetwork", "canManageNetwork"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "mapKey",
+        listView: { initialColumns: ["mapKey", "flightInstance", "version", "status", "createdAt"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields70.relationship)({ ref: "Carrier" }),
+        mapKey: (0, import_fields70.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        flightInstance: (0, import_fields70.relationship)({ ref: "FlightInstance.seatMaps" }),
+        version: (0, import_fields70.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 } }),
+        status: (0, import_fields70.select)({
+          type: "enum",
+          defaultValue: "draft",
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Published", value: "published" },
+            { label: "Retired", value: "retired" }
+          ]
+        }),
+        layoutSnapshot: (0, import_fields70.json)({ defaultValue: {} }),
+        seats: (0, import_fields70.relationship)({ ref: "Seat.seatMap", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "flightInstance"]),
+        lifecycleHooks("seatMap")
+      )
+    });
+  }
+});
+
+// features/keystone/models/SettlementLedgerEntry.ts
+var import_core47, import_fields71, SettlementLedgerEntry;
+var init_SettlementLedgerEntry = __esm({
+  "features/keystone/models/SettlementLedgerEntry.ts"() {
+    "use strict";
+    import_core47 = require("@keystone-6/core");
+    import_fields71 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    SettlementLedgerEntry = (0, import_core47.list)({
+      access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "externalReference", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["externalReference", "ledgerSource", "amount", "currencyCode", "occurredAt", "importedAt"] } },
+      fields: {
+        carrier: (0, import_fields71.relationship)({ ref: "Carrier.settlementLedgerEntries", access: immutableFieldAccess }),
+        connection: (0, import_fields71.relationship)({ ref: "ProviderConnection", access: immutableFieldAccess }),
+        ledgerKey: (0, import_fields71.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        externalReference: (0, import_fields71.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        ledgerSource: (0, import_fields71.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        evidenceDigest: (0, import_fields71.text)({ isIndexed: true, validation: { isRequired: true, match: { regex: /^[a-f0-9]{64}$/i, explanation: "Use a SHA-256 evidence digest." } }, access: immutableFieldAccess }),
+        amount: (0, import_fields71.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields71.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        occurredAt: (0, import_fields71.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        importedAt: (0, import_fields71.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
+        importedByCredentialId: (0, import_fields71.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        sourceMetadata: (0, import_fields71.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        evidence: (0, import_fields71.relationship)({ ref: "ManualPaymentEvidence.ledgerEntry", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(requiredRelationshipHooks(["carrier"]), minorAmountHooks(["amount"]))
+    });
+  }
+});
+
+// features/keystone/models/StationAssignment.ts
+var import_core48, import_fields73, StationAssignment;
+var init_StationAssignment = __esm({
+  "features/keystone/models/StationAssignment.ts"() {
+    "use strict";
+    import_core48 = require("@keystone-6/core");
+    import_fields73 = require("@keystone-6/core/fields");
+    init_lifecycle();
+    init_access();
+    init_validation();
+    init_trackingFields();
+    StationAssignment = (0, import_core48.list)({
+      access: carrierScopedAccess("canReadUsers", "canManageUsers"),
+      ui: { labelField: "assignmentKey", listView: { initialColumns: ["user", "airport", "status", "validFrom", "validUntil"] } },
+      fields: {
+        carrier: (0, import_fields73.relationship)({ ref: "Carrier.stationAssignments" }),
+        assignmentKey: (0, import_fields73.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        user: (0, import_fields73.relationship)({ ref: "User.stationAssignments" }),
+        airport: (0, import_fields73.relationship)({ ref: "Airport.stationAssignments" }),
+        status: (0, import_fields73.select)({ type: "enum", defaultValue: "active", options: [
+          { label: "Active", value: "active" },
+          { label: "Suspended", value: "suspended" },
+          { label: "Revoked", value: "revoked" }
+        ] }),
+        canCheckIn: (0, import_fields73.checkbox)({ defaultValue: false }),
+        canAcceptBags: (0, import_fields73.checkbox)({ defaultValue: false }),
+        canBoard: (0, import_fields73.checkbox)({ defaultValue: false }),
+        validFrom: (0, import_fields73.timestamp)({ defaultValue: { kind: "now" } }),
+        validUntil: (0, import_fields73.timestamp)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        lifecycleHooks("stationAssignment"),
+        requiredRelationshipHooks(["carrier", "user", "airport"]),
+        carrierRelationshipHooks({ user: { model: "user" } }),
+        // An inverted range would silently never take effect in station capability checks.
+        chronologicalRangeHooks("validFrom", "validUntil", "Station assignment validity"),
+        {
+          async validate({ resolvedData, context, addValidationError }) {
+            const airportId = resolvedData.airport?.connect?.id;
+            if (!airportId) return;
+            const airport = await context.prisma.airport.findUnique({ where: { id: airportId }, select: { isActive: true } });
+            if (!airport?.isActive) addValidationError("Station assignments require an active airport.");
+          }
+        }
+      )
+    });
+  }
+});
+
+// features/keystone/models/ServiceRequest.ts
+var import_core49, import_fields74, ServiceRequest;
+var init_ServiceRequest = __esm({
+  "features/keystone/models/ServiceRequest.ts"() {
+    "use strict";
+    import_core49 = require("@keystone-6/core");
+    import_fields74 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_trackingFields();
+    ServiceRequest = (0, import_core49.list)({
+      access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "requestKey",
+        listView: { initialColumns: ["requestKey", "booking", "passenger", "code", "category", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields74.relationship)({ ref: "Carrier" }),
+        requestKey: (0, import_fields74.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        booking: (0, import_fields74.relationship)({ ref: "Booking.serviceRequests" }),
+        passenger: (0, import_fields74.relationship)({ ref: "Passenger.serviceRequests" }),
+        bookingPassenger: (0, import_fields74.relationship)({ ref: "BookingPassenger" }),
+        bookingSegment: (0, import_fields74.relationship)({ ref: "BookingSegment.serviceRequests" }),
+        code: (0, import_fields74.text)({ validation: { isRequired: true } }),
+        category: (0, import_fields74.select)({
+          type: "enum",
+          defaultValue: "ssr",
+          options: [
+            { label: "Special service request", value: "ssr" },
+            { label: "Other service information", value: "osi" },
+            { label: "Accessibility", value: "accessibility" },
+            { label: "Meal", value: "meal" },
+            { label: "Assistance", value: "assistance" },
+            { label: "Other", value: "other" }
+          ]
+        }),
+        status: (0, import_fields74.select)({
+          type: "enum",
+          defaultValue: "requested",
+          options: [
+            { label: "Requested", value: "requested" },
+            { label: "Pending", value: "pending" },
+            { label: "Confirmed", value: "confirmed" },
+            { label: "Fulfilled", value: "fulfilled" },
+            { label: "Unable", value: "unable" },
+            { label: "Cancelled", value: "cancelled" }
+          ]
+        }),
+        travelerText: (0, import_fields74.text)(),
+        internalNotes: (0, import_fields74.text)({ ui: { displayMode: "textarea" } }),
+        serviceData: (0, import_fields74.json)({ defaultValue: {} }),
+        confirmedAt: (0, import_fields74.timestamp)(),
+        fulfilledAt: (0, import_fields74.timestamp)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "passenger"]),
+        lifecycleHooks("serviceRequest")
+      )
+    });
+  }
+});
+
+// features/keystone/models/Ticket.ts
+var import_core50, import_fields75, Ticket;
+var init_Ticket = __esm({
+  "features/keystone/models/Ticket.ts"() {
+    "use strict";
+    import_core50 = require("@keystone-6/core");
+    import_fields75 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    Ticket = (0, import_core50.list)({
+      access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "ticketNumber",
+        listView: { initialColumns: ["ticketNumber", "booking", "passenger", "status", "totalAmount", "currencyCode", "issuedAt"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields75.relationship)({ ref: "Carrier" }),
+        ticketNumber: (0, import_fields75.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        booking: (0, import_fields75.relationship)({ ref: "Booking.tickets", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields75.relationship)({ ref: "BookingPassenger.tickets", access: immutableFieldAccess }),
+        passenger: (0, import_fields75.relationship)({ ref: "Passenger.tickets", access: immutableFieldAccess }),
+        issuingCarrierCode: (0, import_fields75.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        validatingCarrierCode: (0, import_fields75.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        status: (0, import_fields75.select)({
+          type: "enum",
+          defaultValue: "pending",
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Issued", value: "issued" },
+            { label: "Partially used", value: "partially_used" },
+            { label: "Used", value: "used" },
+            { label: "Suspended", value: "suspended" },
+            { label: "Voided", value: "voided" },
+            { label: "Refunded", value: "refunded" },
+            { label: "Exchanged", value: "exchanged" }
+          ]
+        }),
+        totalAmount: (0, import_fields75.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields75.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        issuedAt: (0, import_fields75.timestamp)({ access: immutableFieldAccess }),
+        voidedAt: (0, import_fields75.timestamp)(),
+        refundedAt: (0, import_fields75.timestamp)(),
+        providerReference: (0, import_fields75.text)({ access: immutableFieldAccess }),
+        originalTicket: (0, import_fields75.relationship)({ ref: "Ticket.reissuedTickets", access: immutableFieldAccess }),
+        reissuedTickets: (0, import_fields75.relationship)({ ref: "Ticket.originalTicket", many: true }),
+        coupons: (0, import_fields75.relationship)({ ref: "TicketCoupon.ticket", many: true }),
+        metadata: (0, import_fields75.json)({ defaultValue: {} }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger"]),
+        lifecycleHooks("ticket"),
+        minorAmountHooks(["totalAmount"])
+      )
+    });
+  }
+});
 
 // features/keystone/lib/prisma-schema-constraints.ts
 function requirePrismaRelations(schema, relations) {
@@ -2890,1111 +4847,288 @@ function addPrismaModelAttribute(schema, attribute) {
   ${attribute}
 }`;
 }
-
-// features/keystone/models/OutboxEvent.ts
-var OutboxEvent = (0, import_core34.list)({
-  // Queue-eligibility indexes for the worker's every-cycle scans (claimOutboxEvents ready/stale-lease branches and the
-  // dead-letter count). Additive only; the forward migration is generated from this model, never hand-written.
-  db: {
-    extendPrismaSchema: (schema) => addPrismaModelAttribute(
-      addPrismaModelAttribute(schema, '@@index([status, availableAt, createdAt], map: "OutboxEvent_status_availableAt_createdAt_idx")'),
-      '@@index([status, leasedAt], map: "OutboxEvent_status_leasedAt_idx")'
-    )
-  },
-  access: commandOnlyCarrierAccess("canReadAudit", "canManageIntegrations"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "eventKey", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["topic", "aggregateType", "aggregateId", "status", "attemptCount", "availableAt"] } },
-  fields: {
-    carrier: (0, import_fields49.relationship)({ ref: "Carrier.outboxEvents", access: immutableFieldAccess }),
-    eventKey: (0, import_fields49.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    topic: (0, import_fields49.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    aggregateType: (0, import_fields49.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    aggregateId: (0, import_fields49.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    payload: (0, import_fields49.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    status: (0, import_fields49.select)({ type: "enum", defaultValue: "pending", options: [
-      { label: "Pending", value: "pending" },
-      { label: "Processing", value: "processing" },
-      { label: "Delivered", value: "delivered" },
-      { label: "Failed", value: "failed" },
-      { label: "Dead lettered", value: "dead_lettered" }
-    ] }),
-    attemptCount: (0, import_fields49.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    availableAt: (0, import_fields49.timestamp)({ defaultValue: { kind: "now" } }),
-    leasedAt: (0, import_fields49.timestamp)(),
-    leaseOwner: (0, import_fields49.text)(),
-    lastError: (0, import_fields49.text)(),
-    deliveredAt: (0, import_fields49.timestamp)(),
-    ...trackingFields
-  },
-  hooks: requiredRelationshipHooks(["carrier"])
-});
-
-// features/keystone/models/Passenger.ts
-var import_core35 = require("@keystone-6/core");
-var import_fields51 = require("@keystone-6/core/fields");
-var Passenger = (0, import_core35.list)({
-  access: carrierScopedAccess("canReadPassengers", "canManagePassengers"),
-  ui: {
-    labelField: "familyName",
-    listView: { initialColumns: ["givenName", "familyName", "dateOfBirth", "email", "status", "carrier"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields51.relationship)({ ref: "Carrier" }),
-    passengerKey: (0, import_fields51.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    title: (0, import_fields51.text)(),
-    givenName: (0, import_fields51.text)({ validation: { isRequired: true } }),
-    middleNames: (0, import_fields51.text)(),
-    familyName: (0, import_fields51.text)({ validation: { isRequired: true } }),
-    suffix: (0, import_fields51.text)(),
-    dateOfBirth: (0, import_fields51.timestamp)(),
-    genderMarker: (0, import_fields51.select)({
-      type: "enum",
-      options: [
-        { label: "Female", value: "female" },
-        { label: "Male", value: "male" },
-        { label: "Unspecified", value: "unspecified" },
-        { label: "Undisclosed", value: "undisclosed" }
-      ]
-    }),
-    nationalityCode: (0, import_fields51.text)({
-      db: { isNullable: true },
-      validation: { match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 code." } }
-    }),
-    email: (0, import_fields51.text)(),
-    phone: (0, import_fields51.text)(),
-    preferredLanguage: (0, import_fields51.text)({ defaultValue: "en" }),
-    status: (0, import_fields51.select)({
-      type: "enum",
-      defaultValue: "active",
-      options: [
-        { label: "Active", value: "active" },
-        { label: "Merged", value: "merged" },
-        { label: "Restricted", value: "restricted" },
-        { label: "Archived", value: "archived" }
-      ]
-    }),
-    loyaltyPrograms: (0, import_fields51.json)({ defaultValue: [] }),
-    preferences: (0, import_fields51.json)({ defaultValue: {} }),
-    userAccount: (0, import_fields51.relationship)({ ref: "User.passengerProfile" }),
-    travelDocuments: (0, import_fields51.relationship)({ ref: "TravelDocument.passenger", many: true }),
-    documentVerifications: (0, import_fields51.relationship)({ ref: "DocumentVerification.passenger", many: true }),
-    bookingPassengers: (0, import_fields51.relationship)({ ref: "BookingPassenger.passenger", many: true }),
-    offers: (0, import_fields51.relationship)({ ref: "Offer.passengers", many: true }),
-    serviceRequests: (0, import_fields51.relationship)({ ref: "ServiceRequest.passenger", many: true }),
-    tickets: (0, import_fields51.relationship)({ ref: "Ticket.passenger", many: true }),
-    electronicMiscDocuments: (0, import_fields51.relationship)({ ref: "ElectronicMiscDocument.passenger", many: true }),
-    seatAssignments: (0, import_fields51.relationship)({ ref: "SeatAssignment.passenger", many: true }),
-    checkIns: (0, import_fields51.relationship)({ ref: "CheckIn.passenger", many: true }),
-    boardingPasses: (0, import_fields51.relationship)({ ref: "BoardingPass.passenger", many: true }),
-    bags: (0, import_fields51.relationship)({ ref: "Bag.passenger", many: true }),
-    reaccommodations: (0, import_fields51.relationship)({ ref: "Reaccommodation.passenger", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    carrierRelationshipHooks({ userAccount: { model: "user" } }),
-    commandOwnedRelationshipHooks(["travelDocuments", "documentVerifications", "bookingPassengers", "offers", "serviceRequests", "tickets", "electronicMiscDocuments", "seatAssignments", "checkIns", "boardingPasses", "bags", "reaccommodations"])
-  )
-});
-
-// features/keystone/models/Payment.ts
-var import_core36 = require("@keystone-6/core");
-var import_fields52 = require("@keystone-6/core/fields");
-var import_access40 = require("@keystone-6/core/access");
-var managePayments = (args) => hasFreshPermission(args, "canManagePayments");
-var Payment = (0, import_core36.list)({
-  access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "paymentKey",
-    listView: { initialColumns: ["paymentKey", "booking", "provider", "status", "amount", "capturedAmount", "refundedAmount"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields52.relationship)({ ref: "Carrier" }),
-    paymentKey: (0, import_fields52.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    idempotencyKey: (0, import_fields52.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields52.relationship)({ ref: "Booking.payments", access: immutableFieldAccess }),
-    provider: (0, import_fields52.relationship)({ ref: "PaymentProvider.payments", access: immutableFieldAccess }),
-    session: (0, import_fields52.relationship)({ ref: "PaymentSession.payment", access: immutableFieldAccess }),
-    status: (0, import_fields52.select)({
-      type: "enum",
-      defaultValue: "pending",
-      options: [
-        { label: "Pending", value: "pending" },
-        { label: "Authorized", value: "authorized" },
-        { label: "Captured", value: "captured" },
-        { label: "Partially refunded", value: "partially_refunded" },
-        { label: "Refunded", value: "refunded" },
-        { label: "Failed", value: "failed" },
-        { label: "Cancelled", value: "cancelled" }
-      ]
-    }),
-    amount: (0, import_fields52.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
-    authorizedAmount: (0, import_fields52.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    capturedAmount: (0, import_fields52.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    refundedAmount: (0, import_fields52.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields52.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    providerPaymentId: (0, import_fields52.text)({ isIndexed: true, access: immutableFieldAccess }),
-    providerCaptureId: (0, import_fields52.text)(),
-    instrumentBrand: (0, import_fields52.text)(),
-    instrumentLast4: (0, import_fields52.text)({
-      db: { isNullable: true },
-      validation: { match: { regex: /^\d{4}$/, explanation: "Store only four digits." } }
-    }),
-    rawProviderData: (0, import_fields52.json)({ access: { read: import_access40.denyAll, create: managePayments, update: managePayments }, ui: hiddenSensitiveUi }),
-    failureCode: (0, import_fields52.text)(),
-    failureMessage: (0, import_fields52.text)(),
-    authorizedAt: (0, import_fields52.timestamp)(),
-    capturedAt: (0, import_fields52.timestamp)(),
-    cancelledAt: (0, import_fields52.timestamp)(),
-    refunds: (0, import_fields52.relationship)({ ref: "Refund.payment", many: true }),
-    manualPaymentEvidence: (0, import_fields52.relationship)({ ref: "ManualPaymentEvidence.payment", many: true }),
-    metadata: (0, import_fields52.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "provider"]),
-    lifecycleHooks("payment"),
-    minorAmountHooks(["amount", "authorizedAmount", "capturedAmount", "refundedAmount"])
-  )
-});
-
-// features/keystone/models/PaymentProvider.ts
-var import_core37 = require("@keystone-6/core");
-var import_access42 = require("@keystone-6/core/access");
-var import_fields54 = require("@keystone-6/core/fields");
-
-// features/keystone/lib/bounded-payment-policy.ts
-function isEvidenceOnlyManualProvider(provider) {
-  if (provider.adapterType !== "manual") return false;
-  if (!provider.configuration || typeof provider.configuration !== "object" || Array.isArray(provider.configuration)) return false;
-  const configuration = provider.configuration;
-  return configuration.providerExecution === false && configuration.requiresIndependentApproval === true;
-}
-
-// features/keystone/models/PaymentProvider.ts
-var managePaymentSecrets = (args) => hasFreshPermission(args, "canManagePayments");
-var legacySelectorUi = { createView: { fieldMode: "hidden" }, itemView: { fieldMode: "read" }, listView: { fieldMode: "hidden" } };
-var INSTALLED_ADAPTER_TYPES = ["manual"];
-var PaymentProvider = (0, import_core37.list)({
-  access: carrierScopedAccess("canReadPayments", "canManagePayments"),
-  ui: {
-    labelField: "name",
-    listView: { initialColumns: ["name", "code", "adapterType", "status", "carrier"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields54.relationship)({ ref: "Carrier" }),
-    providerKey: (0, import_fields54.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    name: (0, import_fields54.text)({ validation: { isRequired: true } }),
-    code: (0, import_fields54.text)({ validation: { isRequired: true } }),
-    adapterType: (0, import_fields54.select)({
-      type: "enum",
-      defaultValue: "manual",
-      options: [
-        { label: "Stripe", value: "stripe" },
-        { label: "PayPal", value: "paypal" },
-        { label: "Manual", value: "manual" },
-        { label: "Custom", value: "custom" }
-      ]
-    }),
-    status: (0, import_fields54.select)({
-      type: "enum",
-      defaultValue: "inactive",
-      options: [
-        { label: "Inactive", value: "inactive" },
-        { label: "Active", value: "active" },
-        { label: "Degraded", value: "degraded" },
-        { label: "Disabled", value: "disabled" }
-      ]
-    }),
-    credentials: (0, import_fields54.json)({
-      defaultValue: {},
-      access: { read: import_access42.denyAll, create: managePaymentSecrets, update: managePaymentSecrets },
-      ui: hiddenSensitiveUi
-    }),
-    configuration: (0, import_fields54.json)({ defaultValue: {} }),
-    // Legacy selector columns: the dispatcher (integrations/payment/index.ts) selects only by adapterType, so these are
-    // kept for retained records but are neither required nor offered when configuring a provider.
-    createPaymentFunction: (0, import_fields54.text)({ ui: legacySelectorUi }),
-    capturePaymentFunction: (0, import_fields54.text)({ ui: legacySelectorUi }),
-    refundPaymentFunction: (0, import_fields54.text)({ ui: legacySelectorUi }),
-    getPaymentStatusFunction: (0, import_fields54.text)({ ui: legacySelectorUi }),
-    handleWebhookFunction: (0, import_fields54.text)({ ui: legacySelectorUi }),
-    sessions: (0, import_fields54.relationship)({ ref: "PaymentSession.provider", many: true, access: { create: () => false, update: () => false } }),
-    payments: (0, import_fields54.relationship)({ ref: "Payment.provider", many: true, access: { create: () => false, update: () => false } }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    { validate({ resolvedData, item, addValidationError }) {
-      if (resolvedData.adapterType !== void 0 && resolvedData.adapterType !== item?.adapterType && !INSTALLED_ADAPTER_TYPES.includes(resolvedData.adapterType)) {
-        addValidationError("Only the manual (evidence-only) payment adapter is installed.");
-      }
-      const status = resolvedData.status ?? item?.status;
-      const provider = {
-        adapterType: resolvedData.adapterType ?? item?.adapterType ?? null,
-        configuration: resolvedData.configuration ?? item?.configuration ?? null
-      };
-      if (status === "active" && !isEvidenceOnlyManualProvider(provider)) addValidationError("Active payment providers must be configured for evidence-only manual settlement with independent approval.");
-    } }
-  )
-});
-
-// features/keystone/models/PaymentSession.ts
-var import_core38 = require("@keystone-6/core");
-var import_fields56 = require("@keystone-6/core/fields");
-var canManagePayments = (args) => hasFreshPermission(args, "canManagePayments");
-var PaymentSession = (0, import_core38.list)({
-  access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "sessionKey",
-    listView: { initialColumns: ["sessionKey", "booking", "provider", "status", "amount", "currencyCode", "expiresAt"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields56.relationship)({ ref: "Carrier" }),
-    sessionKey: (0, import_fields56.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    idempotencyKey: (0, import_fields56.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    booking: (0, import_fields56.relationship)({ ref: "Booking.paymentSessions" }),
-    provider: (0, import_fields56.relationship)({ ref: "PaymentProvider.sessions" }),
-    payment: (0, import_fields56.relationship)({ ref: "Payment.session" }),
-    status: (0, import_fields56.select)({
-      type: "enum",
-      defaultValue: "created",
-      options: [
-        { label: "Created", value: "created" },
-        { label: "Pending", value: "pending" },
-        { label: "Authorized", value: "authorized" },
-        { label: "Captured", value: "captured" },
-        { label: "Failed", value: "failed" },
-        { label: "Cancelled", value: "cancelled" },
-        { label: "Expired", value: "expired" }
-      ]
-    }),
-    amount: (0, import_fields56.integer)({ validation: { isRequired: true, min: 0 } }),
-    currencyCode: (0, import_fields56.text)({ validation: { isRequired: true } }),
-    providerSessionId: (0, import_fields56.text)({ isIndexed: true }),
-    providerData: (0, import_fields56.json)({
-      defaultValue: {},
-      access: { read: canManagePayments, create: canManagePayments, update: canManagePayments },
-      ui: hiddenSensitiveUi
-    }),
-    expiresAt: (0, import_fields56.timestamp)(),
-    authorizedAt: (0, import_fields56.timestamp)(),
-    completedAt: (0, import_fields56.timestamp)(),
-    failureCode: (0, import_fields56.text)(),
-    failureMessage: (0, import_fields56.text)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "provider"]),
-    lifecycleHooks("paymentSession"),
-    minorAmountHooks(["amount"])
-  )
-});
-
-// features/keystone/models/ProviderConnection.ts
-var import_core39 = require("@keystone-6/core");
-var import_access45 = require("@keystone-6/core/access");
-var import_fields58 = require("@keystone-6/core/fields");
-var manageIntegrations = (args) => hasFreshPermission(args, "canManageIntegrations");
-var ProviderConnection = (0, import_core39.list)({
-  access: commandOnlyCarrierAccess("canReadIntegrations", "canManageIntegrations"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "name", listView: { initialColumns: ["name", "provider", "status", "externalAccountId", "lastSucceededAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields58.relationship)({ ref: "Carrier.providerConnections" }),
-    connectionKey: (0, import_fields58.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    provider: (0, import_fields58.relationship)({ ref: "IntegrationProvider.connections" }),
-    name: (0, import_fields58.text)({ validation: { isRequired: true } }),
-    status: (0, import_fields58.select)({ type: "enum", defaultValue: "pending", options: [
-      { label: "Pending", value: "pending" },
-      { label: "Active", value: "active" },
-      { label: "Paused", value: "paused" },
-      { label: "Failed", value: "failed" },
-      { label: "Revoked", value: "revoked" }
-    ] }),
-    credentials: (0, import_fields58.json)({
-      defaultValue: {},
-      access: { read: import_access45.denyAll, create: manageIntegrations, update: manageIntegrations },
-      ui: hiddenSensitiveUi
-    }),
-    configuration: (0, import_fields58.json)({ defaultValue: {} }),
-    capabilities: (0, import_fields58.json)({ defaultValue: [] }),
-    externalAccountId: (0, import_fields58.text)(),
-    lastAttemptedAt: (0, import_fields58.timestamp)(),
-    lastSucceededAt: (0, import_fields58.timestamp)(),
-    lastErrorCode: (0, import_fields58.text)(),
-    lastErrorMessage: (0, import_fields58.text)(),
-    webhookEndpoints: (0, import_fields58.relationship)({ ref: "WebhookEndpoint.connection", many: true }),
-    webhookEvents: (0, import_fields58.relationship)({ ref: "WebhookEvent.connection", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "provider"]),
-    lifecycleHooks("providerConnection")
-  )
-});
-
-// features/keystone/models/Reaccommodation.ts
-var import_core40 = require("@keystone-6/core");
-var import_fields60 = require("@keystone-6/core/fields");
-var Reaccommodation = (0, import_core40.list)({
-  access: commandOnlyCarrierAccess("canReadDisruptions", "canManageDisruptions"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "reaccommodationKey", listView: { initialColumns: ["booking", "passenger", "disruption", "status", "optionExpiresAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields60.relationship)({ ref: "Carrier" }),
-    reaccommodationKey: (0, import_fields60.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    idempotencyKey: (0, import_fields60.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields60.relationship)({ ref: "Booking.reaccommodations", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields60.relationship)({ ref: "BookingPassenger.reaccommodations", access: immutableFieldAccess }),
-    passenger: (0, import_fields60.relationship)({ ref: "Passenger.reaccommodations", access: immutableFieldAccess }),
-    disruption: (0, import_fields60.relationship)({ ref: "Disruption.reaccommodations", access: immutableFieldAccess }),
-    status: (0, import_fields60.select)({ type: "enum", defaultValue: "proposed", options: [
-      { label: "Proposed", value: "proposed" },
-      { label: "Accepted", value: "accepted" },
-      { label: "Confirmed", value: "confirmed" },
-      { label: "Declined", value: "declined" },
-      { label: "Failed", value: "failed" },
-      { label: "Expired", value: "expired" },
-      { label: "Cancelled", value: "cancelled" }
-    ] }),
-    originalSegments: (0, import_fields60.relationship)({ ref: "BookingSegment.reaccommodationsAsOriginal", many: true, access: immutableFieldAccess }),
-    replacementSegments: (0, import_fields60.relationship)({ ref: "BookingSegment.reaccommodationsAsReplacement", many: true }),
-    replacementOffer: (0, import_fields60.relationship)({ ref: "Offer" }),
-    optionExpiresAt: (0, import_fields60.timestamp)({ access: immutableFieldAccess }),
-    priceDifferenceAmount: (0, import_fields60.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
-    additionalCollectionAmount: (0, import_fields60.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    refundAmount: (0, import_fields60.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields60.text)({ defaultValue: "USD", access: immutableFieldAccess }),
-    acceptedAt: (0, import_fields60.timestamp)(),
-    confirmedAt: (0, import_fields60.timestamp)(),
-    reason: (0, import_fields60.text)(),
-    optionSnapshot: (0, import_fields60.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "disruption"]),
-    lifecycleHooks("reaccommodation"),
-    minorAmountHooks(["priceDifferenceAmount", "additionalCollectionAmount", "refundAmount"])
-  )
-});
-
-// features/keystone/models/Refund.ts
-var import_core41 = require("@keystone-6/core");
-var import_fields62 = require("@keystone-6/core/fields");
-var Refund = (0, import_core41.list)({
-  access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "refundKey", listView: { initialColumns: ["refundKey", "booking", "payment", "status", "amount", "reason"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields62.relationship)({ ref: "Carrier" }),
-    refundKey: (0, import_fields62.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    idempotencyKey: (0, import_fields62.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields62.relationship)({ ref: "Booking.refunds", access: immutableFieldAccess }),
-    payment: (0, import_fields62.relationship)({ ref: "Payment.refunds", access: immutableFieldAccess }),
-    status: (0, import_fields62.select)({ type: "enum", defaultValue: "requested", options: [
-      { label: "Requested", value: "requested" },
-      { label: "Approved", value: "approved" },
-      { label: "Processing", value: "processing" },
-      { label: "Succeeded", value: "succeeded" },
-      { label: "Failed", value: "failed" },
-      { label: "Cancelled", value: "cancelled" }
-    ] }),
-    reason: (0, import_fields62.select)({ type: "enum", defaultValue: "customer_request", options: [
-      { label: "Customer request", value: "customer_request" },
-      { label: "Disruption", value: "disruption" },
-      { label: "Schedule change", value: "schedule_change" },
-      { label: "Duplicate", value: "duplicate" },
-      { label: "Fraud", value: "fraud" },
-      { label: "Other", value: "other" }
-    ] }),
-    amount: (0, import_fields62.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields62.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    providerRefundId: (0, import_fields62.text)({ isIndexed: true }),
-    note: (0, import_fields62.text)({ ui: { displayMode: "textarea" } }),
-    requestedAt: (0, import_fields62.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
-    approvedAt: (0, import_fields62.timestamp)(),
-    processedAt: (0, import_fields62.timestamp)(),
-    errorMessage: (0, import_fields62.text)(),
-    metadata: (0, import_fields62.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "payment"]),
-    lifecycleHooks("refund"),
-    minorAmountHooks(["amount"])
-  )
-});
-
-// features/keystone/models/RateLimitBucket.ts
-var import_core42 = require("@keystone-6/core");
-var import_fields64 = require("@keystone-6/core/fields");
-var RateLimitBucket = (0, import_core42.list)({
-  access: { operation: { query: () => false, create: () => false, update: () => false, delete: () => false } },
-  graphql: { omit: true },
-  ui: { isHidden: true },
-  fields: {
-    key: (0, import_fields64.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    scope: (0, import_fields64.text)({ validation: { isRequired: true } }),
-    count: (0, import_fields64.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    windowStartedAt: (0, import_fields64.timestamp)({ validation: { isRequired: true } }),
-    expiresAt: (0, import_fields64.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    ...trackingFields
+var init_prisma_schema_constraints = __esm({
+  "features/keystone/lib/prisma-schema-constraints.ts"() {
+    "use strict";
   }
-});
-
-// features/keystone/models/Role.ts
-var import_core43 = require("@keystone-6/core");
-var import_fields65 = require("@keystone-6/core/fields");
-var canReadRolesAccess = (args) => isFreshSignedIn(args);
-async function roleReadFilter(args) {
-  if (!await isFreshSignedIn(args)) return false;
-  if (await hasFreshPermission(args, "canReadRoles", "canManageRoles")) return freshCarrierFilter(args);
-  return { assignedTo: { some: { id: { equals: args.session.itemId } } } };
-}
-var canReadRolesUi = (args) => hasPermission(args, "canReadRoles") || hasPermission(args, "canManageRoles");
-var Role = (0, import_core43.list)({
-  access: {
-    operation: {
-      query: canReadRolesAccess,
-      create: (args) => hasFreshPermission(args, "canManageRoles"),
-      update: (args) => hasFreshPermission(args, "canManageRoles"),
-      delete: (args) => hasFreshPermission(args, "canManageRoles")
-    },
-    filter: {
-      query: roleReadFilter,
-      update: freshCarrierFilter,
-      delete: freshCarrierFilter
-    },
-    item: {
-      create: canCreateForSessionCarrier,
-      update: canUpdateForSessionCarrier
-    }
-  },
-  ui: {
-    hideCreate: (args) => !hasPermission(args, "canManageRoles"),
-    hideDelete: (args) => !hasPermission(args, "canManageRoles"),
-    isHidden: (args) => !canReadRolesUi(args),
-    listView: { initialColumns: ["name", "carrier", "assignedTo"] }
-  },
-  fields: {
-    name: (0, import_fields65.text)({ validation: { isRequired: true } }),
-    carrier: (0, import_fields65.relationship)({ ref: "Carrier.roles" }),
-    ...permissionFields,
-    assignedTo: (0, import_fields65.relationship)({ ref: "User.role", many: true, access: { create: () => false, update: () => false } }),
-    ...trackingFields
-  }
-});
-
-// features/keystone/models/Route.ts
-var import_core44 = require("@keystone-6/core");
-var import_fields67 = require("@keystone-6/core/fields");
-var routeIdentityHooks = {
-  async validate({ operation, resolvedData, item, context, addValidationError }) {
-    if (operation !== "update") return;
-    const relationChanged = (field) => resolvedData[field] !== void 0 && resolvedData[field]?.connect?.id !== item?.[`${field}Id`];
-    if (!(resolvedData.routeKey !== void 0 && resolvedData.routeKey !== item?.routeKey || relationChanged("origin") || relationChanged("destination"))) return;
-    const [schedules, flights] = await Promise.all([
-      context.prisma.flightSchedule.count({ where: { routeId: item.id } }),
-      context.prisma.flightInstance.count({ where: { routeId: item.id } })
-    ]);
-    if (schedules + flights > 0) addValidationError("Route key, origin, and destination are fixed once schedules or dated flights use the route.");
-  }
-};
-var Route = (0, import_core44.list)({
-  access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
-  ui: {
-    labelField: "routeKey",
-    listView: { initialColumns: ["routeKey", "origin", "destination", "status", "distanceKilometers"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields67.relationship)({ ref: "Carrier.routes" }),
-    routeKey: (0, import_fields67.text)({
-      isIndexed: "unique",
-      validation: { isRequired: true, match: { regex: /^[A-Z0-9]{2,3}:[A-Z0-9]{3}:[A-Z0-9]{3}$/, explanation: "Use CARRIER:ORIGIN:DESTINATION." } }
-    }),
-    origin: (0, import_fields67.relationship)({ ref: "Airport.departingRoutes" }),
-    destination: (0, import_fields67.relationship)({ ref: "Airport.arrivingRoutes" }),
-    status: (0, import_fields67.select)({
-      type: "enum",
-      defaultValue: "active",
-      validation: { isRequired: true },
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Active", value: "active" },
-        { label: "Suspended", value: "suspended" },
-        { label: "Archived", value: "archived" }
-      ]
-    }),
-    distanceKilometers: (0, import_fields67.integer)({ validation: { min: 0 } }),
-    minimumConnectionMinutes: (0, import_fields67.integer)({ validation: { min: 0 } }),
-    isInternational: (0, import_fields67.checkbox)({ defaultValue: false }),
-    schedules: (0, import_fields67.relationship)({ ref: "FlightSchedule.route", many: true }),
-    flightInstances: (0, import_fields67.relationship)({ ref: "FlightInstance.route", many: true }),
-    fareRules: (0, import_fields67.relationship)({ ref: "FareRule.route", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "origin", "destination"]),
-    commandOwnedRelationshipHooks(["schedules", "flightInstances", "fareRules"]),
-    routeIdentityHooks
-  )
-});
-
-// features/keystone/models/Seat.ts
-var import_core45 = require("@keystone-6/core");
-var import_fields68 = require("@keystone-6/core/fields");
-var Seat = (0, import_core45.list)({
-  access: carrierScopedAccess("canReadNetwork", "canManageNetwork"),
-  ui: {
-    labelField: "designator",
-    listView: { initialColumns: ["designator", "seatMap", "cabin", "status", "surchargeAmount"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields68.relationship)({ ref: "Carrier" }),
-    seatKey: (0, import_fields68.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    // Seat-map structure is fixed at creation (SeatMap itself is command-only); status, type, and surcharge stay editable.
-    seatMap: (0, import_fields68.relationship)({ ref: "SeatMap.seats", access: immutableFieldAccess }),
-    cabin: (0, import_fields68.relationship)({ ref: "Cabin.seats", access: immutableFieldAccess }),
-    designator: (0, import_fields68.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    rowNumber: (0, import_fields68.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    columnCode: (0, import_fields68.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    status: (0, import_fields68.select)({
-      type: "enum",
-      defaultValue: "available",
-      options: [
-        { label: "Available", value: "available" },
-        { label: "Blocked", value: "blocked" },
-        { label: "Unavailable", value: "unavailable" }
-      ]
-    }),
-    seatType: (0, import_fields68.select)({
-      type: "enum",
-      defaultValue: "standard",
-      options: [
-        { label: "Standard", value: "standard" },
-        { label: "Preferred", value: "preferred" },
-        { label: "Extra legroom", value: "extra_legroom" },
-        { label: "Bassinet", value: "bassinet" },
-        { label: "Restricted", value: "restricted" }
-      ]
-    }),
-    characteristics: (0, import_fields68.json)({ defaultValue: [] }),
-    surchargeAmount: (0, import_fields68.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    currencyCode: (0, import_fields68.text)({ defaultValue: "USD", validation: { isRequired: true, match: { regex: /^[A-Z]{3}$/, explanation: "Use an ISO 4217 currency code." } } }),
-    assignments: (0, import_fields68.relationship)({ ref: "SeatAssignment.seat", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "seatMap", "cabin"]),
-    carrierRelationshipHooks({ seatMap: { model: "seatMap" }, cabin: { model: "cabin" } }),
-    commandOwnedRelationshipHooks(["assignments"]),
-    minorAmountHooks(["surchargeAmount"])
-  )
-});
-
-// features/keystone/models/SeatAssignment.ts
-var import_core46 = require("@keystone-6/core");
-var import_fields70 = require("@keystone-6/core/fields");
-var SeatAssignment = (0, import_core46.list)({
-  access: stationScopedCommandAccess("canReadAirportService", "canManageAirportService", "bookingSegment.flightInstance.origin", "canCheckIn"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "assignmentKey",
-    listView: { initialColumns: ["booking", "passenger", "bookingSegment", "seat", "status", "assignedAt"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields70.relationship)({ ref: "Carrier" }),
-    assignmentKey: (0, import_fields70.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    occupancyKey: (0, import_fields70.text)({ isIndexed: "unique", db: { isNullable: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields70.relationship)({ ref: "Booking.seatAssignments", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields70.relationship)({ ref: "BookingPassenger.seatAssignments", access: immutableFieldAccess }),
-    passenger: (0, import_fields70.relationship)({ ref: "Passenger.seatAssignments", access: immutableFieldAccess }),
-    bookingSegment: (0, import_fields70.relationship)({ ref: "BookingSegment.seatAssignments", access: immutableFieldAccess }),
-    seat: (0, import_fields70.relationship)({ ref: "Seat.assignments", access: immutableFieldAccess }),
-    status: (0, import_fields70.select)({
-      type: "enum",
-      defaultValue: "held",
-      options: [
-        { label: "Held", value: "held" },
-        { label: "Assigned", value: "assigned" },
-        { label: "Confirmed", value: "confirmed" },
-        { label: "Boarded", value: "boarded" },
-        { label: "Released", value: "released" },
-        { label: "Cancelled", value: "cancelled" }
-      ]
-    }),
-    seatDesignatorSnapshot: (0, import_fields70.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    cabinCodeSnapshot: (0, import_fields70.text)({ access: immutableFieldAccess }),
-    characteristicsSnapshot: (0, import_fields70.json)({ defaultValue: [], access: immutableFieldAccess }),
-    amount: (0, import_fields70.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields70.text)({ defaultValue: "USD", access: immutableFieldAccess }),
-    assignedAt: (0, import_fields70.timestamp)(),
-    confirmedAt: (0, import_fields70.timestamp)(),
-    releasedAt: (0, import_fields70.timestamp)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger", "bookingSegment", "seat"]),
-    lifecycleHooks("seatAssignment"),
-    minorAmountHooks(["amount"])
-  )
-});
-
-// features/keystone/models/SeatMap.ts
-var import_core47 = require("@keystone-6/core");
-var import_fields72 = require("@keystone-6/core/fields");
-var SeatMap = (0, import_core47.list)({
-  access: commandOnlyCarrierAccess("canReadNetwork", "canManageNetwork"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "mapKey",
-    listView: { initialColumns: ["mapKey", "flightInstance", "version", "status", "createdAt"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields72.relationship)({ ref: "Carrier" }),
-    mapKey: (0, import_fields72.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    flightInstance: (0, import_fields72.relationship)({ ref: "FlightInstance.seatMaps" }),
-    version: (0, import_fields72.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 } }),
-    status: (0, import_fields72.select)({
-      type: "enum",
-      defaultValue: "draft",
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Published", value: "published" },
-        { label: "Retired", value: "retired" }
-      ]
-    }),
-    layoutSnapshot: (0, import_fields72.json)({ defaultValue: {} }),
-    seats: (0, import_fields72.relationship)({ ref: "Seat.seatMap", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "flightInstance"]),
-    lifecycleHooks("seatMap")
-  )
-});
-
-// features/keystone/models/SettlementLedgerEntry.ts
-var import_core48 = require("@keystone-6/core");
-var import_fields73 = require("@keystone-6/core/fields");
-var SettlementLedgerEntry = (0, import_core48.list)({
-  access: commandOnlyCarrierAccess("canReadPayments", "canManagePayments"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "externalReference", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["externalReference", "ledgerSource", "amount", "currencyCode", "occurredAt", "importedAt"] } },
-  fields: {
-    carrier: (0, import_fields73.relationship)({ ref: "Carrier.settlementLedgerEntries", access: immutableFieldAccess }),
-    connection: (0, import_fields73.relationship)({ ref: "ProviderConnection", access: immutableFieldAccess }),
-    ledgerKey: (0, import_fields73.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    externalReference: (0, import_fields73.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    ledgerSource: (0, import_fields73.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    evidenceDigest: (0, import_fields73.text)({ isIndexed: true, validation: { isRequired: true, match: { regex: /^[a-f0-9]{64}$/i, explanation: "Use a SHA-256 evidence digest." } }, access: immutableFieldAccess }),
-    amount: (0, import_fields73.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields73.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    occurredAt: (0, import_fields73.timestamp)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    importedAt: (0, import_fields73.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
-    importedByCredentialId: (0, import_fields73.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    sourceMetadata: (0, import_fields73.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    evidence: (0, import_fields73.relationship)({ ref: "ManualPaymentEvidence.ledgerEntry", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(requiredRelationshipHooks(["carrier"]), minorAmountHooks(["amount"]))
-});
-
-// features/keystone/models/StationAssignment.ts
-var import_core49 = require("@keystone-6/core");
-var import_fields75 = require("@keystone-6/core/fields");
-var StationAssignment = (0, import_core49.list)({
-  access: carrierScopedAccess("canReadUsers", "canManageUsers"),
-  ui: { labelField: "assignmentKey", listView: { initialColumns: ["user", "airport", "status", "validFrom", "validUntil"] } },
-  fields: {
-    carrier: (0, import_fields75.relationship)({ ref: "Carrier.stationAssignments" }),
-    assignmentKey: (0, import_fields75.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    user: (0, import_fields75.relationship)({ ref: "User.stationAssignments" }),
-    airport: (0, import_fields75.relationship)({ ref: "Airport.stationAssignments" }),
-    status: (0, import_fields75.select)({ type: "enum", defaultValue: "active", options: [
-      { label: "Active", value: "active" },
-      { label: "Suspended", value: "suspended" },
-      { label: "Revoked", value: "revoked" }
-    ] }),
-    canCheckIn: (0, import_fields75.checkbox)({ defaultValue: false }),
-    canAcceptBags: (0, import_fields75.checkbox)({ defaultValue: false }),
-    canBoard: (0, import_fields75.checkbox)({ defaultValue: false }),
-    validFrom: (0, import_fields75.timestamp)({ defaultValue: { kind: "now" } }),
-    validUntil: (0, import_fields75.timestamp)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "user", "airport"]),
-    carrierRelationshipHooks({ user: { model: "user" } }),
-    // An inverted range would silently never take effect in station capability checks.
-    chronologicalRangeHooks("validFrom", "validUntil", "Station assignment validity"),
-    {
-      async validate({ resolvedData, context, addValidationError }) {
-        const airportId = resolvedData.airport?.connect?.id;
-        if (!airportId) return;
-        const airport = await context.prisma.airport.findUnique({ where: { id: airportId }, select: { isActive: true } });
-        if (!airport?.isActive) addValidationError("Station assignments require an active airport.");
-      }
-    }
-  )
-});
-
-// features/keystone/models/ServiceRequest.ts
-var import_core50 = require("@keystone-6/core");
-var import_fields76 = require("@keystone-6/core/fields");
-var ServiceRequest = (0, import_core50.list)({
-  access: commandOnlyCarrierAccess("canReadBookings", "canManageBookings"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "requestKey",
-    listView: { initialColumns: ["requestKey", "booking", "passenger", "code", "category", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields76.relationship)({ ref: "Carrier" }),
-    requestKey: (0, import_fields76.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    booking: (0, import_fields76.relationship)({ ref: "Booking.serviceRequests" }),
-    passenger: (0, import_fields76.relationship)({ ref: "Passenger.serviceRequests" }),
-    bookingPassenger: (0, import_fields76.relationship)({ ref: "BookingPassenger" }),
-    bookingSegment: (0, import_fields76.relationship)({ ref: "BookingSegment.serviceRequests" }),
-    code: (0, import_fields76.text)({ validation: { isRequired: true } }),
-    category: (0, import_fields76.select)({
-      type: "enum",
-      defaultValue: "ssr",
-      options: [
-        { label: "Special service request", value: "ssr" },
-        { label: "Other service information", value: "osi" },
-        { label: "Accessibility", value: "accessibility" },
-        { label: "Meal", value: "meal" },
-        { label: "Assistance", value: "assistance" },
-        { label: "Other", value: "other" }
-      ]
-    }),
-    status: (0, import_fields76.select)({
-      type: "enum",
-      defaultValue: "requested",
-      options: [
-        { label: "Requested", value: "requested" },
-        { label: "Pending", value: "pending" },
-        { label: "Confirmed", value: "confirmed" },
-        { label: "Fulfilled", value: "fulfilled" },
-        { label: "Unable", value: "unable" },
-        { label: "Cancelled", value: "cancelled" }
-      ]
-    }),
-    travelerText: (0, import_fields76.text)(),
-    internalNotes: (0, import_fields76.text)({ ui: { displayMode: "textarea" } }),
-    serviceData: (0, import_fields76.json)({ defaultValue: {} }),
-    confirmedAt: (0, import_fields76.timestamp)(),
-    fulfilledAt: (0, import_fields76.timestamp)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "passenger"]),
-    lifecycleHooks("serviceRequest")
-  )
-});
-
-// features/keystone/models/Ticket.ts
-var import_core51 = require("@keystone-6/core");
-var import_fields77 = require("@keystone-6/core/fields");
-var Ticket = (0, import_core51.list)({
-  access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "ticketNumber",
-    listView: { initialColumns: ["ticketNumber", "booking", "passenger", "status", "totalAmount", "currencyCode", "issuedAt"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields77.relationship)({ ref: "Carrier" }),
-    ticketNumber: (0, import_fields77.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    booking: (0, import_fields77.relationship)({ ref: "Booking.tickets", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields77.relationship)({ ref: "BookingPassenger.tickets", access: immutableFieldAccess }),
-    passenger: (0, import_fields77.relationship)({ ref: "Passenger.tickets", access: immutableFieldAccess }),
-    issuingCarrierCode: (0, import_fields77.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    validatingCarrierCode: (0, import_fields77.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    status: (0, import_fields77.select)({
-      type: "enum",
-      defaultValue: "pending",
-      options: [
-        { label: "Pending", value: "pending" },
-        { label: "Issued", value: "issued" },
-        { label: "Partially used", value: "partially_used" },
-        { label: "Used", value: "used" },
-        { label: "Suspended", value: "suspended" },
-        { label: "Voided", value: "voided" },
-        { label: "Refunded", value: "refunded" },
-        { label: "Exchanged", value: "exchanged" }
-      ]
-    }),
-    totalAmount: (0, import_fields77.integer)({ validation: { isRequired: true, min: 0 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields77.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    issuedAt: (0, import_fields77.timestamp)({ access: immutableFieldAccess }),
-    voidedAt: (0, import_fields77.timestamp)(),
-    refundedAt: (0, import_fields77.timestamp)(),
-    providerReference: (0, import_fields77.text)({ access: immutableFieldAccess }),
-    originalTicket: (0, import_fields77.relationship)({ ref: "Ticket.reissuedTickets", access: immutableFieldAccess }),
-    reissuedTickets: (0, import_fields77.relationship)({ ref: "Ticket.originalTicket", many: true }),
-    coupons: (0, import_fields77.relationship)({ ref: "TicketCoupon.ticket", many: true }),
-    metadata: (0, import_fields77.json)({ defaultValue: {} }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "booking", "bookingPassenger", "passenger"]),
-    lifecycleHooks("ticket"),
-    minorAmountHooks(["totalAmount"])
-  )
 });
 
 // features/keystone/models/TicketCoupon.ts
-var import_core52 = require("@keystone-6/core");
-var import_fields79 = require("@keystone-6/core/fields");
-var TicketCoupon = (0, import_core52.list)({
-  // NOT NULL service obligation (and version) from migration 20260923044000; see prisma-schema-constraints.ts.
-  db: { extendPrismaSchema: (schema) => requirePrismaRelations(schema, ["serviceObligation"]) },
-  access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "couponKey",
-    listView: { initialColumns: ["ticket", "couponNumber", "bookingSegment", "status", "amount"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields79.relationship)({ ref: "Carrier" }),
-    couponKey: (0, import_fields79.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    ticket: (0, import_fields79.relationship)({ ref: "Ticket.coupons", access: immutableFieldAccess }),
-    serviceObligation: (0, import_fields79.relationship)({ ref: "ServiceObligation.ticketCoupons", access: immutableFieldAccess }),
-    serviceObligationVersion: (0, import_fields79.integer)({ validation: { isRequired: true, min: 1 }, db: { isNullable: false }, access: immutableFieldAccess }),
-    bookingSegment: (0, import_fields79.relationship)({ ref: "BookingSegment.ticketCoupons", access: immutableFieldAccess }),
-    couponNumber: (0, import_fields79.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    status: (0, import_fields79.select)({
-      type: "enum",
-      defaultValue: "open",
-      options: [
-        { label: "Open", value: "open" },
-        { label: "Checked in", value: "checked_in" },
-        { label: "Boarded", value: "boarded" },
-        { label: "Flown", value: "flown" },
-        { label: "Suspended", value: "suspended" },
-        { label: "Voided", value: "voided" },
-        { label: "Refunded", value: "refunded" },
-        { label: "Exchanged", value: "exchanged" }
-      ]
-    }),
-    fareBasisCode: (0, import_fields79.text)({ access: immutableFieldAccess }),
-    bookingClassCode: (0, import_fields79.text)({ access: immutableFieldAccess }),
-    amount: (0, import_fields79.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
-    currencyCode: (0, import_fields79.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    usedAt: (0, import_fields79.timestamp)(),
-    entitlementSnapshot: (0, import_fields79.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    checkedInAt: (0, import_fields79.timestamp)(),
-    checkIns: (0, import_fields79.relationship)({ ref: "CheckIn.ticketCoupon", many: true }),
-    bags: (0, import_fields79.relationship)({ ref: "Bag.ticketCoupon", many: true }),
-    lineageAsParent: (0, import_fields79.relationship)({ ref: "TicketCouponLineage.parentCoupon", many: true }),
-    lineageAsChild: (0, import_fields79.relationship)({ ref: "TicketCouponLineage.childCoupon", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "ticket", "bookingSegment", "serviceObligation"]),
-    lifecycleHooks("ticketCoupon"),
-    minorAmountHooks(["amount"])
-  )
+var import_core51, import_fields77, TicketCoupon;
+var init_TicketCoupon = __esm({
+  "features/keystone/models/TicketCoupon.ts"() {
+    "use strict";
+    import_core51 = require("@keystone-6/core");
+    import_fields77 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_prisma_schema_constraints();
+    init_trackingFields();
+    TicketCoupon = (0, import_core51.list)({
+      // NOT NULL service obligation (and version) from migration 20260923044000; see prisma-schema-constraints.ts.
+      db: { extendPrismaSchema: (schema) => requirePrismaRelations(schema, ["serviceObligation"]) },
+      access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "couponKey",
+        listView: { initialColumns: ["ticket", "couponNumber", "bookingSegment", "status", "amount"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields77.relationship)({ ref: "Carrier" }),
+        couponKey: (0, import_fields77.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        ticket: (0, import_fields77.relationship)({ ref: "Ticket.coupons", access: immutableFieldAccess }),
+        serviceObligation: (0, import_fields77.relationship)({ ref: "ServiceObligation.ticketCoupons", access: immutableFieldAccess }),
+        serviceObligationVersion: (0, import_fields77.integer)({ validation: { isRequired: true, min: 1 }, db: { isNullable: false }, access: immutableFieldAccess }),
+        bookingSegment: (0, import_fields77.relationship)({ ref: "BookingSegment.ticketCoupons", access: immutableFieldAccess }),
+        couponNumber: (0, import_fields77.integer)({ validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        status: (0, import_fields77.select)({
+          type: "enum",
+          defaultValue: "open",
+          options: [
+            { label: "Open", value: "open" },
+            { label: "Checked in", value: "checked_in" },
+            { label: "Boarded", value: "boarded" },
+            { label: "Flown", value: "flown" },
+            { label: "Suspended", value: "suspended" },
+            { label: "Voided", value: "voided" },
+            { label: "Refunded", value: "refunded" },
+            { label: "Exchanged", value: "exchanged" }
+          ]
+        }),
+        fareBasisCode: (0, import_fields77.text)({ access: immutableFieldAccess }),
+        bookingClassCode: (0, import_fields77.text)({ access: immutableFieldAccess }),
+        amount: (0, import_fields77.integer)({ defaultValue: 0, validation: { min: 0 }, access: immutableFieldAccess }),
+        currencyCode: (0, import_fields77.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        usedAt: (0, import_fields77.timestamp)(),
+        entitlementSnapshot: (0, import_fields77.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        checkedInAt: (0, import_fields77.timestamp)(),
+        checkIns: (0, import_fields77.relationship)({ ref: "CheckIn.ticketCoupon", many: true }),
+        bags: (0, import_fields77.relationship)({ ref: "Bag.ticketCoupon", many: true }),
+        lineageAsParent: (0, import_fields77.relationship)({ ref: "TicketCouponLineage.parentCoupon", many: true }),
+        lineageAsChild: (0, import_fields77.relationship)({ ref: "TicketCouponLineage.childCoupon", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "ticket", "bookingSegment", "serviceObligation"]),
+        lifecycleHooks("ticketCoupon"),
+        minorAmountHooks(["amount"])
+      )
+    });
+  }
 });
 
 // features/keystone/models/TicketCouponLineage.ts
-var import_core53 = require("@keystone-6/core");
-var import_fields81 = require("@keystone-6/core/fields");
-var TicketCouponLineage = (0, import_core53.list)({
-  // NOT NULL ownership/coupon links and the parent/child unique pair from migration 20260923044000.
-  db: {
-    extendPrismaSchema: (schema) => addPrismaModelAttribute(
-      requirePrismaRelations(schema, ["carrier", "bookingPassenger", "parentCoupon", "childCoupon"]),
-      '@@unique([parentCouponId, childCouponId], map: "TicketCouponLineage_parentCoupon_childCoupon_key")'
-    )
-  },
-  access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "lineageKey",
-    listView: { initialColumns: ["lineageKey", "transformation", "parentCoupon", "childCoupon", "changeSetKey"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields81.relationship)({ ref: "Carrier.ticketCouponLineages", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields81.relationship)({ ref: "BookingPassenger.ticketCouponLineages", access: immutableFieldAccess }),
-    lineageKey: (0, import_fields81.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    changeSetKey: (0, import_fields81.text)({ isIndexed: true, validation: { isRequired: true }, access: immutableFieldAccess }),
-    transformation: (0, import_fields81.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      access: immutableFieldAccess,
-      options: [
-        { label: "Alternative", value: "alternative" },
-        { label: "Connection split", value: "split" },
-        { label: "Consolidation", value: "consolidation" }
-      ]
-    }),
-    operationType: (0, import_fields81.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      access: immutableFieldAccess,
-      options: [
-        { label: "Exchange", value: "exchange" },
-        { label: "Reaccommodation", value: "reaccommodation" },
-        { label: "Servicing", value: "servicing" }
-      ]
-    }),
-    operationId: (0, import_fields81.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    parentCoupon: (0, import_fields81.relationship)({ ref: "TicketCoupon.lineageAsParent", access: immutableFieldAccess }),
-    childCoupon: (0, import_fields81.relationship)({ ref: "TicketCoupon.lineageAsChild", access: immutableFieldAccess }),
-    metadata: (0, import_fields81.json)({ defaultValue: {}, access: immutableFieldAccess }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(requiredRelationshipHooks(["carrier", "bookingPassenger", "parentCoupon", "childCoupon"]))
+var import_core52, import_fields79, TicketCouponLineage;
+var init_TicketCouponLineage = __esm({
+  "features/keystone/models/TicketCouponLineage.ts"() {
+    "use strict";
+    import_core52 = require("@keystone-6/core");
+    import_fields79 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_prisma_schema_constraints();
+    init_trackingFields();
+    TicketCouponLineage = (0, import_core52.list)({
+      // NOT NULL ownership/coupon links and the parent/child unique pair from migration 20260923044000.
+      db: {
+        extendPrismaSchema: (schema) => addPrismaModelAttribute(
+          requirePrismaRelations(schema, ["carrier", "bookingPassenger", "parentCoupon", "childCoupon"]),
+          '@@unique([parentCouponId, childCouponId], map: "TicketCouponLineage_parentCoupon_childCoupon_key")'
+        )
+      },
+      access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "lineageKey",
+        listView: { initialColumns: ["lineageKey", "transformation", "parentCoupon", "childCoupon", "changeSetKey"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields79.relationship)({ ref: "Carrier.ticketCouponLineages", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields79.relationship)({ ref: "BookingPassenger.ticketCouponLineages", access: immutableFieldAccess }),
+        lineageKey: (0, import_fields79.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        changeSetKey: (0, import_fields79.text)({ isIndexed: true, validation: { isRequired: true }, access: immutableFieldAccess }),
+        transformation: (0, import_fields79.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          access: immutableFieldAccess,
+          options: [
+            { label: "Alternative", value: "alternative" },
+            { label: "Connection split", value: "split" },
+            { label: "Consolidation", value: "consolidation" }
+          ]
+        }),
+        operationType: (0, import_fields79.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          access: immutableFieldAccess,
+          options: [
+            { label: "Exchange", value: "exchange" },
+            { label: "Reaccommodation", value: "reaccommodation" },
+            { label: "Servicing", value: "servicing" }
+          ]
+        }),
+        operationId: (0, import_fields79.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        parentCoupon: (0, import_fields79.relationship)({ ref: "TicketCoupon.lineageAsParent", access: immutableFieldAccess }),
+        childCoupon: (0, import_fields79.relationship)({ ref: "TicketCoupon.lineageAsChild", access: immutableFieldAccess }),
+        metadata: (0, import_fields79.json)({ defaultValue: {}, access: immutableFieldAccess }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(requiredRelationshipHooks(["carrier", "bookingPassenger", "parentCoupon", "childCoupon"]))
+    });
+  }
 });
 
 // features/keystone/models/ServiceObligation.ts
-var import_core54 = require("@keystone-6/core");
-var import_fields83 = require("@keystone-6/core/fields");
-var ServiceObligation = (0, import_core54.list)({
-  // NOT NULL carrier/booking/passenger ownership from migration 20260923044000; see prisma-schema-constraints.ts.
-  db: { extendPrismaSchema: (schema) => requirePrismaRelations(schema, ["carrier", "booking", "bookingPassenger"]) },
-  access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "obligationKey",
-    listView: { initialColumns: ["obligationKey", "bookingPassenger", "currentVersion", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields83.relationship)({ ref: "Carrier.serviceObligations", access: immutableFieldAccess }),
-    booking: (0, import_fields83.relationship)({ ref: "Booking.serviceObligations", access: immutableFieldAccess }),
-    bookingPassenger: (0, import_fields83.relationship)({ ref: "BookingPassenger.serviceObligations", access: immutableFieldAccess }),
-    obligationKey: (0, import_fields83.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    currentVersion: (0, import_fields83.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
-    status: (0, import_fields83.select)({
-      type: "enum",
-      defaultValue: "active",
-      validation: { isRequired: true },
-      access: immutableFieldAccess,
-      options: [
-        { label: "Active", value: "active" },
-        { label: "Fulfilled", value: "fulfilled" },
-        { label: "Retired", value: "retired" }
-      ]
-    }),
-    ticketCoupons: (0, import_fields83.relationship)({ ref: "TicketCoupon.serviceObligation", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(requiredRelationshipHooks(["carrier", "booking", "bookingPassenger"]))
+var import_core53, import_fields81, ServiceObligation;
+var init_ServiceObligation = __esm({
+  "features/keystone/models/ServiceObligation.ts"() {
+    "use strict";
+    import_core53 = require("@keystone-6/core");
+    import_fields81 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_prisma_schema_constraints();
+    init_trackingFields();
+    ServiceObligation = (0, import_core53.list)({
+      // NOT NULL carrier/booking/passenger ownership from migration 20260923044000; see prisma-schema-constraints.ts.
+      db: { extendPrismaSchema: (schema) => requirePrismaRelations(schema, ["carrier", "booking", "bookingPassenger"]) },
+      access: commandOnlyCarrierAccess("canReadTicketing", "canManageTicketing"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "obligationKey",
+        listView: { initialColumns: ["obligationKey", "bookingPassenger", "currentVersion", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields81.relationship)({ ref: "Carrier.serviceObligations", access: immutableFieldAccess }),
+        booking: (0, import_fields81.relationship)({ ref: "Booking.serviceObligations", access: immutableFieldAccess }),
+        bookingPassenger: (0, import_fields81.relationship)({ ref: "BookingPassenger.serviceObligations", access: immutableFieldAccess }),
+        obligationKey: (0, import_fields81.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        currentVersion: (0, import_fields81.integer)({ defaultValue: 1, validation: { isRequired: true, min: 1 }, access: immutableFieldAccess }),
+        status: (0, import_fields81.select)({
+          type: "enum",
+          defaultValue: "active",
+          validation: { isRequired: true },
+          access: immutableFieldAccess,
+          options: [
+            { label: "Active", value: "active" },
+            { label: "Fulfilled", value: "fulfilled" },
+            { label: "Retired", value: "retired" }
+          ]
+        }),
+        ticketCoupons: (0, import_fields81.relationship)({ ref: "TicketCoupon.serviceObligation", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(requiredRelationshipHooks(["carrier", "booking", "bookingPassenger"]))
+    });
+  }
 });
 
 // features/keystone/models/TravelDocument.ts
-var import_core55 = require("@keystone-6/core");
-var import_fields85 = require("@keystone-6/core/fields");
-var secureAccess = {
-  read: canReadSecurePassengerData,
-  create: canReadSecurePassengerData,
-  update: canReadSecurePassengerData
-};
-var TravelDocument = (0, import_core55.list)({
-  access: commandOnlyCarrierAccess("canManageSecurePassengerData", "canManageSecurePassengerData"),
-  graphql: commandOnlyGraphql(),
-  ui: {
-    labelField: "documentNumberLast4",
-    listView: { initialColumns: ["passenger", "documentType", "issuingCountryCode", "expiresAt", "status"] },
-    hideDelete: true
-  },
-  fields: {
-    carrier: (0, import_fields85.relationship)({ ref: "Carrier" }),
-    passenger: (0, import_fields85.relationship)({ ref: "Passenger.travelDocuments" }),
-    documentType: (0, import_fields85.select)({
-      type: "enum",
-      validation: { isRequired: true },
-      options: [
-        { label: "Passport", value: "passport" },
-        { label: "National identity card", value: "national_id" },
-        { label: "Residence permit", value: "residence_permit" },
-        { label: "Visa", value: "visa" },
-        { label: "Known traveler credential", value: "known_traveler" },
-        { label: "Redress credential", value: "redress" },
-        { label: "Other", value: "other" }
-      ]
-    }),
-    documentNumberToken: (0, import_fields85.text)({
-      access: secureAccess,
-      ui: hiddenSensitiveUi,
-      db: { isNullable: true }
-    }),
-    documentNumberHash: (0, import_fields85.text)({
-      isIndexed: true,
-      access: secureAccess,
-      ui: hiddenSensitiveUi,
-      db: { isNullable: true },
-      validation: {
-        match: {
-          regex: /^[a-f0-9]{64}$/i,
-          explanation: "Store only a SHA-256 hex lookup digest."
-        }
-      }
-    }),
-    encryptedPayload: (0, import_fields85.text)({
-      access: secureAccess,
-      ui: hiddenSensitiveUi,
-      db: { nativeType: "Text", isNullable: true }
-    }),
-    documentNumberLast4: (0, import_fields85.text)({
-      db: { isNullable: true },
-      validation: { match: { regex: /^[A-Z0-9]{4}$/, explanation: "Store only the final four characters." } }
-    }),
-    issuingCountryCode: (0, import_fields85.text)({
-      validation: { isRequired: true, match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 code." } }
-    }),
-    nationalityCode: (0, import_fields85.text)({
-      db: { isNullable: true },
-      validation: { match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 code." } }
-    }),
-    issuedAt: (0, import_fields85.timestamp)(),
-    expiresAt: (0, import_fields85.timestamp)(),
-    status: (0, import_fields85.select)({
-      type: "enum",
-      defaultValue: "unverified",
-      options: [
-        { label: "Unverified", value: "unverified" },
-        { label: "Verified", value: "verified" },
-        { label: "Rejected", value: "rejected" },
-        { label: "Expired", value: "expired" },
-        { label: "Revoked", value: "revoked" }
-      ]
-    }),
-    verificationProviderReference: (0, import_fields85.text)({ access: secureAccess, ui: hiddenSensitiveUi }),
-    verifiedAt: (0, import_fields85.timestamp)(),
-    verifiedBy: (0, import_fields85.relationship)({ ref: "User" }),
-    verifications: (0, import_fields85.relationship)({ ref: "DocumentVerification.travelDocument", many: true }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier", "passenger"]),
-    travelDocumentHooks()
-  )
+var import_core54, import_fields83, secureAccess, TravelDocument;
+var init_TravelDocument = __esm({
+  "features/keystone/models/TravelDocument.ts"() {
+    "use strict";
+    import_core54 = require("@keystone-6/core");
+    import_fields83 = require("@keystone-6/core/fields");
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    secureAccess = {
+      read: canReadSecurePassengerData,
+      create: canReadSecurePassengerData,
+      update: canReadSecurePassengerData
+    };
+    TravelDocument = (0, import_core54.list)({
+      access: commandOnlyCarrierAccess("canManageSecurePassengerData", "canManageSecurePassengerData"),
+      graphql: commandOnlyGraphql(),
+      ui: {
+        labelField: "documentNumberLast4",
+        listView: { initialColumns: ["passenger", "documentType", "issuingCountryCode", "expiresAt", "status"] },
+        hideDelete: true
+      },
+      fields: {
+        carrier: (0, import_fields83.relationship)({ ref: "Carrier" }),
+        passenger: (0, import_fields83.relationship)({ ref: "Passenger.travelDocuments" }),
+        documentType: (0, import_fields83.select)({
+          type: "enum",
+          validation: { isRequired: true },
+          options: [
+            { label: "Passport", value: "passport" },
+            { label: "National identity card", value: "national_id" },
+            { label: "Residence permit", value: "residence_permit" },
+            { label: "Visa", value: "visa" },
+            { label: "Known traveler credential", value: "known_traveler" },
+            { label: "Redress credential", value: "redress" },
+            { label: "Other", value: "other" }
+          ]
+        }),
+        documentNumberToken: (0, import_fields83.text)({
+          access: secureAccess,
+          ui: hiddenSensitiveUi,
+          db: { isNullable: true }
+        }),
+        documentNumberHash: (0, import_fields83.text)({
+          isIndexed: true,
+          access: secureAccess,
+          ui: hiddenSensitiveUi,
+          db: { isNullable: true },
+          validation: {
+            match: {
+              regex: /^[a-f0-9]{64}$/i,
+              explanation: "Store only a SHA-256 hex lookup digest."
+            }
+          }
+        }),
+        encryptedPayload: (0, import_fields83.text)({
+          access: secureAccess,
+          ui: hiddenSensitiveUi,
+          db: { nativeType: "Text", isNullable: true }
+        }),
+        documentNumberLast4: (0, import_fields83.text)({
+          db: { isNullable: true },
+          validation: { match: { regex: /^[A-Z0-9]{4}$/, explanation: "Store only the final four characters." } }
+        }),
+        issuingCountryCode: (0, import_fields83.text)({
+          validation: { isRequired: true, match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 code." } }
+        }),
+        nationalityCode: (0, import_fields83.text)({
+          db: { isNullable: true },
+          validation: { match: { regex: /^[A-Z]{2}$/, explanation: "Use an ISO 3166-1 alpha-2 code." } }
+        }),
+        issuedAt: (0, import_fields83.timestamp)(),
+        expiresAt: (0, import_fields83.timestamp)(),
+        status: (0, import_fields83.select)({
+          type: "enum",
+          defaultValue: "unverified",
+          options: [
+            { label: "Unverified", value: "unverified" },
+            { label: "Verified", value: "verified" },
+            { label: "Rejected", value: "rejected" },
+            { label: "Expired", value: "expired" },
+            { label: "Revoked", value: "revoked" }
+          ]
+        }),
+        verificationProviderReference: (0, import_fields83.text)({ access: secureAccess, ui: hiddenSensitiveUi }),
+        verifiedAt: (0, import_fields83.timestamp)(),
+        verifiedBy: (0, import_fields83.relationship)({ ref: "User" }),
+        verifications: (0, import_fields83.relationship)({ ref: "DocumentVerification.travelDocument", many: true }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier", "passenger"]),
+        travelDocumentHooks()
+      )
+    });
+  }
 });
-
-// features/keystone/models/User.ts
-var import_core56 = require("@keystone-6/core");
-var import_access62 = require("@keystone-6/core/access");
-var import_fields87 = require("@keystone-6/core/fields");
 
 // features/keystone/lib/initial-operator-setup.ts
 function initialOperatorSetupEnabled(_env = process.env) {
@@ -4008,7 +5142,6 @@ function validateInitialOperatorInput(input) {
   if (input.password.length < 10 || input.password.length > 1e3) throw new Error("The initial operator password must contain at least 10 characters.");
   return { name, email: email2, password: input.password };
 }
-var INITIAL_ROLE_NAME = "Initial Carrier Administrator";
 async function ensureInitialCarrierAndRole(prisma, permissions2, env = process.env) {
   const allPermissions = Object.fromEntries(permissions2.map((permission) => [permission, true]));
   return prisma.$transaction(async (tx) => {
@@ -4022,7 +5155,10 @@ async function ensureInitialCarrierAndRole(prisma, permissions2, env = process.e
           defaultCurrencyCode: env.INITIAL_CURRENCY_CODE || "USD",
           defaultTimezone: env.INITIAL_TIMEZONE || "America/New_York",
           status: "active",
-          directSalesEnabled: false
+          directSalesEnabled: false,
+          // Like E-commerce's onboarding, the new carrier always gets the registry logo.
+          logoIcon: DEFAULT_STORE_LOGO_ICON,
+          logoColor: DEFAULT_STORE_LOGO_COLOR
         },
         select: { id: true }
       });
@@ -4037,11 +5173,16 @@ async function ensureInitialCarrierAndRole(prisma, permissions2, env = process.e
     return { carrierId: carrier.id, roleId: role.id };
   });
 }
+var INITIAL_ROLE_NAME;
+var init_initial_operator_setup = __esm({
+  "features/keystone/lib/initial-operator-setup.ts"() {
+    "use strict";
+    init_store_logo();
+    INITIAL_ROLE_NAME = "Initial Carrier Administrator";
+  }
+});
 
 // features/keystone/models/User.ts
-var canCreateUser = (args) => args.session ? hasFreshPermission(args, "canManageUsers", "canManageCarriers") : false;
-var canManageUsersAccess = (args) => hasFreshPermission(args, "canManageUsers", "canManageCarriers");
-var canManageUsersUi = (args) => hasPermission(args, "canManageUsers") || hasPermission(args, "canManageCarriers");
 function connectedId2(value) {
   return typeof value?.connect?.id === "string" ? value.connect.id : typeof value?.id === "string" ? value.id : null;
 }
@@ -4055,135 +5196,156 @@ async function canAssignCarrierRelationship(args, model) {
   const related = await args.context.prisma[model].findUnique({ where: { id: relatedId }, select: { carrierId: true } });
   return related?.carrierId === carrierId;
 }
-var User = (0, import_core56.list)({
-  access: {
-    operation: {
-      query: isFreshSignedIn,
-      create: canCreateUser,
-      update: isFreshSignedIn,
-      delete: canManageUsersAccess
-    },
-    filter: {
-      query: userReadFilter,
-      update: userUpdateFilter,
-      delete: userUpdateFilter
-    },
-    item: {
-      // Public signup cannot set carrier/role fields; authenticated managers
-      // must create users in their own carrier unless they are platform admins.
-      create: (args) => !args.session || canCreateForSessionCarrier(args),
-      update: canUpdateForSessionCarrier,
-      // Deleting an account removes its sign-in authority, so it is held to the same fresh target-role ceiling as
-      // changing that account's credentials: a delegated manager cannot delete a peer or superior.
-      delete: canManageTargetUser
-    }
-  },
-  ui: {
-    hideCreate: (args) => !canManageUsersUi(args),
-    hideDelete: (args) => !canManageUsersUi(args),
-    listView: { initialColumns: ["name", "email", "carrier", "role", "approvedAgent"] },
-    itemView: {
-      defaultFieldMode: ({ session, item }) => canManageUsersUi({ session }) || session?.itemId === item?.id ? "edit" : "read"
-    }
-  },
-  fields: {
-    name: (0, import_fields87.text)({ validation: { isRequired: true } }),
-    email: (0, import_fields87.text)({
-      isIndexed: "unique",
-      validation: { isRequired: true },
-      isFilterable: false,
-      isOrderable: false,
-      access: { create: canManageUsersAccess, update: canManageTargetUser }
-    }),
-    password: (0, import_fields87.password)({
+var import_core55, import_access61, import_fields85, canCreateUser, canManageUsersAccess, canManageUsersUi, User;
+var init_User = __esm({
+  "features/keystone/models/User.ts"() {
+    "use strict";
+    import_core55 = require("@keystone-6/core");
+    import_access61 = require("@keystone-6/core/access");
+    import_fields85 = require("@keystone-6/core/fields");
+    init_access();
+    init_initial_operator_setup();
+    init_fields();
+    init_trackingFields();
+    canCreateUser = (args) => args.session ? hasFreshPermission(args, "canManageUsers", "canManageCarriers") : false;
+    canManageUsersAccess = (args) => hasFreshPermission(args, "canManageUsers", "canManageCarriers");
+    canManageUsersUi = (args) => hasPermission(args, "canManageUsers") || hasPermission(args, "canManageCarriers");
+    User = (0, import_core55.list)({
       access: {
-        read: import_access62.denyAll,
-        create: canManageUsersAccess,
-        update: canManageTargetUser
+        operation: {
+          query: isFreshSignedIn,
+          create: canCreateUser,
+          update: isFreshSignedIn,
+          delete: canManageUsersAccess
+        },
+        filter: {
+          query: userReadFilter,
+          update: userUpdateFilter,
+          delete: userUpdateFilter
+        },
+        item: {
+          // Public signup cannot set carrier/role fields; authenticated managers
+          // must create users in their own carrier unless they are platform admins.
+          create: (args) => !args.session || canCreateForSessionCarrier(args),
+          update: canUpdateForSessionCarrier,
+          // Deleting an account removes its sign-in authority, so it is held to the same fresh target-role ceiling as
+          // changing that account's credentials: a delegated manager cannot delete a peer or superior.
+          delete: canManageTargetUser
+        }
       },
-      validation: {
-        isRequired: true,
-        length: { min: 10, max: 1e3 },
-        rejectCommon: true
+      ui: {
+        hideCreate: (args) => !canManageUsersUi(args),
+        hideDelete: (args) => !canManageUsersUi(args),
+        listView: { initialColumns: ["name", "email", "carrier", "role", "approvedAgent"] },
+        itemView: {
+          defaultFieldMode: ({ session, item }) => canManageUsersUi({ session }) || session?.itemId === item?.id ? "edit" : "read"
+        }
+      },
+      fields: {
+        name: (0, import_fields85.text)({ validation: { isRequired: true } }),
+        email: (0, import_fields85.text)({
+          isIndexed: "unique",
+          validation: { isRequired: true },
+          isFilterable: false,
+          isOrderable: false,
+          access: { create: canManageUsersAccess, update: canManageTargetUser }
+        }),
+        password: (0, import_fields85.password)({
+          access: {
+            read: import_access61.denyAll,
+            create: canManageUsersAccess,
+            update: canManageTargetUser
+          },
+          validation: {
+            isRequired: true,
+            length: { min: 10, max: 1e3 },
+            rejectCommon: true
+          }
+        }),
+        carrier: (0, import_fields85.relationship)({
+          ref: "Carrier.users",
+          access: { create: canManageUsersAccess, update: canManageUsersAccess }
+        }),
+        role: (0, import_fields85.relationship)({
+          ref: "Role.assignedTo",
+          access: {
+            create: (args) => canAssignCarrierRelationship(args, "role").then((allowed) => allowed && canAssignUserRole(args)),
+            update: (args) => canAssignCarrierRelationship(args, "role").then((allowed) => allowed && canAssignUserRole(args))
+          }
+        }),
+        approvedAgent: (0, import_fields85.relationship)({
+          ref: "ApprovedAgent.users",
+          access: {
+            create: (args) => canAssignCarrierRelationship(args, "approvedAgent"),
+            update: (args) => canAssignCarrierRelationship(args, "approvedAgent")
+          }
+        }),
+        onboardingStatus: (0, import_fields85.select)({
+          type: "enum",
+          defaultValue: "not_started",
+          options: [
+            { label: "Not started", value: "not_started" },
+            { label: "In progress", value: "in_progress" },
+            { label: "Completed", value: "completed" },
+            { label: "Dismissed", value: "dismissed" }
+          ],
+          access: { create: () => false, update: () => false },
+          graphql: { omit: { create: true, update: true } }
+        }),
+        // A carrier that has taken a paid booking is launched, whatever its stored launch-setup state says; the dashboard
+        // stops offering "Get started" to an airline that already sells.
+        carrierLaunched: (0, import_fields85.virtual)({
+          field: import_core55.graphql.field({
+            type: import_core55.graphql.Boolean,
+            async resolve(item, _args, context) {
+              if (!item.carrierId) return false;
+              const paid = await context.sudo().prisma.booking.findFirst({ where: { carrierId: item.carrierId, paymentStatus: { in: ["paid", "partially_refunded", "refunded"] } }, select: { id: true } });
+              return Boolean(paid);
+            }
+          })
+        }),
+        passengerProfile: (0, import_fields85.relationship)({ ref: "Passenger.userAccount", access: { create: () => false, update: () => false } }),
+        offers: (0, import_fields85.relationship)({ ref: "Offer.customer", many: true, access: { create: () => false, update: () => false } }),
+        bookings: (0, import_fields85.relationship)({ ref: "Booking.customer", many: true, access: { create: () => false, update: () => false } }),
+        auditEvents: (0, import_fields85.relationship)({ ref: "AuditEvent.actor", many: true, access: { create: () => false, update: () => false } }),
+        stationAssignments: (0, import_fields85.relationship)({ ref: "StationAssignment.user", many: true, access: { create: () => false, update: () => false } }),
+        documentVerifications: (0, import_fields85.relationship)({ ref: "DocumentVerification.verifiedBy", many: true, access: { create: () => false, update: () => false } }),
+        submittedPaymentEvidence: (0, import_fields85.relationship)({ ref: "ManualPaymentEvidence.submittedBy", many: true, access: { create: () => false, update: () => false } }),
+        approvedPaymentEvidence: (0, import_fields85.relationship)({ ref: "ManualPaymentEvidence.approvedBy", many: true, access: { create: () => false, update: () => false } }),
+        onboardingSteps: (0, import_fields85.relationship)({ ref: "OnboardingStep.user", many: true, access: { create: () => false, update: () => false } }),
+        ...trackingFields
+      },
+      hooks: {
+        // First-run setup (createInitialUser, no session, empty user table) attaches the operator to the carrier and
+        // full-permission role from ensureInitialCarrierAndRole. Invalid details write nothing: validate rejects them.
+        async resolveInput({ operation, resolvedData, inputData, context }) {
+          if (operation !== "create" || context.session) return resolvedData;
+          if (await context.prisma.user.count() !== 0) return resolvedData;
+          try {
+            validateInitialOperatorInput({ name: String(inputData.name ?? ""), email: String(inputData.email ?? ""), password: String(inputData.password ?? "") });
+          } catch {
+            return resolvedData;
+          }
+          const { carrierId, roleId } = await ensureInitialCarrierAndRole(context.prisma, permissionsList);
+          return { ...resolvedData, carrier: { connect: { id: carrierId } }, role: { connect: { id: roleId } } };
+        },
+        // createInitialUser runs without a session while no user exists. Hold that first operator to the launch policy
+        // (name, email and password rules).
+        async validate({ operation, inputData, context, addValidationError }) {
+          if (operation !== "create" || context.session) return;
+          if (await context.prisma.user.count() !== 0) return;
+          try {
+            validateInitialOperatorInput({ name: String(inputData.name ?? ""), email: String(inputData.email ?? ""), password: String(inputData.password ?? "") });
+          } catch (error) {
+            addValidationError(error instanceof Error ? error.message : "Initial operator details are invalid.");
+          }
+        }
       }
-    }),
-    carrier: (0, import_fields87.relationship)({
-      ref: "Carrier.users",
-      access: { create: canManageUsersAccess, update: canManageUsersAccess }
-    }),
-    role: (0, import_fields87.relationship)({
-      ref: "Role.assignedTo",
-      access: {
-        create: (args) => canAssignCarrierRelationship(args, "role").then((allowed) => allowed && canAssignUserRole(args)),
-        update: (args) => canAssignCarrierRelationship(args, "role").then((allowed) => allowed && canAssignUserRole(args))
-      }
-    }),
-    approvedAgent: (0, import_fields87.relationship)({
-      ref: "ApprovedAgent.users",
-      access: {
-        create: (args) => canAssignCarrierRelationship(args, "approvedAgent"),
-        update: (args) => canAssignCarrierRelationship(args, "approvedAgent")
-      }
-    }),
-    onboardingStatus: (0, import_fields87.select)({
-      type: "enum",
-      defaultValue: "not_started",
-      options: [
-        { label: "Not started", value: "not_started" },
-        { label: "In progress", value: "in_progress" },
-        { label: "Completed", value: "completed" },
-        { label: "Dismissed", value: "dismissed" }
-      ],
-      access: { create: () => false, update: () => false },
-      graphql: { omit: { create: true, update: true } }
-    }),
-    passengerProfile: (0, import_fields87.relationship)({ ref: "Passenger.userAccount", access: { create: () => false, update: () => false } }),
-    offers: (0, import_fields87.relationship)({ ref: "Offer.customer", many: true, access: { create: () => false, update: () => false } }),
-    bookings: (0, import_fields87.relationship)({ ref: "Booking.customer", many: true, access: { create: () => false, update: () => false } }),
-    auditEvents: (0, import_fields87.relationship)({ ref: "AuditEvent.actor", many: true, access: { create: () => false, update: () => false } }),
-    stationAssignments: (0, import_fields87.relationship)({ ref: "StationAssignment.user", many: true, access: { create: () => false, update: () => false } }),
-    documentVerifications: (0, import_fields87.relationship)({ ref: "DocumentVerification.verifiedBy", many: true, access: { create: () => false, update: () => false } }),
-    submittedPaymentEvidence: (0, import_fields87.relationship)({ ref: "ManualPaymentEvidence.submittedBy", many: true, access: { create: () => false, update: () => false } }),
-    approvedPaymentEvidence: (0, import_fields87.relationship)({ ref: "ManualPaymentEvidence.approvedBy", many: true, access: { create: () => false, update: () => false } }),
-    onboardingSteps: (0, import_fields87.relationship)({ ref: "OnboardingStep.user", many: true, access: { create: () => false, update: () => false } }),
-    ...trackingFields
-  },
-  hooks: {
-    // First-run setup (createInitialUser, no session, empty user table) attaches the operator to the carrier and
-    // full-permission role from ensureInitialCarrierAndRole. Invalid details write nothing: validate rejects them.
-    async resolveInput({ operation, resolvedData, inputData, context }) {
-      if (operation !== "create" || context.session) return resolvedData;
-      if (await context.prisma.user.count() !== 0) return resolvedData;
-      try {
-        validateInitialOperatorInput({ name: String(inputData.name ?? ""), email: String(inputData.email ?? ""), password: String(inputData.password ?? "") });
-      } catch {
-        return resolvedData;
-      }
-      const { carrierId, roleId } = await ensureInitialCarrierAndRole(context.prisma, permissionsList);
-      return { ...resolvedData, carrier: { connect: { id: carrierId } }, role: { connect: { id: roleId } } };
-    },
-    // createInitialUser runs without a session while no user exists. Hold that first operator to the launch policy
-    // (name, email and password rules).
-    async validate({ operation, inputData, context, addValidationError }) {
-      if (operation !== "create" || context.session) return;
-      if (await context.prisma.user.count() !== 0) return;
-      try {
-        validateInitialOperatorInput({ name: String(inputData.name ?? ""), email: String(inputData.email ?? ""), password: String(inputData.password ?? "") });
-      } catch (error) {
-        addValidationError(error instanceof Error ? error.message : "Initial operator details are invalid.");
-      }
-    }
+    });
   }
 });
 
-// features/keystone/models/WebhookEndpoint.ts
-var import_core57 = require("@keystone-6/core");
-var import_access64 = require("@keystone-6/core/access");
-var import_fields89 = require("@keystone-6/core/fields");
-
 // features/integrations/webhook-url.ts
-var import_promises = require("node:dns/promises");
-var import_node_net = __toESM(require("node:net"));
 function assertExternalWebhookUrl(url, env = process.env) {
   if (url.username || url.password || url.hash) throw new Error("Webhook endpoints cannot contain credentials or fragments.");
   if (env.NODE_ENV !== "production") return;
@@ -4191,219 +5353,288 @@ function assertExternalWebhookUrl(url, env = process.env) {
   const allowedHosts = new Set(String(env.OUTBOUND_WEBHOOK_HOSTS ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean));
   if (!allowedHosts.has(url.host.toLowerCase())) throw new Error("Production webhook endpoint host is not explicitly allowlisted.");
 }
+var import_promises, import_node_net;
+var init_webhook_url = __esm({
+  "features/integrations/webhook-url.ts"() {
+    "use strict";
+    import_promises = require("node:dns/promises");
+    import_node_net = __toESM(require("node:net"));
+  }
+});
 
 // features/keystone/models/WebhookEndpoint.ts
-var manageIntegrations2 = (args) => hasFreshPermission(args, "canManageIntegrations");
-var WebhookEndpoint = (0, import_core57.list)({
-  access: carrierScopedAccess("canReadIntegrations", "canManageIntegrations"),
-  ui: { labelField: "name", listView: { initialColumns: ["name", "url", "status", "failureCount", "lastDeliveredAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields89.relationship)({ ref: "Carrier" }),
-    endpointKey: (0, import_fields89.text)({ isIndexed: "unique", validation: { isRequired: true } }),
-    connection: (0, import_fields89.relationship)({ ref: "ProviderConnection.webhookEndpoints" }),
-    name: (0, import_fields89.text)({ validation: { isRequired: true } }),
-    url: (0, import_fields89.text)({
-      validation: { isRequired: true },
-      // Stored normalized, so the value the worker dispatches to is exactly the one validated on save.
-      hooks: { resolveInput: ({ resolvedData }) => {
-        try {
-          return typeof resolvedData.url === "string" ? new URL(resolvedData.url).toString() : resolvedData.url;
-        } catch {
-          return resolvedData.url;
-        }
-      } }
-    }),
-    eventTypes: (0, import_fields89.json)({ defaultValue: [] }),
-    status: (0, import_fields89.select)({ type: "enum", defaultValue: "active", options: [
-      { label: "Active", value: "active" },
-      { label: "Paused", value: "paused" },
-      { label: "Failed", value: "failed" },
-      { label: "Disabled", value: "disabled" }
-    ] }),
-    // The receiver must already hold the shared secret to verify signatures, so the operator supplies it; a secret
-    // generated here could never be read back (read: denyAll) and nothing could verify it.
-    secret: (0, import_fields89.text)({
-      access: { read: import_access64.denyAll, create: manageIntegrations2, update: manageIntegrations2 },
-      ui: hiddenSensitiveUi
-    }),
-    failureCount: (0, import_fields89.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    lastAttemptedAt: (0, import_fields89.timestamp)(),
-    lastDeliveredAt: (0, import_fields89.timestamp)(),
-    nextAttemptAt: (0, import_fields89.timestamp)(),
-    events: (0, import_fields89.relationship)({ ref: "WebhookEvent.endpoint", many: true, access: { create: () => false, update: () => false } }),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    {
-      validate({ resolvedData, addValidationError }) {
-        if (resolvedData.url === void 0) return;
-        let url;
-        try {
-          url = new URL(String(resolvedData.url));
-        } catch {
-          return addValidationError("Webhook URL must be an absolute http(s) URL.");
-        }
-        if (!["http:", "https:"].includes(url.protocol)) return addValidationError("Webhook URL must be an absolute http(s) URL.");
-        try {
-          assertExternalWebhookUrl(url);
-        } catch (error) {
-          addValidationError(error instanceof Error ? error.message : "Webhook URL is not allowed.");
-        }
-      }
-    },
-    {
-      validate({ operation, resolvedData, inputData, addValidationError }) {
-        const eventTypes = resolvedData.eventTypes;
-        if (eventTypes !== void 0 && (!Array.isArray(eventTypes) || eventTypes.length > 50 || eventTypes.some((type) => typeof type !== "string" || !(type === "*" || /^[a-z0-9][a-z0-9._-]{0,99}$/.test(type))))) {
-          addValidationError('Event types must be a list of topic names (for example booking.confirmed), or "*" for every topic.');
-        }
-        if (operation === "create" && typeof inputData.secret !== "string") addValidationError("Enter the signing secret shared with the receiver (at least 32 characters).");
-        if (typeof inputData.secret === "string" && inputData.secret.length < 32) addValidationError("Webhook signing secrets must be at least 32 characters.");
-      }
-    },
-    requiredRelationshipHooks(["carrier"]),
-    carrierRelationshipHooks({ connection: { model: "providerConnection" } })
-  )
+var import_core56, import_access63, import_fields87, manageIntegrations2, WebhookEndpoint;
+var init_WebhookEndpoint = __esm({
+  "features/keystone/models/WebhookEndpoint.ts"() {
+    "use strict";
+    import_core56 = require("@keystone-6/core");
+    import_access63 = require("@keystone-6/core/access");
+    import_fields87 = require("@keystone-6/core/fields");
+    init_webhook_url();
+    init_access();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    manageIntegrations2 = (args) => hasFreshPermission(args, "canManageIntegrations");
+    WebhookEndpoint = (0, import_core56.list)({
+      access: carrierScopedAccess("canReadIntegrations", "canManageIntegrations"),
+      ui: { labelField: "name", listView: { initialColumns: ["name", "url", "status", "failureCount", "lastDeliveredAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields87.relationship)({ ref: "Carrier" }),
+        endpointKey: (0, import_fields87.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+        connection: (0, import_fields87.relationship)({ ref: "ProviderConnection.webhookEndpoints" }),
+        name: (0, import_fields87.text)({ validation: { isRequired: true } }),
+        url: (0, import_fields87.text)({
+          validation: { isRequired: true },
+          // Stored normalized, so the value delivery targets is exactly the one validated on save.
+          hooks: { resolveInput: ({ resolvedData }) => {
+            try {
+              return typeof resolvedData.url === "string" ? new URL(resolvedData.url).toString() : resolvedData.url;
+            } catch {
+              return resolvedData.url;
+            }
+          } }
+        }),
+        eventTypes: (0, import_fields87.json)({ defaultValue: [] }),
+        status: (0, import_fields87.select)({ type: "enum", defaultValue: "active", options: [
+          { label: "Active", value: "active" },
+          { label: "Paused", value: "paused" },
+          { label: "Failed", value: "failed" },
+          { label: "Disabled", value: "disabled" }
+        ] }),
+        // The receiver must already hold the shared secret to verify signatures, so the operator supplies it; a secret
+        // generated here could never be read back (read: denyAll) and nothing could verify it.
+        secret: (0, import_fields87.text)({
+          access: { read: import_access63.denyAll, create: manageIntegrations2, update: manageIntegrations2 },
+          ui: hiddenSensitiveUi
+        }),
+        failureCount: (0, import_fields87.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        lastAttemptedAt: (0, import_fields87.timestamp)(),
+        lastDeliveredAt: (0, import_fields87.timestamp)(),
+        nextAttemptAt: (0, import_fields87.timestamp)(),
+        events: (0, import_fields87.relationship)({ ref: "WebhookEvent.endpoint", many: true, access: { create: () => false, update: () => false } }),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        {
+          validate({ resolvedData, addValidationError }) {
+            if (resolvedData.url === void 0) return;
+            let url;
+            try {
+              url = new URL(String(resolvedData.url));
+            } catch {
+              return addValidationError("Webhook URL must be an absolute http(s) URL.");
+            }
+            if (!["http:", "https:"].includes(url.protocol)) return addValidationError("Webhook URL must be an absolute http(s) URL.");
+            try {
+              assertExternalWebhookUrl(url);
+            } catch (error) {
+              addValidationError(error instanceof Error ? error.message : "Webhook URL is not allowed.");
+            }
+          }
+        },
+        {
+          validate({ operation, resolvedData, inputData, addValidationError }) {
+            const eventTypes = resolvedData.eventTypes;
+            if (eventTypes !== void 0 && (!Array.isArray(eventTypes) || eventTypes.length > 50 || eventTypes.some((type) => typeof type !== "string" || !(type === "*" || /^[a-z0-9][a-z0-9._-]{0,99}$/.test(type))))) {
+              addValidationError('Event types must be a list of topic names (for example booking.confirmed), or "*" for every topic.');
+            }
+            if (operation === "create" && typeof inputData.secret !== "string") addValidationError("Enter the signing secret shared with the receiver (at least 32 characters).");
+            if (typeof inputData.secret === "string" && inputData.secret.length < 32) addValidationError("Webhook signing secrets must be at least 32 characters.");
+          }
+        },
+        requiredRelationshipHooks(["carrier"]),
+        carrierRelationshipHooks({ connection: { model: "providerConnection" } })
+      )
+    });
+  }
 });
 
 // features/keystone/models/WebhookEvent.ts
-var import_core58 = require("@keystone-6/core");
-var import_fields91 = require("@keystone-6/core/fields");
-var manageIntegrations3 = (args) => hasFreshPermission(args, "canManageIntegrations");
-var WebhookEvent = (0, import_core58.list)({
-  access: commandOnlyCarrierAccess("canReadIntegrations", "canManageIntegrations"),
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "eventKey", listView: { initialColumns: ["eventKey", "direction", "eventType", "status", "attemptCount", "occurredAt"] }, hideDelete: true },
-  fields: {
-    carrier: (0, import_fields91.relationship)({ ref: "Carrier" }),
-    eventKey: (0, import_fields91.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    dedupeKey: (0, import_fields91.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    providerEventId: (0, import_fields91.text)({ isIndexed: true, access: immutableFieldAccess }),
-    connection: (0, import_fields91.relationship)({ ref: "ProviderConnection.webhookEvents", access: immutableFieldAccess }),
-    endpoint: (0, import_fields91.relationship)({ ref: "WebhookEndpoint.events", access: immutableFieldAccess }),
-    direction: (0, import_fields91.select)({ type: "enum", validation: { isRequired: true }, access: immutableFieldAccess, options: [
-      { label: "Inbound", value: "inbound" },
-      { label: "Outbound", value: "outbound" }
-    ] }),
-    eventType: (0, import_fields91.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    resourceType: (0, import_fields91.text)({ access: immutableFieldAccess }),
-    resourceId: (0, import_fields91.text)({ access: immutableFieldAccess }),
-    status: (0, import_fields91.select)({ type: "enum", defaultValue: "pending", options: [
-      { label: "Pending", value: "pending" },
-      { label: "Processing", value: "processing" },
-      { label: "Succeeded", value: "succeeded" },
-      { label: "Failed", value: "failed" },
-      { label: "Dead lettered", value: "dead_lettered" }
-    ] }),
-    signatureVerified: (0, import_fields91.checkbox)({ defaultValue: false }),
-    payload: (0, import_fields91.json)({
-      access: { read: manageIntegrations3, create: manageIntegrations3, update: manageIntegrations3 },
-      ui: hiddenSensitiveUi
-    }),
-    payloadSummary: (0, import_fields91.json)({ defaultValue: {} }),
-    attemptCount: (0, import_fields91.integer)({ defaultValue: 0, validation: { min: 0 } }),
-    occurredAt: (0, import_fields91.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
-    lastAttemptedAt: (0, import_fields91.timestamp)(),
-    nextAttemptAt: (0, import_fields91.timestamp)(),
-    completedAt: (0, import_fields91.timestamp)(),
-    responseStatus: (0, import_fields91.integer)(),
-    errorCode: (0, import_fields91.text)(),
-    errorMessage: (0, import_fields91.text)(),
-    ...trackingFields
-  },
-  hooks: combineListHooks(
-    requiredRelationshipHooks(["carrier"]),
-    lifecycleHooks("webhookEvent")
-  )
-});
-
-// features/keystone/models/WorkerHeartbeat.ts
-var import_core59 = require("@keystone-6/core");
-var import_fields93 = require("@keystone-6/core/fields");
-var WorkerHeartbeat = (0, import_core59.list)({
-  access: {
-    operation: { query: (args) => hasFreshPermission(args, "canReadAudit"), create: () => false, update: () => false, delete: () => false }
-  },
-  graphql: commandOnlyGraphql(),
-  ui: { labelField: "workerKey", hideCreate: true, hideDelete: true, itemView: { defaultFieldMode: "read" }, listView: { initialColumns: ["workerKey", "component", "status", "lastSeenAt"] } },
-  fields: {
-    workerKey: (0, import_fields93.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
-    component: (0, import_fields93.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
-    status: (0, import_fields93.select)({ type: "enum", defaultValue: "running", options: [{ label: "Running", value: "running" }, { label: "Draining", value: "draining" }, { label: "Stopped", value: "stopped" }] }),
-    lastSeenAt: (0, import_fields93.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
-    metadata: (0, import_fields93.json)({ defaultValue: {} }),
-    ...trackingFields
+var import_core57, import_fields89, manageIntegrations3, WebhookEvent;
+var init_WebhookEvent = __esm({
+  "features/keystone/models/WebhookEvent.ts"() {
+    "use strict";
+    import_core57 = require("@keystone-6/core");
+    import_fields89 = require("@keystone-6/core/fields");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_fields();
+    init_trackingFields();
+    manageIntegrations3 = (args) => hasFreshPermission(args, "canManageIntegrations");
+    WebhookEvent = (0, import_core57.list)({
+      access: commandOnlyCarrierAccess("canReadIntegrations", "canManageIntegrations"),
+      graphql: commandOnlyGraphql(),
+      ui: { labelField: "eventKey", listView: { initialColumns: ["eventKey", "direction", "eventType", "status", "attemptCount", "occurredAt"] }, hideDelete: true },
+      fields: {
+        carrier: (0, import_fields89.relationship)({ ref: "Carrier" }),
+        eventKey: (0, import_fields89.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        dedupeKey: (0, import_fields89.text)({ isIndexed: "unique", validation: { isRequired: true }, access: immutableFieldAccess }),
+        providerEventId: (0, import_fields89.text)({ isIndexed: true, access: immutableFieldAccess }),
+        connection: (0, import_fields89.relationship)({ ref: "ProviderConnection.webhookEvents", access: immutableFieldAccess }),
+        endpoint: (0, import_fields89.relationship)({ ref: "WebhookEndpoint.events", access: immutableFieldAccess }),
+        direction: (0, import_fields89.select)({ type: "enum", validation: { isRequired: true }, access: immutableFieldAccess, options: [
+          { label: "Inbound", value: "inbound" },
+          { label: "Outbound", value: "outbound" }
+        ] }),
+        eventType: (0, import_fields89.text)({ validation: { isRequired: true }, access: immutableFieldAccess }),
+        resourceType: (0, import_fields89.text)({ access: immutableFieldAccess }),
+        resourceId: (0, import_fields89.text)({ access: immutableFieldAccess }),
+        status: (0, import_fields89.select)({ type: "enum", defaultValue: "pending", options: [
+          { label: "Pending", value: "pending" },
+          { label: "Processing", value: "processing" },
+          { label: "Succeeded", value: "succeeded" },
+          { label: "Failed", value: "failed" },
+          { label: "Dead lettered", value: "dead_lettered" }
+        ] }),
+        signatureVerified: (0, import_fields89.checkbox)({ defaultValue: false }),
+        payload: (0, import_fields89.json)({
+          access: { read: manageIntegrations3, create: manageIntegrations3, update: manageIntegrations3 },
+          ui: hiddenSensitiveUi
+        }),
+        payloadSummary: (0, import_fields89.json)({ defaultValue: {} }),
+        attemptCount: (0, import_fields89.integer)({ defaultValue: 0, validation: { min: 0 } }),
+        occurredAt: (0, import_fields89.timestamp)({ defaultValue: { kind: "now" }, access: immutableFieldAccess }),
+        lastAttemptedAt: (0, import_fields89.timestamp)(),
+        nextAttemptAt: (0, import_fields89.timestamp)(),
+        completedAt: (0, import_fields89.timestamp)(),
+        responseStatus: (0, import_fields89.integer)(),
+        errorCode: (0, import_fields89.text)(),
+        errorMessage: (0, import_fields89.text)(),
+        ...trackingFields
+      },
+      hooks: combineListHooks(
+        requiredRelationshipHooks(["carrier"]),
+        lifecycleHooks("webhookEvent")
+      )
+    });
   }
 });
 
 // features/keystone/models/index.ts
-var models = {
-  User,
-  Role,
-  Carrier,
-  Airport,
-  ApprovedAgent,
-  Route,
-  FlightSchedule,
-  FlightInstance,
-  Cabin,
-  InventoryBucket,
-  InventoryHold,
-  FareBrand,
-  FareRule,
-  AncillaryProduct,
-  Offer,
-  OfferItem,
-  Passenger,
-  TravelDocument,
-  DocumentVerification,
-  Booking,
-  BookingPassenger,
-  Journey,
-  BookingSegment,
-  BookingLineItem,
-  ServiceRequest,
-  Ticket,
-  TicketCoupon,
-  ServiceObligation,
-  TicketCouponLineage,
-  ElectronicMiscDocument,
-  ElectronicMiscCoupon,
-  SeatMap,
-  Seat,
-  SeatAssignment,
-  PaymentProvider,
-  PaymentSession,
-  SettlementLedgerEntry,
-  ManualPaymentEvidence,
-  Payment,
-  Refund,
-  Exchange,
-  CheckIn,
-  BoardingPass,
-  Bag,
-  BagEvent,
-  Disruption,
-  Reaccommodation,
-  StationAssignment,
-  IntegrationProvider,
-  ProviderConnection,
-  WebhookEndpoint,
-  WebhookEvent,
-  MachineCredential,
-  OutboxEvent,
-  OnboardingStep,
-  RateLimitBucket,
-  IdempotencyKey,
-  AuditEvent,
-  WorkerHeartbeat
-};
-
-// features/keystone/index.ts
-var import_session2 = require("@keystone-6/core/session");
-
-// features/keystone/mutations/index.ts
-var import_schema = require("@graphql-tools/schema");
+var models;
+var init_models = __esm({
+  "features/keystone/models/index.ts"() {
+    "use strict";
+    init_AncillaryProduct();
+    init_ApprovedAgent();
+    init_Airport();
+    init_AuditEvent();
+    init_Bag();
+    init_BagEvent();
+    init_BoardingPass();
+    init_Booking();
+    init_BookingLineItem();
+    init_BookingPassenger();
+    init_BookingSegment();
+    init_Cabin();
+    init_Carrier();
+    init_CheckIn();
+    init_Disruption();
+    init_DocumentVerification();
+    init_ElectronicMiscCoupon();
+    init_ElectronicMiscDocument();
+    init_Exchange();
+    init_FareBrand();
+    init_FareRule();
+    init_FlightInstance();
+    init_FlightSchedule();
+    init_InventoryBucket();
+    init_IdempotencyKey();
+    init_IntegrationProvider();
+    init_InventoryHold();
+    init_MachineCredential();
+    init_ManualPaymentEvidence();
+    init_Journey();
+    init_Offer();
+    init_OfferItem();
+    init_OnboardingStep();
+    init_Passenger();
+    init_Payment();
+    init_PaymentProvider();
+    init_PaymentSession();
+    init_ProviderConnection();
+    init_Reaccommodation();
+    init_Refund();
+    init_RateLimitBucket();
+    init_Role();
+    init_Route();
+    init_Seat();
+    init_SeatAssignment();
+    init_SeatMap();
+    init_SettlementLedgerEntry();
+    init_StationAssignment();
+    init_ServiceRequest();
+    init_Ticket();
+    init_TicketCoupon();
+    init_TicketCouponLineage();
+    init_ServiceObligation();
+    init_TravelDocument();
+    init_User();
+    init_WebhookEndpoint();
+    init_WebhookEvent();
+    models = {
+      User,
+      Role,
+      Carrier,
+      Airport,
+      ApprovedAgent,
+      Route,
+      FlightSchedule,
+      FlightInstance,
+      Cabin,
+      InventoryBucket,
+      InventoryHold,
+      FareBrand,
+      FareRule,
+      AncillaryProduct,
+      Offer,
+      OfferItem,
+      Passenger,
+      TravelDocument,
+      DocumentVerification,
+      Booking,
+      BookingPassenger,
+      Journey,
+      BookingSegment,
+      BookingLineItem,
+      ServiceRequest,
+      Ticket,
+      TicketCoupon,
+      ServiceObligation,
+      TicketCouponLineage,
+      ElectronicMiscDocument,
+      ElectronicMiscCoupon,
+      SeatMap,
+      Seat,
+      SeatAssignment,
+      PaymentProvider,
+      PaymentSession,
+      SettlementLedgerEntry,
+      ManualPaymentEvidence,
+      Payment,
+      Refund,
+      Exchange,
+      CheckIn,
+      BoardingPass,
+      Bag,
+      BagEvent,
+      Disruption,
+      Reaccommodation,
+      StationAssignment,
+      IntegrationProvider,
+      ProviderConnection,
+      WebhookEndpoint,
+      WebhookEvent,
+      MachineCredential,
+      OnboardingStep,
+      RateLimitBucket,
+      IdempotencyKey,
+      AuditEvent
+    };
+  }
+});
 
 // features/keystone/mutations/redirectToInit.ts
 async function shouldRedirectToInitialOperatorSetup(context, env = process.env) {
@@ -4414,14 +5645,16 @@ async function shouldRedirectToInitialOperatorSetup(context, env = process.env) 
 async function redirectToInit(_root, _args, context) {
   return shouldRedirectToInitialOperatorSetup(context);
 }
-var redirectToInit_default = redirectToInit;
-
-// features/keystone/mutations/airlineOperations.ts
-var import_node_crypto3 = __toESM(require("node:crypto"));
-var import_client = require("@prisma/client");
+var redirectToInit_default;
+var init_redirectToInit = __esm({
+  "features/keystone/mutations/redirectToInit.ts"() {
+    "use strict";
+    init_initial_operator_setup();
+    redirectToInit_default = redirectToInit;
+  }
+});
 
 // features/keystone/lib/storefront-session.ts
-var import_node_crypto = __toESM(require("node:crypto"));
 function normalizeStorefrontToken(value) {
   const token = value?.trim();
   if (!/^[A-Za-z0-9_-]{32,200}$/.test(token)) throw new DomainError("A valid shopping-session token is required.");
@@ -4445,16 +5678,16 @@ function withStorefrontSession(context, carrier, bookingId) {
     data: { name: "Storefront", email: "", carrier, approvedAgent: null, role: null, storefront: true, storefrontBookingId: bookingId }
   });
 }
+var import_node_crypto;
+var init_storefront_session = __esm({
+  "features/keystone/lib/storefront-session.ts"() {
+    "use strict";
+    import_node_crypto = __toESM(require("node:crypto"));
+    init_domain_error();
+  }
+});
 
 // features/keystone/lib/passenger-service-allocation.ts
-var PASSENGER_SERVICE_ALLOCATION_TYPE = "whole-party-contiguous-journey";
-var UnsupportedPassengerServiceAllocation = class extends Error {
-  constructor(reason) {
-    super(`Unsupported passenger-service allocation: ${reason}. Retain the original offer/command for reconciliation; do not create a replacement key.`);
-    this.code = "UNSUPPORTED_PASSENGER_SERVICE_ALLOCATION";
-    this.name = "UnsupportedPassengerServiceAllocation";
-  }
-};
 function record(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new UnsupportedPassengerServiceAllocation("missing explicit itinerary identity");
   return value;
@@ -4550,9 +5783,22 @@ function frozenAcceptanceVersion(value) {
   if (version !== 1 && version !== 2) throw new Error("Legacy offer has no supported frozen acceptance version; reconcile the original offer, not a new booking key.");
   return version;
 }
+var PASSENGER_SERVICE_ALLOCATION_TYPE, UnsupportedPassengerServiceAllocation;
+var init_passenger_service_allocation = __esm({
+  "features/keystone/lib/passenger-service-allocation.ts"() {
+    "use strict";
+    PASSENGER_SERVICE_ALLOCATION_TYPE = "whole-party-contiguous-journey";
+    UnsupportedPassengerServiceAllocation = class extends Error {
+      constructor(reason) {
+        super(`Unsupported passenger-service allocation: ${reason}. Retain the original offer/command for reconciliation; do not create a replacement key.`);
+        this.code = "UNSUPPORTED_PASSENGER_SERVICE_ALLOCATION";
+        this.name = "UnsupportedPassengerServiceAllocation";
+      }
+    };
+  }
+});
 
 // features/keystone/lib/booking-acceptance.ts
-var import_node_crypto2 = __toESM(require("node:crypto"));
 function bookingAcceptanceDigest(value) {
   const canonical = (entry) => entry instanceof Date ? entry.toISOString() : Array.isArray(entry) ? entry.map(canonical) : entry && typeof entry === "object" ? Object.fromEntries(Object.entries(entry).filter(([, item]) => item !== void 0).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : entry;
   return import_node_crypto2.default.createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
@@ -4563,23 +5809,6 @@ function normalizedBookingPassengerIds(ids2) {
   if (new Set(normalized).size !== normalized.length) throw new Error("One to nine unique passenger IDs are required.");
   return normalized;
 }
-var BOOKING_ACCEPTANCE_OFFER_QUERY = `
-  id offerNumber idempotencyKey shoppingSessionId source status expiresAt baseAmount taxAmount feeAmount discountAmount totalAmount currencyCode
-  carrier { id code } customer { id carrier { id } } approvedAgent { id carrier { id } }
-  passengers { id }
-  items {
-    id itemKey itemType description quantity unitAmount baseAmount taxAmount feeAmount totalAmount currencyCode
-    productSnapshot segmentSnapshot passengerReferences carrier { id }
-    fareBrand { id } fareRule { id } ancillaryProduct { id carrier { id } }
-    inventoryBucket { id carrier { id } flightInstance { id } cabin { id code } }
-    flightInstance { id status flightNumber scheduledDepartureAt scheduledArrivalAt origin { id iataCode } destination { id iataCode } carrier { id code } operatingCarrier { id code } }
-  }
-  inventoryHolds {
-    id holdKey status quantity expiresAt carrier { id }
-    inventoryBucket { id held sold blocked authorized capacity carrier { id } }
-  }
-`;
-var BOOKING_ACCEPTANCE_PASSENGER_QUERY = "id passengerKey title givenName middleNames familyName suffix dateOfBirth nationalityCode email phone loyaltyPrograms updatedAt carrier { id }";
 function acceptedBookingSnapshot(offer, passengers, version = 2) {
   const identityFields = ["id", "passengerKey", "title", "givenName", "middleNames", "familyName", "suffix", "dateOfBirth", "nationalityCode", "email", "phone", "loyaltyPrograms", "updatedAt"];
   return {
@@ -4679,10 +5908,34 @@ function publicBookingReceipt(result, booking, accessState) {
     current: { status: booking.status, paymentStatus: booking.paymentStatus, ticketingStatus: booking.ticketingStatus }
   };
 }
+var import_node_crypto2, BOOKING_ACCEPTANCE_OFFER_QUERY, BOOKING_ACCEPTANCE_PASSENGER_QUERY;
+var init_booking_acceptance = __esm({
+  "features/keystone/lib/booking-acceptance.ts"() {
+    "use strict";
+    import_node_crypto2 = __toESM(require("node:crypto"));
+    init_passenger_service_allocation();
+    BOOKING_ACCEPTANCE_OFFER_QUERY = `
+  id offerNumber idempotencyKey shoppingSessionId source status expiresAt baseAmount taxAmount feeAmount discountAmount totalAmount currencyCode
+  carrier { id code } customer { id carrier { id } } approvedAgent { id carrier { id } }
+  passengers { id }
+  items {
+    id itemKey itemType description quantity unitAmount baseAmount taxAmount feeAmount totalAmount currencyCode
+    productSnapshot segmentSnapshot passengerReferences carrier { id }
+    fareBrand { id } fareRule { id } ancillaryProduct { id carrier { id } }
+    inventoryBucket { id carrier { id } flightInstance { id } cabin { id code } }
+    flightInstance { id status flightNumber scheduledDepartureAt scheduledArrivalAt origin { id iataCode } destination { id iataCode } carrier { id code } operatingCarrier { id code } }
+  }
+  inventoryHolds {
+    id holdKey status quantity expiresAt carrier { id }
+    inventoryBucket { id held sold blocked authorized capacity carrier { id } }
+  }
+`;
+    BOOKING_ACCEPTANCE_PASSENGER_QUERY = "id passengerKey title givenName middleNames familyName suffix dateOfBirth nationalityCode email phone loyaltyPrograms updatedAt carrier { id }";
+  }
+});
 
 // features/keystone/lib/service-eligibility.ts
-var passengerProcessingFlightStatuses = /* @__PURE__ */ new Set(["scheduled", "open_for_sale", "closed_for_sale", "delayed"]);
-function timestamp42(value) {
+function timestamp40(value) {
   if (value == null) return null;
   const result = value instanceof Date ? value.getTime() : new Date(value).getTime();
   return Number.isFinite(result) ? result : null;
@@ -4695,7 +5948,7 @@ function assertDatedFlightEligibleForAction(flight, action, now = /* @__PURE__ *
   if (!passengerProcessingFlightStatuses.has(String(flight.status))) {
     throw new DomainError(`${action} is not allowed for a cancelled, departed, arrived, or unsupported dated service.`);
   }
-  const departureAt = timestamp42(flight.status === "delayed" && flight.estimatedDepartureAt ? flight.estimatedDepartureAt : flight.scheduledDepartureAt);
+  const departureAt = timestamp40(flight.status === "delayed" && flight.estimatedDepartureAt ? flight.estimatedDepartureAt : flight.scheduledDepartureAt);
   if (departureAt == null || departureAt <= now.getTime()) {
     throw new DomainError(`${action} requires a future scheduled departure; the dated service is missing, departed, or past departure.`);
   }
@@ -4791,13 +6044,16 @@ function ticketIssuanceArtifactBlockers(input) {
   if (input.ancillaryCouponCount !== 0) blockers.push("existing ancillary coupon artifacts");
   return blockers;
 }
+var passengerProcessingFlightStatuses;
+var init_service_eligibility = __esm({
+  "features/keystone/lib/service-eligibility.ts"() {
+    "use strict";
+    init_domain_error();
+    passengerProcessingFlightStatuses = /* @__PURE__ */ new Set(["scheduled", "open_for_sale", "closed_for_sale", "delayed"]);
+  }
+});
 
 // features/keystone/lib/transactions.ts
-var SERIALIZABLE_TRANSACTION_OPTIONS = {
-  isolationLevel: "Serializable",
-  maxWait: 5e3,
-  timeout: 2e4
-};
 function sortUniqueIds(ids2) {
   return [...new Set(ids2.map((id2) => id2.trim()).filter(Boolean))].sort();
 }
@@ -4836,6 +6092,18 @@ async function runSerializableTransaction(context, work, maxAttempts = 3) {
   }
   throw new DomainError("The record changed concurrently; retry the request.", "CONFLICT");
 }
+var SERIALIZABLE_TRANSACTION_OPTIONS;
+var init_transactions = __esm({
+  "features/keystone/lib/transactions.ts"() {
+    "use strict";
+    init_domain_error();
+    SERIALIZABLE_TRANSACTION_OPTIONS = {
+      isolationLevel: "Serializable",
+      maxWait: 5e3,
+      timeout: 2e4
+    };
+  }
+});
 
 // features/keystone/lib/passenger-age.ts
 function ageOn(dateOfBirth, on) {
@@ -4860,9 +6128,13 @@ function travelerDateOfBirth(value, departure) {
 function hasAccompanyingAdult(datesOfBirth, departure) {
   return datesOfBirth.some((dateOfBirth) => ageOn(dateOfBirth, departure) >= 18);
 }
+var init_passenger_age = __esm({
+  "features/keystone/lib/passenger-age.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/mutations/airlineOperations.ts
-var sensitiveAuditKey = /authorization|cookie|credential|document|password|payload|secret|token/i;
 function sanitizeAuditMetadata(value, depth = 0) {
   if (value === null || typeof value === "boolean" || typeof value === "number") return value;
   if (typeof value === "string") return value.slice(0, 500);
@@ -4975,23 +6247,14 @@ async function writeAudit(sudo, context, input) {
       occurredAt: (/* @__PURE__ */ new Date()).toISOString()
     }
   });
-  await sudo.query.OutboxEvent.createOne({
-    data: {
-      carrier: { connect: { id: input.carrierId } },
-      eventKey: `outbox:${input.key}`,
-      topic: input.action,
-      aggregateType: input.aggregateType,
-      aggregateId: input.aggregateId,
-      payload: sanitizeAuditMetadata({ before: input.before ?? {}, after: input.after ?? {}, metadata: input.metadata ?? {} }),
-      status: "pending",
-      availableAt: (/* @__PURE__ */ new Date()).toISOString()
-    }
-  });
 }
 async function cancelBooking(_root, args, context) {
   const storefrontBookingId = isStorefrontContext(context) ? context.session?.data?.storefrontBookingId : void 0;
   if (!storefrontBookingId || storefrontBookingId !== args.customerBookingId) await requireFreshPermission(context, "canManageBookings");
-  return runSerializableTransaction(context, async (transactionContext) => {
+  return runSerializableTransaction(context, (transactionContext) => cancelBookingInTransaction(transactionContext, args, storefrontBookingId));
+}
+async function cancelBookingInTransaction(transactionContext, args, storefrontBookingId, options = {}) {
+  {
     const prisma = transactionContext.prisma;
     const readCancellationState = () => prisma.booking.findUnique({
       where: { id: args.bookingId },
@@ -5053,7 +6316,8 @@ async function cancelBooking(_root, args, context) {
       const metadata = payment.metadata ?? {};
       return metadata.purchaseKind !== "seat" && ["captured", "partially_refunded"].includes(payment.status);
     });
-    if (unsettledFarePayment || ["paid", "partially_refunded"].includes(booking.paymentStatus)) throw new DomainError("Refund captured airfare before cancelling this booking.");
+    const fareSettledByRefund = options.refundSettled === true && booking.paymentStatus !== "paid" && (!unsettledFarePayment || unsettledFarePayment.status === "partially_refunded");
+    if (!fareSettledByRefund && (unsettledFarePayment || ["paid", "partially_refunded"].includes(booking.paymentStatus))) throw new DomainError("Refund captured airfare before cancelling this booking.");
     const unsettledSeatPayment = booking.payments.find((payment) => {
       const metadata = payment.metadata ?? {};
       return metadata.purchaseKind === "seat" && ["captured", "partially_refunded"].includes(payment.status);
@@ -5116,7 +6380,7 @@ async function cancelBooking(_root, args, context) {
     const result = { resourceType: "Booking", resourceId: booking.id, status: "cancelled", changed: true, replayed: false };
     await finishOperation(sudo, claim.record.id, result);
     return result;
-  });
+  }
 }
 function randomReference(prefix, length) {
   return `${prefix}${import_node_crypto3.default.randomBytes(length).toString("hex").toUpperCase().slice(0, length)}`;
@@ -5351,7 +6615,10 @@ async function createBookingFromOfferInTransaction(_root, args, context, admissi
     return replay;
   }
   try {
-    const recordLocator = randomReference("", 6);
+    let recordLocator = randomReference("", 6);
+    for (let attempt = 0; attempt < 5 && await context.prisma.booking.findFirst({ where: { carrierId: offer.carrier.id, recordLocator }, select: { id: true } }); attempt++) {
+      recordLocator = randomReference("", 6);
+    }
     const orderNumber = randomReference(`${offer.carrier.code}-`, 12);
     const booking = await sudo.query.Booking.createOne({
       data: {
@@ -5569,6 +6836,25 @@ async function createBookingFromOffer(root, args, context, admission) {
     return runSerializableTransaction(context, (tx) => createBookingFromOfferInTransaction(root, { ...args, recoverOnly: true }, tx, admission));
   }
 }
+var import_node_crypto3, import_client, sensitiveAuditKey;
+var init_airlineOperations = __esm({
+  "features/keystone/mutations/airlineOperations.ts"() {
+    "use strict";
+    import_node_crypto3 = __toESM(require("node:crypto"));
+    import_client = require("@prisma/client");
+    init_access();
+    init_lifecycle();
+    init_snapshots();
+    init_storefront_session();
+    init_passenger_service_allocation();
+    init_booking_acceptance();
+    init_service_eligibility();
+    init_transactions();
+    init_domain_error();
+    init_passenger_age();
+    sensitiveAuditKey = /authorization|cookie|credential|document|password|payload|secret|token/i;
+  }
+});
 
 // features/keystone/lib/segment-service-status.ts
 function deriveSegmentServiceStatus(entitlements) {
@@ -5593,10 +6879,12 @@ async function currentSegmentServiceStatus(prisma, bookingId, segmentId) {
   if (entitlements.some((item) => !item.bookingPassengerId)) throw new DomainError("A current entitlement has no traveler binding.");
   return deriveSegmentServiceStatus(entitlements);
 }
-
-// features/keystone/mutations/airlineWorkflows.ts
-var import_node_crypto6 = __toESM(require("node:crypto"));
-var import_client2 = require("@prisma/client");
+var init_segment_service_status = __esm({
+  "features/keystone/lib/segment-service-status.ts"() {
+    "use strict";
+    init_domain_error();
+  }
+});
 
 // features/integrations/payment/manual.ts
 function requiredReference(value, label) {
@@ -5611,36 +6899,39 @@ function requiredAttemptKey(value) {
   if (!normalized || normalized.length > 300) throw new Error("A payment attempt identity is required.");
   return normalized;
 }
-var manualReconciliationAdapter = {
-  async capture(_provider, input) {
-    const attemptKey = requiredAttemptKey(input.attemptKey);
-    const reference = requiredReference(input.providerReference, "Payment reference");
-    if (input.instrumentLast4 && !/^\d{4}$/.test(input.instrumentLast4)) {
-      throw new Error("Instrument last four must contain exactly four digits.");
-    }
-    return {
-      providerPaymentId: reference,
-      providerCaptureId: reference,
-      ...input.instrumentBrand?.trim() ? { instrumentBrand: input.instrumentBrand.trim().slice(0, 40) } : {},
-      ...input.instrumentLast4 ? { instrumentLast4: input.instrumentLast4 } : {},
-      providerData: { settlementMode: "manual_reconciliation", attemptKey }
-    };
-  },
-  async refund(_provider, input) {
-    const attemptKey = requiredAttemptKey(input.attemptKey);
-    requiredReference(input.paymentReference, "Payment reference");
-    const refundReference = requiredReference(input.refundReference, "Refund reference");
-    return {
-      providerRefundId: refundReference,
-      providerData: { settlementMode: "manual_reconciliation", attemptKey }
+var manualReconciliationAdapter;
+var init_manual = __esm({
+  "features/integrations/payment/manual.ts"() {
+    "use strict";
+    manualReconciliationAdapter = {
+      async capture(_provider, input) {
+        const attemptKey = requiredAttemptKey(input.attemptKey);
+        const reference = requiredReference(input.providerReference, "Payment reference");
+        if (input.instrumentLast4 && !/^\d{4}$/.test(input.instrumentLast4)) {
+          throw new Error("Instrument last four must contain exactly four digits.");
+        }
+        return {
+          providerPaymentId: reference,
+          providerCaptureId: reference,
+          ...input.instrumentBrand?.trim() ? { instrumentBrand: input.instrumentBrand.trim().slice(0, 40) } : {},
+          ...input.instrumentLast4 ? { instrumentLast4: input.instrumentLast4 } : {},
+          providerData: { settlementMode: "manual_reconciliation", attemptKey }
+        };
+      },
+      async refund(_provider, input) {
+        const attemptKey = requiredAttemptKey(input.attemptKey);
+        requiredReference(input.paymentReference, "Payment reference");
+        const refundReference = requiredReference(input.refundReference, "Refund reference");
+        return {
+          providerRefundId: refundReference,
+          providerData: { settlementMode: "manual_reconciliation", attemptKey }
+        };
+      }
     };
   }
-};
+});
 
 // features/integrations/payment/index.ts
-var adapters = {
-  manual: manualReconciliationAdapter
-};
 function getPaymentAdapter(provider) {
   const adapter = adapters[provider.adapterType];
   if (!adapter) {
@@ -5648,16 +6939,31 @@ function getPaymentAdapter(provider) {
   }
   return adapter;
 }
+var adapters;
+var init_payment = __esm({
+  "features/integrations/payment/index.ts"() {
+    "use strict";
+    init_manual();
+    init_stripe();
+    adapters = {
+      manual: manualReconciliationAdapter,
+      stripe: stripeAdapter
+    };
+  }
+});
 
 // features/keystone/lib/storefront-capacity.ts
 function anonymousHoldQuota(authorized, requestedPartySize) {
   const baseline = Math.max(1, Math.floor(authorized * 0.25));
   return Math.min(10, Math.max(requestedPartySize, baseline));
 }
+var init_storefront_capacity = __esm({
+  "features/keystone/lib/storefront-capacity.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/lib/coupon-lineage.ts
-var import_node_crypto4 = __toESM(require("node:crypto"));
-var spendable = (coupon) => coupon.status === "open" || coupon.status === "checked_in";
 function createServiceObligationKey() {
   return `svo_${import_node_crypto4.default.randomBytes(24).toString("base64url")}`;
 }
@@ -5693,6 +6999,14 @@ function validateCouponTransformation(transformation, parents, children) {
     throw new Error("A consolidation must retire distinct parent obligations and create a new child obligation at version one.");
   }
 }
+var import_node_crypto4, spendable;
+var init_coupon_lineage = __esm({
+  "features/keystone/lib/coupon-lineage.ts"() {
+    "use strict";
+    import_node_crypto4 = __toESM(require("node:crypto"));
+    spendable = (coupon) => coupon.status === "open" || coupon.status === "checked_in";
+  }
+});
 
 // features/keystone/lib/money.ts
 function currencyExponent(currencyCode) {
@@ -5713,7 +7027,6 @@ function formatMinorUnits(amount, currencyCode) {
     return `${currencyCode} ${minorToMajor(amount, currencyCode).toFixed(currencyExponent(currencyCode))}`;
   }
 }
-var MAX_MINOR_AMOUNT = 2147483647;
 function checkedMinorTotal(perUnit, quantity = 1) {
   const unit = perUnit.reduce((sum, value) => sum + value, 0);
   const total2 = unit * quantity;
@@ -5722,12 +7035,16 @@ function checkedMinorTotal(perUnit, quantity = 1) {
   }
   return total2;
 }
-
-// features/keystone/lib/travel-document-key.ts
-var import_node_crypto5 = __toESM(require("node:crypto"));
+var MAX_MINOR_AMOUNT;
+var init_money = __esm({
+  "features/keystone/lib/money.ts"() {
+    "use strict";
+    init_domain_error();
+    MAX_MINOR_AMOUNT = 2147483647;
+  }
+});
 
 // features/keystone/lib/session.ts
-var LOCAL_TEST_SECRET = "local-test-session-secret-not-for-production";
 function resolveSessionSecret(env = process.env) {
   const configured = env.SESSION_SECRET;
   if (configured) {
@@ -5741,6 +7058,13 @@ function resolveSessionSecret(env = process.env) {
   }
   return LOCAL_TEST_SECRET;
 }
+var LOCAL_TEST_SECRET;
+var init_session = __esm({
+  "features/keystone/lib/session.ts"() {
+    "use strict";
+    LOCAL_TEST_SECRET = "local-test-session-secret-not-for-production";
+  }
+});
 
 // features/keystone/lib/travel-document-key.ts
 function travelDocumentTokenizationKey(env = process.env) {
@@ -5748,6 +7072,27 @@ function travelDocumentTokenizationKey(env = process.env) {
   if (configured) return configured;
   return import_node_crypto5.default.createHmac("sha256", resolveSessionSecret(env)).update("openfront-airline:travel-document-tokenization:v1").digest("hex");
 }
+var import_node_crypto5;
+var init_travel_document_key = __esm({
+  "features/keystone/lib/travel-document-key.ts"() {
+    "use strict";
+    import_node_crypto5 = __toESM(require("node:crypto"));
+    init_session();
+  }
+});
+
+// features/airline/lib/travel-documents.ts
+function travelDocumentsRequired(originCountryCode, destinationCountryCode) {
+  const origin = originCountryCode?.trim().toUpperCase() ?? "";
+  const destination = destinationCountryCode?.trim().toUpperCase() ?? "";
+  if (!/^[A-Z]{2}$/.test(origin) || !/^[A-Z]{2}$/.test(destination)) return true;
+  return origin !== destination;
+}
+var init_travel_documents = __esm({
+  "features/airline/lib/travel-documents.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/mutations/airlineWorkflows.ts
 function calculateAvailability(input) {
@@ -5855,8 +7200,6 @@ async function searchAirlineFlights(_root, args, context) {
     };
   }));
 }
-var MAX_ACTIVE_STOREFRONT_OFFERS = 2;
-var MAX_ACTIVE_STOREFRONT_HELD_SEATS = 9;
 async function enforceStorefrontHoldCap(context, carrierId, shoppingSessionHash, requestedSeats) {
   await context.prisma.$queryRaw(import_client2.Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${carrierId}:`} || ${shoppingSessionHash}, 0))::text AS "lock"`);
   const reconciled = await context.prisma.$executeRaw(import_client2.Prisma.sql`
@@ -6257,15 +7600,18 @@ async function captureBookingPayment(_root, args, context) {
   });
 }
 async function processBookingRefund(_root, args, context) {
-  return runSerializableTransaction(context, async (transactionContext) => {
-    await requireFreshPermission(transactionContext, "canManagePayments");
+  return runSerializableTransaction(context, (transactionContext) => processBookingRefundInTransaction(transactionContext, args, { authorize: true }));
+}
+async function processBookingRefundInTransaction(transactionContext, args, options) {
+  {
+    if (options.authorize) await requireFreshPermission(transactionContext, "canManagePayments");
     const sudo = transactionContext.sudo();
     let booking = await sudo.query.Booking.findOne({
       where: { id: args.bookingId },
       query: "id status paymentStatus ticketingStatus totalAmount currencyCode carrier { id } payments { id status capturedAmount refundedAmount providerPaymentId metadata session { id providerData } provider { id providerKey adapterType configuration } } tickets { id status coupons { id status } }"
     });
     if (!booking) throw new DomainError("Booking not found.");
-    await requireFreshCarrierPermission(transactionContext, "canManagePayments", booking.carrier.id);
+    if (options.authorize) await requireFreshCarrierPermission(transactionContext, "canManagePayments", booking.carrier.id);
     if (!Number.isSafeInteger(args.amount) || args.amount <= 0) throw new DomainError("Refund amount must be a positive minor-unit integer.");
     const reason = args.reason.trim();
     const providerReference = args.providerReference.trim();
@@ -6289,6 +7635,7 @@ async function processBookingRefund(_root, args, context) {
       return purchaseKind !== "seat" && ["captured", "partially_refunded"].includes(candidate.status);
     });
     if (!payment) throw new DomainError("No captured payment is available to refund.");
+    if (options.cardOnly && payment.provider.adapterType !== "stripe") throw new DomainError("This booking was not paid by card online. Contact the airline to cancel it.");
     const remaining = payment.capturedAmount - payment.refundedAmount;
     if (args.amount > remaining) throw new DomainError("Refund amount exceeds the remaining captured amount.");
     const providerLock = await transactionContext.prisma.$queryRaw(import_client2.Prisma.sql`SELECT "id" FROM "PaymentProvider" WHERE "id" = ${payment.provider.id} FOR UPDATE`);
@@ -6361,145 +7708,148 @@ async function processBookingRefund(_root, args, context) {
     const result = { resourceType: "Refund", resourceId: refund.id, status: "succeeded", changed: true, replayed: false };
     await finishOperation(sudo, claim.record.id, result);
     return result;
-  });
+  }
 }
 async function issueBookingTickets(_root, args, context) {
   return runSerializableTransaction(context, async (transactionContext) => {
     await requireFreshPermission(transactionContext, "canManageTicketing");
-    const sudo = transactionContext.sudo();
-    const prisma = transactionContext.prisma;
-    const bookingQuery = `id status paymentStatus ticketingStatus totalAmount currencyCode carrier { id code } passengers { id passenger { id } }`;
-    let booking = await sudo.query.Booking.findOne({ where: { id: args.bookingId }, query: bookingQuery });
-    if (!booking) throw new DomainError("Booking not found.");
-    await requireFreshCarrierPermission(transactionContext, "canManageTicketing", booking.carrier.id);
-    await lockBooking(transactionContext, booking.id);
-    booking = await sudo.query.Booking.findOne({ where: { id: booking.id }, query: bookingQuery });
-    if (!booking) throw new DomainError("Booking changed while preparing ticket issuance.");
-    const key = normalizeIdempotencyKey(args.idempotencyKey);
-    const request = { bookingId: booking.id };
-    const inspected = await inspectOperation(sudo, booking.carrier.id, key, "ticket.issue", request);
-    if (inspected.replay) return { ...inspected.replay.result ?? {}, replayed: true };
-    const readSegments = () => prisma.bookingSegment.findMany({
-      where: { bookingId: booking.id },
-      orderBy: [{ sequence: "asc" }, { id: "asc" }],
-      take: 51,
-      select: {
-        id: true,
-        carrierId: true,
-        bookingId: true,
-        sequence: true,
-        status: true,
-        bookingClassCode: true,
-        fareBasisCode: true,
-        flightInstanceId: true,
-        flightInstance: { select: { id: true, carrierId: true, status: true, scheduledDepartureAt: true, estimatedDepartureAt: true, actualDepartureAt: true, actualArrivalAt: true } }
-      }
+    return issueBookingTicketsInTransaction(transactionContext, args, { authorize: true });
+  });
+}
+async function issueBookingTicketsInTransaction(transactionContext, args, options) {
+  const sudo = transactionContext.sudo();
+  const prisma = transactionContext.prisma;
+  const bookingQuery = `id status paymentStatus ticketingStatus totalAmount currencyCode carrier { id code } passengers { id passenger { id } }`;
+  let booking = await sudo.query.Booking.findOne({ where: { id: args.bookingId }, query: bookingQuery });
+  if (!booking) throw new DomainError("Booking not found.");
+  if (options.authorize) await requireFreshCarrierPermission(transactionContext, "canManageTicketing", booking.carrier.id);
+  await lockBooking(transactionContext, booking.id);
+  booking = await sudo.query.Booking.findOne({ where: { id: booking.id }, query: bookingQuery });
+  if (!booking) throw new DomainError("Booking changed while preparing ticket issuance.");
+  const key = normalizeIdempotencyKey(args.idempotencyKey);
+  const request = { bookingId: booking.id };
+  const inspected = await inspectOperation(sudo, booking.carrier.id, key, "ticket.issue", request);
+  if (inspected.replay) return { ...inspected.replay.result ?? {}, replayed: true };
+  const readSegments = () => prisma.bookingSegment.findMany({
+    where: { bookingId: booking.id },
+    orderBy: [{ sequence: "asc" }, { id: "asc" }],
+    take: 51,
+    select: {
+      id: true,
+      carrierId: true,
+      bookingId: true,
+      sequence: true,
+      status: true,
+      bookingClassCode: true,
+      fareBasisCode: true,
+      flightInstanceId: true,
+      flightInstance: { select: { id: true, carrierId: true, status: true, scheduledDepartureAt: true, estimatedDepartureAt: true, actualDepartureAt: true, actualArrivalAt: true } }
+    }
+  });
+  const initialSegments = await readSegments();
+  if (initialSegments.length > 50) throw new DomainError("Booking exceeds the bounded 50-segment ticket-issuance limit.");
+  const flightIds = [...new Set(initialSegments.map((segment) => segment.flightInstanceId).filter((id2) => typeof id2 === "string"))].sort();
+  if (flightIds.length) {
+    const flightLocks = await transactionContext.prisma.$queryRaw(import_client2.Prisma.sql`SELECT "id" FROM "FlightInstance" WHERE "id" IN (${import_client2.Prisma.join(flightIds)}) ORDER BY "id" FOR UPDATE`);
+    throwIfKeystonePrismaError(flightLocks);
+  }
+  const ticketableSegmentsRaw = await readSegments();
+  if (ticketableSegmentsRaw.length > 50) throw new DomainError("Booking exceeds the bounded 50-segment ticket-issuance limit.");
+  const inspectedAfterFlightLocks = await inspectOperation(sudo, booking.carrier.id, key, "ticket.issue", request);
+  if (inspectedAfterFlightLocks.replay) return { ...inspectedAfterFlightLocks.replay.result ?? {}, replayed: true };
+  if (booking.paymentStatus !== "paid") throw new DomainError("Capture payment before issuing tickets.");
+  if (booking.ticketingStatus !== "not_ticketed") throw new DomainError("Only a never-ticketed booking can receive its initial ticket issuance.");
+  if (booking.status !== "confirmed") throw new DomainError("Only confirmed bookings can be ticketed.");
+  if (!booking.passengers?.length || booking.passengers.length > 9 || new Set(booking.passengers.map((passenger) => passenger.id)).size !== booking.passengers.length || booking.passengers.some((passenger) => !passenger.id || !passenger.passenger?.id)) {
+    throw new DomainError("Booking must have one to nine uniquely linked passengers before ticket issuance.");
+  }
+  if (ticketableSegmentsRaw.some((segment) => segment.bookingId !== booking.id || segment.carrierId !== booking.carrier.id || segment.flightInstance?.carrierId !== booking.carrier.id)) {
+    throw new DomainError("Ticketable itinerary ownership is inconsistent across booking, carrier, or dated service.");
+  }
+  const now = /* @__PURE__ */ new Date();
+  const ticketableSegments = selectCurrentTicketableSegments(ticketableSegmentsRaw, now);
+  const [ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount] = await Promise.all([
+    prisma.ticket.count({ where: { bookingId: booking.id } }),
+    prisma.serviceObligation.count({ where: { bookingId: booking.id } }),
+    prisma.checkIn.count({ where: { bookingId: booking.id } }),
+    prisma.boardingPass.count({ where: { checkIn: { bookingId: booking.id } } }),
+    prisma.seatAssignment.count({ where: { bookingId: booking.id } }),
+    prisma.bag.count({ where: { bookingId: booking.id } }),
+    prisma.electronicMiscCoupon.count({ where: { document: { bookingId: booking.id } } })
+  ]);
+  const artifactBlockers = ticketIssuanceArtifactBlockers({ ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount });
+  if (artifactBlockers.length) throw new DomainError(`Initial ticket issuance is blocked by existing passenger-service artifacts: ${artifactBlockers.join(", ")}.`);
+  const claim = await beginOperation(sudo, transactionContext, booking.carrier.id, key, "ticket.issue", request);
+  if (claim.replay) return { ...claim.replay.result ?? {}, replayed: true };
+  const issuedAt = now.toISOString();
+  let ticketCountCreated = 0;
+  for (const [passengerIndex, bookingPassenger] of booking.passengers.entries()) {
+    const passengerAmount = Math.floor(booking.totalAmount / booking.passengers.length) + (passengerIndex < booking.totalAmount % booking.passengers.length ? 1 : 0);
+    const ticket = await sudo.query.Ticket.createOne({
+      data: {
+        carrier: { connect: { id: booking.carrier.id } },
+        ticketNumber: `${booking.carrier.code}-${randomReference("", 12)}`,
+        booking: { connect: { id: booking.id } },
+        bookingPassenger: { connect: { id: bookingPassenger.id } },
+        passenger: { connect: { id: bookingPassenger.passenger.id } },
+        issuingCarrierCode: booking.carrier.code,
+        validatingCarrierCode: booking.carrier.code,
+        status: "issued",
+        totalAmount: passengerAmount,
+        currencyCode: booking.currencyCode,
+        issuedAt,
+        providerReference: `internal:${booking.id}`,
+        metadata: { issuanceChannel: "openfront", allocation: "party-total-minor-units" }
+      },
+      query: "id"
     });
-    const initialSegments = await readSegments();
-    if (initialSegments.length > 50) throw new DomainError("Booking exceeds the bounded 50-segment ticket-issuance limit.");
-    const flightIds = [...new Set(initialSegments.map((segment) => segment.flightInstanceId).filter((id2) => typeof id2 === "string"))].sort();
-    if (flightIds.length) {
-      const flightLocks = await transactionContext.prisma.$queryRaw(import_client2.Prisma.sql`SELECT "id" FROM "FlightInstance" WHERE "id" IN (${import_client2.Prisma.join(flightIds)}) ORDER BY "id" FOR UPDATE`);
-      throwIfKeystonePrismaError(flightLocks);
-    }
-    const ticketableSegmentsRaw = await readSegments();
-    if (ticketableSegmentsRaw.length > 50) throw new DomainError("Booking exceeds the bounded 50-segment ticket-issuance limit.");
-    const inspectedAfterFlightLocks = await inspectOperation(sudo, booking.carrier.id, key, "ticket.issue", request);
-    if (inspectedAfterFlightLocks.replay) return { ...inspectedAfterFlightLocks.replay.result ?? {}, replayed: true };
-    if (booking.paymentStatus !== "paid") throw new DomainError("Capture payment before issuing tickets.");
-    if (booking.ticketingStatus !== "not_ticketed") throw new DomainError("Only a never-ticketed booking can receive its initial ticket issuance.");
-    if (booking.status !== "confirmed") throw new DomainError("Only confirmed bookings can be ticketed.");
-    if (!booking.passengers?.length || booking.passengers.length > 9 || new Set(booking.passengers.map((passenger) => passenger.id)).size !== booking.passengers.length || booking.passengers.some((passenger) => !passenger.id || !passenger.passenger?.id)) {
-      throw new DomainError("Booking must have one to nine uniquely linked passengers before ticket issuance.");
-    }
-    if (ticketableSegmentsRaw.some((segment) => segment.bookingId !== booking.id || segment.carrierId !== booking.carrier.id || segment.flightInstance?.carrierId !== booking.carrier.id)) {
-      throw new DomainError("Ticketable itinerary ownership is inconsistent across booking, carrier, or dated service.");
-    }
-    const now = /* @__PURE__ */ new Date();
-    const ticketableSegments = selectCurrentTicketableSegments(ticketableSegmentsRaw, now);
-    const [ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount] = await Promise.all([
-      prisma.ticket.count({ where: { bookingId: booking.id } }),
-      prisma.serviceObligation.count({ where: { bookingId: booking.id } }),
-      prisma.checkIn.count({ where: { bookingId: booking.id } }),
-      prisma.boardingPass.count({ where: { checkIn: { bookingId: booking.id } } }),
-      prisma.seatAssignment.count({ where: { bookingId: booking.id } }),
-      prisma.bag.count({ where: { bookingId: booking.id } }),
-      prisma.electronicMiscCoupon.count({ where: { document: { bookingId: booking.id } } })
-    ]);
-    const artifactBlockers = ticketIssuanceArtifactBlockers({ ticketCount, obligationCount, checkInCount, boardingPassCount, seatAssignmentCount, bagCount, ancillaryCouponCount });
-    if (artifactBlockers.length) throw new DomainError(`Initial ticket issuance is blocked by existing passenger-service artifacts: ${artifactBlockers.join(", ")}.`);
-    const claim = await beginOperation(sudo, transactionContext, booking.carrier.id, key, "ticket.issue", request);
-    if (claim.replay) return { ...claim.replay.result ?? {}, replayed: true };
-    const issuedAt = now.toISOString();
-    let ticketCountCreated = 0;
-    for (const [passengerIndex, bookingPassenger] of booking.passengers.entries()) {
-      const passengerAmount = Math.floor(booking.totalAmount / booking.passengers.length) + (passengerIndex < booking.totalAmount % booking.passengers.length ? 1 : 0);
-      const ticket = await sudo.query.Ticket.createOne({
+    for (const [segmentIndex, segment] of ticketableSegments.entries()) {
+      const couponAmount = Math.floor(passengerAmount / ticketableSegments.length) + (segmentIndex < passengerAmount % ticketableSegments.length ? 1 : 0);
+      const obligation = await sudo.query.ServiceObligation.createOne({
         data: {
           carrier: { connect: { id: booking.carrier.id } },
-          ticketNumber: `${booking.carrier.code}-${randomReference("", 12)}`,
           booking: { connect: { id: booking.id } },
           bookingPassenger: { connect: { id: bookingPassenger.id } },
-          passenger: { connect: { id: bookingPassenger.passenger.id } },
-          issuingCarrierCode: booking.carrier.code,
-          validatingCarrierCode: booking.carrier.code,
-          status: "issued",
-          totalAmount: passengerAmount,
-          currencyCode: booking.currencyCode,
-          issuedAt,
-          providerReference: `internal:${booking.id}`,
-          metadata: { issuanceChannel: "openfront", allocation: "party-total-minor-units" }
+          obligationKey: createServiceObligationKey(),
+          currentVersion: 1,
+          status: "active"
         },
         query: "id"
       });
-      for (const [segmentIndex, segment] of ticketableSegments.entries()) {
-        const couponAmount = Math.floor(passengerAmount / ticketableSegments.length) + (segmentIndex < passengerAmount % ticketableSegments.length ? 1 : 0);
-        const obligation = await sudo.query.ServiceObligation.createOne({
-          data: {
-            carrier: { connect: { id: booking.carrier.id } },
-            booking: { connect: { id: booking.id } },
-            bookingPassenger: { connect: { id: bookingPassenger.id } },
-            obligationKey: createServiceObligationKey(),
-            currentVersion: 1,
-            status: "active"
-          },
-          query: "id"
-        });
-        await sudo.query.TicketCoupon.createOne({
-          data: {
-            carrier: { connect: { id: booking.carrier.id } },
-            couponKey: `${ticket.id}:${segment.id}`,
-            ticket: { connect: { id: ticket.id } },
-            bookingSegment: { connect: { id: segment.id } },
-            serviceObligation: { connect: { id: obligation.id } },
-            serviceObligationVersion: 1,
-            couponNumber: segment.sequence,
-            status: "open",
-            fareBasisCode: segment.fareBasisCode ?? "STANDARD",
-            bookingClassCode: segment.bookingClassCode ?? "Y",
-            amount: couponAmount,
-            currencyCode: booking.currencyCode,
-            entitlementSnapshot: { bookingId: booking.id, segmentId: segment.id }
-          },
-          query: "id"
-        });
-      }
-      ticketCountCreated += 1;
+      await sudo.query.TicketCoupon.createOne({
+        data: {
+          carrier: { connect: { id: booking.carrier.id } },
+          couponKey: `${ticket.id}:${segment.id}`,
+          ticket: { connect: { id: ticket.id } },
+          bookingSegment: { connect: { id: segment.id } },
+          serviceObligation: { connect: { id: obligation.id } },
+          serviceObligationVersion: 1,
+          couponNumber: segment.sequence,
+          status: "open",
+          fareBasisCode: segment.fareBasisCode ?? "STANDARD",
+          bookingClassCode: segment.bookingClassCode ?? "Y",
+          amount: couponAmount,
+          currencyCode: booking.currencyCode,
+          entitlementSnapshot: { bookingId: booking.id, segmentId: segment.id }
+        },
+        query: "id"
+      });
     }
-    await sudo.query.Booking.updateOne({ where: { id: booking.id }, data: { status: "ticketed", ticketingStatus: "ticketed", ticketedAt: issuedAt } });
-    await writeAudit(sudo, transactionContext, {
-      carrierId: booking.carrier.id,
-      key: claim.storageKey,
-      action: "ticket.issue",
-      aggregateType: "Booking",
-      aggregateId: booking.id,
-      after: { status: "ticketed", ticketingStatus: "ticketed" },
-      metadata: { ticketCount: ticketCountCreated, currentSegmentCount: ticketableSegments.length }
-    });
-    const result = { resourceType: "Booking", resourceId: booking.id, status: "ticketed", changed: true, replayed: false };
-    await finishOperation(sudo, claim.record.id, result);
-    return result;
+    ticketCountCreated += 1;
+  }
+  await sudo.query.Booking.updateOne({ where: { id: booking.id }, data: { status: "ticketed", ticketingStatus: "ticketed", ticketedAt: issuedAt } });
+  await writeAudit(sudo, transactionContext, {
+    carrierId: booking.carrier.id,
+    key: claim.storageKey,
+    action: "ticket.issue",
+    aggregateType: "Booking",
+    aggregateId: booking.id,
+    after: { status: "ticketed", ticketingStatus: "ticketed" },
+    metadata: { ticketCount: ticketCountCreated, currentSegmentCount: ticketableSegments.length }
   });
+  const result = { resourceType: "Booking", resourceId: booking.id, status: "ticketed", changed: true, replayed: false };
+  await finishOperation(sudo, claim.record.id, result);
+  return result;
 }
 async function registerPassengerTravelDocument(_root, args, context) {
   return runSerializableTransaction(context, async (transactionContext) => {
@@ -6608,11 +7958,11 @@ async function checkInBookingPassenger(_root, args, context) {
     const sudo = transactionContext.sudo();
     const bookingPassenger = await sudo.query.BookingPassenger.findOne({
       where: { id: args.bookingPassengerId },
-      query: "id booking { id status carrier { id code } } passenger { id givenName familyName }"
+      query: "id booking { id status currencyCode carrier { id code } } passenger { id givenName familyName }"
     });
     const segment = await sudo.query.BookingSegment.findOne({
       where: { id: args.bookingSegmentId },
-      query: "id status booking { id carrier { id code } } flightInstance { id flightNumber status scheduledDepartureAt estimatedDepartureAt actualDepartureAt actualArrivalAt origin { id iataCode } destination { id iataCode } departureGate departureTerminal }"
+      query: "id status booking { id carrier { id code } } flightInstance { id flightNumber status scheduledDepartureAt estimatedDepartureAt actualDepartureAt actualArrivalAt origin { id iataCode countryCode } destination { id iataCode countryCode } departureGate departureTerminal }"
     });
     if (!bookingPassenger || !segment || bookingPassenger.booking.id !== segment.booking.id) throw new DomainError("Passenger and segment must belong to the same booking.");
     const booking = bookingPassenger.booking;
@@ -6658,7 +8008,8 @@ async function checkInBookingPassenger(_root, args, context) {
       select: { id: true, evidenceVersion: true, providerReference: true },
       orderBy: { verifiedAt: "desc" }
     });
-    if (!verification) throw new DomainError("A current authoritative travel-document verification is required.");
+    const documentsRequired = travelDocumentsRequired(segment.flightInstance.origin?.countryCode, segment.flightInstance.destination?.countryCode);
+    if (!verification && documentsRequired) throw new DomainError("A current authoritative travel-document verification is required.");
     const couponCandidates = await transactionContext.prisma.ticketCoupon.findMany({
       where: {
         bookingSegmentId: segment.id,
@@ -6743,7 +8094,7 @@ async function checkInBookingPassenger(_root, args, context) {
     const checkInData = {
       status: "checked_in",
       channel: customerBookingId ? "web" : "agent",
-      travelDocumentsVerified: true,
+      travelDocumentsVerified: Boolean(verification),
       checkedInAt: now,
       offloadedAt: null,
       boardedAt: null,
@@ -6754,7 +8105,7 @@ async function checkInBookingPassenger(_root, args, context) {
       flightInstance: { connect: { id: currentFlight.id } },
       seatAssignment: { connect: { id: seatAssignment.id } },
       ticketCoupon: { connect: { id: coupon.id } },
-      eligibilityData: { documentVerificationId: verification.id, evidenceVersion: verification.evidenceVersion, confirmedAt: now }
+      eligibilityData: verification ? { documentVerificationId: verification.id, evidenceVersion: verification.evidenceVersion, confirmedAt: now } : { travelDocumentsRequired: false, reason: "domestic", confirmedAt: now }
     };
     const checkIn = previousCheckIn ? await sudo.query.CheckIn.updateOne({ where: { id: previousCheckIn.id }, data: checkInData, query: "id" }) : await sudo.query.CheckIn.createOne({
       data: { carrier: { connect: { id: booking.carrier.id } }, checkInKey: `${bookingPassenger.id}:${segment.id}`, ...checkInData },
@@ -6890,12 +8241,35 @@ async function acceptCheckedBag(_root, args, context) {
     return result;
   });
 }
-
-// features/keystone/mutations/storefrontAccess.ts
-var import_node_crypto10 = __toESM(require("node:crypto"));
+var import_node_crypto6, import_client2, MAX_ACTIVE_STOREFRONT_OFFERS, MAX_ACTIVE_STOREFRONT_HELD_SEATS;
+var init_airlineWorkflows = __esm({
+  "features/keystone/mutations/airlineWorkflows.ts"() {
+    "use strict";
+    init_segment_service_status();
+    import_node_crypto6 = __toESM(require("node:crypto"));
+    import_client2 = require("@prisma/client");
+    init_access();
+    init_airlineOperations();
+    init_transactions();
+    init_payment();
+    init_bounded_payment_policy();
+    init_storefront_capacity();
+    init_passenger_service_allocation();
+    init_booking_acceptance();
+    init_storefront_session();
+    init_snapshots();
+    init_coupon_lineage();
+    init_money();
+    init_service_eligibility();
+    init_domain_error();
+    init_travel_document_key();
+    init_travel_documents();
+    MAX_ACTIVE_STOREFRONT_OFFERS = 2;
+    MAX_ACTIVE_STOREFRONT_HELD_SEATS = 9;
+  }
+});
 
 // features/keystone/lib/mail.ts
-var import_nodemailer = require("nodemailer");
 function getBaseUrlForEmails() {
   if (process.env.SMTP_STORE_LINK) {
     return process.env.SMTP_STORE_LINK.replace(/\/+$/, "");
@@ -6909,19 +8283,6 @@ function getBaseUrlForEmails() {
 function emailConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
 }
-var smtpPort = process.env.SMTP_PORT ? Number.parseInt(process.env.SMTP_PORT, 10) : void 0;
-var transport = (0, import_nodemailer.createTransport)({
-  host: process.env.SMTP_HOST,
-  port: Number.isSafeInteger(smtpPort) ? smtpPort : void 0,
-  auth: process.env.SMTP_USER && process.env.SMTP_PASSWORD ? {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD
-  } : void 0,
-  // Password-reset mail is generated in process and never needs filesystem or
-  // URL-backed content. Keep these attack surfaces closed at the transport.
-  disableFileAccess: true,
-  disableUrlAccess: true
-});
 function safeCarrierName(value) {
   const normalized = String(value ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
   return normalized || "Carrier operations";
@@ -7019,9 +8380,56 @@ async function sendBookingConfirmationEmail(booking) {
     return false;
   }
 }
+function bookingNoticeEmail(notice, manageUrl) {
+  const brandName = escapeHtml(safeCarrierName(notice.carrierName));
+  const lines = notice.lines.map((line) => `<tr><td style="padding:8px 28px 0;font-size:15px;line-height:1.5;">${escapeHtml(line)}</td></tr>`).join("");
+  return `
+    <body style="background:#f5f2eb;margin:0;padding:24px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;background:#fffdf8;border-radius:16px;font-family:Helvetica,Arial,sans-serif;color:#0f1b2d;">
+        <tr><td style="padding:24px 28px 8px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6b7689;">${brandName} \xB7 ${escapeHtml(notice.recordLocator)}</td></tr>
+        <tr><td style="padding:0 28px;font-size:24px;font-weight:700;">${escapeHtml(notice.heading)}</td></tr>
+        ${lines}
+        <tr><td style="padding:24px 28px 28px;"><a href="${escapeHtml(manageUrl)}" style="background:#0f1b2d;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700;display:inline-block;">Manage booking</a></td></tr>
+      </table>
+    </body>
+  `;
+}
+async function sendBookingNoticeEmail(notice) {
+  if (!emailConfigured()) {
+    console.warn(`Booking notice for ${notice.recordLocator} not emailed: SMTP is not configured.`);
+    return false;
+  }
+  try {
+    const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(notice.recordLocator)}`;
+    await transport.sendMail({ to: notice.to, from: process.env.SMTP_FROM, subject: `${safeCarrierName(notice.carrierName)}: ${notice.subject}`, html: bookingNoticeEmail(notice, manageUrl) });
+    return true;
+  } catch (error) {
+    console.error(`Booking notice for ${notice.recordLocator} could not be emailed:`, error instanceof Error ? error.message : "unknown error");
+    return false;
+  }
+}
+var import_nodemailer, smtpPort, transport;
+var init_mail = __esm({
+  "features/keystone/lib/mail.ts"() {
+    "use strict";
+    import_nodemailer = require("nodemailer");
+    smtpPort = process.env.SMTP_PORT ? Number.parseInt(process.env.SMTP_PORT, 10) : void 0;
+    transport = (0, import_nodemailer.createTransport)({
+      host: process.env.SMTP_HOST,
+      port: Number.isSafeInteger(smtpPort) ? smtpPort : void 0,
+      auth: process.env.SMTP_USER && process.env.SMTP_PASSWORD ? {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD
+      } : void 0,
+      // Password-reset mail is generated in process and never needs filesystem or
+      // URL-backed content. Keep these attack surfaces closed at the transport.
+      disableFileAccess: true,
+      disableUrlAccess: true
+    });
+  }
+});
 
 // features/airline/lib/time.ts
-var FIELDS = { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
 function formatAirportTime(value, timeZone) {
   if (value === null || value === void 0 || value === "") return null;
   const date2 = value instanceof Date ? value : new Date(value);
@@ -7032,10 +8440,15 @@ function formatAirportTime(value, timeZone) {
     return new Intl.DateTimeFormat("en-US", { ...FIELDS, timeZone: "UTC" }).format(date2);
   }
 }
+var FIELDS;
+var init_time = __esm({
+  "features/airline/lib/time.ts"() {
+    "use strict";
+    FIELDS = { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
+  }
+});
 
 // features/keystone/lib/rate-limit.ts
-var import_node_crypto7 = __toESM(require("node:crypto"));
-var import_client3 = require("@prisma/client");
 function rateLimitKey(scope, signal) {
   return import_node_crypto7.default.createHash("sha256").update(`${scope}\0${signal}`).digest("hex");
 }
@@ -7061,10 +8474,17 @@ async function consumeDurableRateLimit(prisma, scope, signal, limit, windowMs) {
   `);
   if (!rows[0] || rows[0].count > limit) throw new DomainError("This request cannot be completed right now.", "RATE_LIMITED");
 }
+var import_node_crypto7, import_client3;
+var init_rate_limit = __esm({
+  "features/keystone/lib/rate-limit.ts"() {
+    "use strict";
+    import_node_crypto7 = __toESM(require("node:crypto"));
+    import_client3 = require("@prisma/client");
+    init_domain_error();
+  }
+});
 
 // features/keystone/lib/request-identity.ts
-var import_node_crypto8 = __toESM(require("node:crypto"));
-var import_node_net2 = __toESM(require("node:net"));
 function normalizeAddress(value) {
   const address = value.trim();
   return address.startsWith("::ffff:") ? address.slice(7) : address;
@@ -7075,7 +8495,37 @@ function configuredTrustedProxies() {
   if (process.env.NODE_ENV !== "production") return /* @__PURE__ */ new Set([...valid, "127.0.0.1", "::1"]);
   return new Set(valid);
 }
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && (0, import_node_crypto8.timingSafeEqual)(leftBuffer, rightBuffer);
+}
+function verifiedInternalIdentity(headers, socketAddress, secret = String(process.env.SESSION_SECRET || ""), now = Date.now()) {
+  const loopback = /^(?:127\.|::1$|::ffff:127\.)/.test(String(socketAddress || ""));
+  if (!loopback || secret.length < 32) return null;
+  const identity = String(headers["x-openfront-client-identity"] || "");
+  const timestamp41 = String(headers["x-openfront-client-timestamp"] || "");
+  const signature = String(headers["x-openfront-client-signature"] || "");
+  if (!/^[a-f0-9]{64}$/.test(identity) || !/^\d{10}$/.test(timestamp41) || !/^[a-f0-9]{64}$/.test(signature)) return null;
+  const age = Math.abs(now - Number(timestamp41) * 1e3);
+  if (!Number.isFinite(age) || age > INTERNAL_IDENTITY_MAX_AGE_MS) return null;
+  const expected = (0, import_node_crypto8.createHmac)("sha256", secret).update(`${timestamp41}:${identity}`).digest("hex");
+  return safeEqual(signature, expected) ? `forwarded:${identity}` : null;
+}
+function railwayEdgeClientAddress(request) {
+  if (!process.env.RAILWAY_ENVIRONMENT) return null;
+  const peer = normalizeAddress(request.socket?.remoteAddress ?? "");
+  if (!peer || /^(?:127\.|::1$)/.test(peer)) return null;
+  const raw = request.headers?.["x-real-ip"];
+  const value = normalizeAddress(String(Array.isArray(raw) ? raw[0] ?? "" : raw ?? ""));
+  if (!value || value.length > 64 || value.includes(",") || import_node_net2.default.isIP(value) === 0) return null;
+  return value.toLowerCase();
+}
 function trustedClientAddress(request) {
+  const internal = verifiedInternalIdentity(request.headers ?? {}, request.socket?.remoteAddress);
+  if (internal) return internal;
+  const edge = railwayEdgeClientAddress(request);
+  if (edge) return edge;
   const peer = normalizeAddress(request.socket?.remoteAddress ?? "");
   if (!peer || import_node_net2.default.isIP(peer) === 0) return "unknown";
   const trusted = configuredTrustedProxies();
@@ -7092,21 +8542,17 @@ function trustedClientAddress(request) {
 function durableRequestFingerprint(request, sessionSignal) {
   return import_node_crypto8.default.createHash("sha256").update(`${trustedClientAddress(request)}\0${sessionSignal ?? ""}`).digest("hex");
 }
-
-// features/keystone/mutations/storefront.ts
-var import_node_crypto9 = __toESM(require("node:crypto"));
-var import_client4 = require("@prisma/client");
+var import_node_crypto8, import_node_net2, INTERNAL_IDENTITY_MAX_AGE_MS;
+var init_request_identity = __esm({
+  "features/keystone/lib/request-identity.ts"() {
+    "use strict";
+    import_node_crypto8 = __toESM(require("node:crypto"));
+    import_node_net2 = __toESM(require("node:net"));
+    INTERNAL_IDENTITY_MAX_AGE_MS = 9e4;
+  }
+});
 
 // features/airline/lib/branding.ts
-var STOREFRONT_BRAND_COLORS = [
-  { value: "slate", label: "Slate", hex: "#334155", hover: "#1e293b", soft: "#f1f5f9" },
-  { value: "blue", label: "Blue", hex: "#1d4ed8", hover: "#1e40af", soft: "#eff6ff" },
-  { value: "indigo", label: "Indigo", hex: "#4338ca", hover: "#3730a3", soft: "#eef2ff" },
-  { value: "violet", label: "Violet", hex: "#6d28d9", hover: "#5b21b6", soft: "#f5f3ff" },
-  { value: "rose", label: "Rose", hex: "#be123c", hover: "#9f1239", soft: "#fff1f2" },
-  { value: "emerald", label: "Emerald", hex: "#047857", hover: "#065f46", soft: "#ecfdf5" },
-  { value: "amber", label: "Amber", hex: "#92400e", hover: "#78350f", soft: "#fffbeb" }
-];
 function normalizeStorefrontBrandColor(value) {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   return STOREFRONT_BRAND_COLORS.some((option) => option.value === normalized) ? normalized : null;
@@ -7120,6 +8566,185 @@ function hasConfiguredStorefrontBrand(settings) {
     storefrontBrandPalette(settings?.storefrontBrandColor) && typeof settings?.storefrontHomepageTitle === "string" && settings.storefrontHomepageTitle.trim() && typeof settings?.storefrontHomepageDescription === "string" && settings.storefrontHomepageDescription.trim()
   );
 }
+var STOREFRONT_BRAND_COLORS;
+var init_branding = __esm({
+  "features/airline/lib/branding.ts"() {
+    "use strict";
+    STOREFRONT_BRAND_COLORS = [
+      { value: "navy", label: "Navy", hex: "#0a3161", hover: "#072448", soft: "#eaf1f8" },
+      { value: "slate", label: "Slate", hex: "#334155", hover: "#1e293b", soft: "#f1f5f9" },
+      { value: "blue", label: "Blue", hex: "#1d4ed8", hover: "#1e40af", soft: "#eff6ff" },
+      { value: "rose", label: "Rose", hex: "#be123c", hover: "#9f1239", soft: "#fff1f2" },
+      { value: "emerald", label: "Emerald", hex: "#047857", hover: "#065f46", soft: "#ecfdf5" },
+      { value: "amber", label: "Amber", hex: "#92400e", hover: "#78350f", soft: "#fffbeb" }
+    ];
+  }
+});
+
+// features/keystone/mutations/storefrontPayments.ts
+async function activeStripeProvider(prisma, carrierId) {
+  const providers = await prisma.paymentProvider.findMany({
+    where: { carrierId, adapterType: "stripe", status: "active" },
+    orderBy: [{ providerKey: "asc" }],
+    take: 5,
+    select: { id: true, providerKey: true, credentials: true }
+  });
+  const provider = providers.find((candidate) => stripeSecretKey(candidate.credentials));
+  return provider ? { id: provider.id, providerKey: provider.providerKey, secretKey: stripeSecretKey(provider.credentials) } : null;
+}
+async function onlinePaymentEnabled(prisma, carrierId) {
+  return Boolean(await activeStripeProvider(prisma, carrierId));
+}
+function storefrontOrigin(context) {
+  if (process.env.SMTP_STORE_LINK) return process.env.SMTP_STORE_LINK.replace(/\/+$/, "");
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  const headers = context.req?.headers ?? {};
+  const first = (value) => (Array.isArray(value) ? value[0] : value)?.split(",")[0]?.trim();
+  const host = first(headers["x-forwarded-host"]) || first(headers.host);
+  if (!host || !/^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(host)) throw new DomainError("Online payment isn\u2019t available right now.");
+  const protocol = first(headers["x-forwarded-proto"]) === "http" || host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https";
+  return `${protocol}://${host}`;
+}
+async function payableBooking(context, carrierCode, recordLocator, accessToken) {
+  if (!await isConfiguredPublicCarrier(context.prisma, carrierCode)) throw new DomainError("Carrier is unavailable on this storefront.");
+  const owned = await ownedBooking(context, recordLocator, accessToken);
+  const booking = await context.prisma.booking.findUnique({
+    where: { id: owned.id },
+    select: { id: true, carrierId: true, recordLocator: true, status: true, paymentStatus: true, ticketingStatus: true, totalAmount: true, currencyCode: true, contactEmail: true, metadata: true }
+  });
+  if (!booking || booking.carrierId !== owned.carrier.id) throw new DomainError("Booking not found or inaccessible.");
+  return { booking, carrier: owned.carrier };
+}
+async function startCustomerCheckout(_root, args, context) {
+  const { booking, carrier } = await payableBooking(context, args.carrierCode, args.recordLocator, args.accessToken);
+  if (booking.status === "cancelled") throw new DomainError("Cancelled bookings can\u2019t be paid.");
+  if (!["unpaid", "failed"].includes(booking.paymentStatus)) throw new DomainError("This booking is already paid.");
+  const dueAt = Date.parse(booking.metadata?.paymentDueAt ?? "");
+  if (Number.isFinite(dueAt) && dueAt <= Date.now()) throw new DomainError("The payment window for this reservation has closed. Contact the airline.");
+  const provider = await activeStripeProvider(context.prisma, carrier.id);
+  if (!provider) throw new DomainError("Online payment isn\u2019t available for this airline.");
+  await consumeDurableRateLimit(context.prisma, "storefront.checkout.client", durableRequestFingerprint(context.req ?? {}), 20, 15 * 6e4);
+  const origin = storefrontOrigin(context);
+  const locator = encodeURIComponent(booking.recordLocator);
+  let session;
+  try {
+    session = await createStripeCheckoutSession(provider.secretKey, {
+      bookingId: booking.id,
+      recordLocator: booking.recordLocator,
+      description: `${carrier.name} reservation ${booking.recordLocator}`,
+      amount: booking.totalAmount,
+      currencyCode: booking.currencyCode,
+      customerEmail: booking.contactEmail,
+      successUrl: `${origin}/manage-booking?ref=${locator}&checkout={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${origin}/manage-booking?ref=${locator}&checkout=cancelled`,
+      // One Checkout session per booking amount and ten-minute window: double clicks reuse it.
+      idempotencyKey: `checkout:${booking.id}:${booking.totalAmount}:${Math.floor(Date.now() / 6e5)}`
+    });
+  } catch (error) {
+    console.error("Stripe checkout could not start:", error instanceof Error ? error.message : "unknown error");
+    throw new DomainError("Online payment couldn\u2019t start. Try again in a moment.");
+  }
+  if (!session.url) throw new DomainError("Online payment couldn\u2019t start. Try again in a moment.");
+  await context.prisma.booking.update({ where: { id: booking.id }, data: { metadata: { ...booking.metadata ?? {}, checkoutSessionId: session.id } } });
+  return { url: session.url, checkoutSessionId: session.id };
+}
+async function completeCustomerCheckout(_root, args, context) {
+  const { booking, carrier } = await payableBooking(context, args.carrierCode, args.recordLocator, args.accessToken);
+  const sessionId = args.checkoutSessionId?.trim() || (typeof booking.metadata?.checkoutSessionId === "string" ? booking.metadata.checkoutSessionId : "");
+  if (booking.paymentStatus === "paid") return { status: "paid", ticketingStatus: booking.ticketingStatus };
+  if (!sessionId) return { status: "none", ticketingStatus: booking.ticketingStatus };
+  const provider = await activeStripeProvider(context.prisma, carrier.id);
+  if (!provider) return { status: "none", ticketingStatus: booking.ticketingStatus };
+  let session;
+  try {
+    session = await retrieveStripeCheckoutSession(provider.secretKey, sessionId);
+  } catch {
+    throw new DomainError("We couldn\u2019t confirm your payment yet. Retrieve your booking again in a moment.");
+  }
+  if (session.client_reference_id !== booking.id || session.metadata?.bookingId !== booking.id) throw new DomainError("This payment doesn\u2019t belong to this booking.");
+  if (session.payment_status !== "paid") return { status: session.status === "expired" ? "expired" : "pending", ticketingStatus: booking.ticketingStatus };
+  if (session.amount_total !== booking.totalAmount || session.currency?.toUpperCase() !== booking.currencyCode) throw new DomainError("The paid amount doesn\u2019t match this booking. Contact the airline.");
+  const intent = typeof session.payment_intent === "string" ? { id: session.payment_intent, latest_charge: null } : session.payment_intent;
+  if (!intent?.id) throw new DomainError("We couldn\u2019t confirm your payment yet. Retrieve your booking again in a moment.");
+  const charge = intent.latest_charge && typeof intent.latest_charge === "object" ? intent.latest_charge : null;
+  const card = charge?.payment_method_details?.card;
+  await runSerializableTransaction(context, async (transactionContext) => {
+    const sudo = transactionContext.sudo();
+    const lock = await transactionContext.prisma.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${booking.id} FOR UPDATE`;
+    throwIfKeystonePrismaError(lock);
+    const key = `stripe-checkout:${session.id}`;
+    const request = { bookingId: booking.id, checkoutSessionId: session.id, paymentIntentId: intent.id, amount: booking.totalAmount, currencyCode: booking.currencyCode };
+    const inspected = await inspectOperation(sudo, carrier.id, key, "payment.checkout", request);
+    if (inspected.replay) return;
+    const current = await transactionContext.prisma.booking.findUnique({ where: { id: booking.id }, select: { status: true, paymentStatus: true, payments: { select: { providerPaymentId: true } } } });
+    if (!current) throw new DomainError("Booking not found or inaccessible.");
+    if (current.payments.some((payment2) => payment2.providerPaymentId === intent.id)) return;
+    if (current.status === "cancelled" || !["unpaid", "failed"].includes(current.paymentStatus)) {
+      console.error(`Stripe payment ${intent.id} arrived for booking ${booking.id} in state ${current.status}/${current.paymentStatus}; needs operator refund review.`);
+      throw new DomainError("Your payment was received but the booking changed. Contact the airline.");
+    }
+    const claim = await beginOperation(sudo, transactionContext, carrier.id, key, "payment.checkout", request);
+    if (claim.replay) return;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const payment = await sudo.query.Payment.createOne({
+      data: {
+        carrier: { connect: { id: carrier.id } },
+        paymentKey: `PAY-${randomReference("", 12)}`,
+        idempotencyKey: claim.storageKey,
+        booking: { connect: { id: booking.id } },
+        provider: { connect: { id: provider.id } },
+        status: "captured",
+        amount: booking.totalAmount,
+        authorizedAmount: booking.totalAmount,
+        capturedAmount: booking.totalAmount,
+        currencyCode: booking.currencyCode,
+        providerPaymentId: intent.id,
+        providerCaptureId: charge?.id ?? "",
+        instrumentBrand: card?.brand ?? "card",
+        instrumentLast4: card?.last4 && /^\d{4}$/.test(card.last4) ? card.last4 : null,
+        authorizedAt: now,
+        capturedAt: now,
+        rawProviderData: { checkoutSessionId: session.id, paymentIntentId: intent.id, chargeId: charge?.id ?? null },
+        metadata: { adapterType: "stripe", purchaseKind: "booking", checkoutSessionId: session.id }
+      },
+      query: "id"
+    });
+    await sudo.query.Booking.updateOne({ where: { id: booking.id }, data: { paymentStatus: "paid", ...current.status === "pending" ? { status: "confirmed", confirmedAt: now } : {} } });
+    await writeAudit(sudo, transactionContext, {
+      carrierId: carrier.id,
+      key: claim.storageKey,
+      action: "payment.checkout",
+      aggregateType: "Booking",
+      aggregateId: booking.id,
+      after: { paymentStatus: "paid", amount: booking.totalAmount, currencyCode: booking.currencyCode },
+      metadata: { paymentId: payment.id, providerId: provider.id }
+    });
+    await finishOperation(sudo, claim.record.id, { resourceType: "Payment", resourceId: payment.id, status: "captured", changed: true, replayed: false });
+  });
+  let ticketingStatus = "not_ticketed";
+  try {
+    await runSerializableTransaction(context, (transactionContext) => issueBookingTicketsInTransaction(transactionContext, { bookingId: booking.id, idempotencyKey: `checkout-ticketing:${session.id}` }, { authorize: false }));
+    ticketingStatus = "ticketed";
+  } catch (error) {
+    const latest = await context.prisma.booking.findUnique({ where: { id: booking.id }, select: { ticketingStatus: true } });
+    ticketingStatus = latest?.ticketingStatus ?? "not_ticketed";
+    if (ticketingStatus !== "ticketed") console.error(`Tickets for paid booking ${booking.id} need operator issuance:`, error instanceof Error ? error.message : "unknown error");
+  }
+  return { status: "paid", ticketingStatus };
+}
+var init_storefrontPayments = __esm({
+  "features/keystone/mutations/storefrontPayments.ts"() {
+    "use strict";
+    init_stripe();
+    init_domain_error();
+    init_rate_limit();
+    init_request_identity();
+    init_transactions();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    init_storefront();
+  }
+});
 
 // features/keystone/mutations/storefront.ts
 async function consumeRateLimit(context, scope, limit, windowMs, sessionSignal) {
@@ -7164,7 +8789,7 @@ async function lookupDirectCarrier(prisma, carrierCode) {
 async function lookupCarrierIdentity(prisma, carrierCode) {
   const carrier = await prisma.carrier.findUnique({
     where: { code: carrierCode.trim().toUpperCase() },
-    select: { id: true, code: true, name: true, legalName: true, defaultCurrencyCode: true, defaultTimezone: true, status: true, directSalesEnabled: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true }
+    select: { id: true, code: true, name: true, legalName: true, defaultCurrencyCode: true, defaultTimezone: true, status: true, directSalesEnabled: true, logoIcon: true, logoColor: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true }
   });
   if (!carrier) throw new DomainError("Carrier identity is not configured.");
   const storefrontBrandColor = normalizeStorefrontBrandColor(carrier.storefrontBrandColor);
@@ -7193,7 +8818,8 @@ async function directCarrier(context, carrierCode) {
 async function getPublicCarrierIdentity(_root, args, context) {
   await assertConfiguredPublicCarrier(context.prisma, args.carrierCode);
   try {
-    const identity = { ...await lookupCarrierIdentity(context.prisma, args.carrierCode), accessRecoveryEnabled: accessRecoveryEnabled() };
+    const carrierIdentity = await lookupCarrierIdentity(context.prisma, args.carrierCode);
+    const identity = { ...carrierIdentity, accessRecoveryEnabled: accessRecoveryEnabled(), onlinePaymentEnabled: await onlinePaymentEnabled(context.prisma, carrierIdentity.id) };
     return operatorOnlyLaunchSetup() ? { ...identity, salesEnabled: false } : identity;
   } catch (error) {
     if (error instanceof Error && error.message === "Carrier identity is not configured.") return null;
@@ -7348,7 +8974,6 @@ async function createCustomerBooking(root, args, context) {
   if (current && !result.replayed && result.resourceId) await emailBookingAccess(context, String(result.resourceId), accessToken);
   return { ...result, bookingAccessToken: current ? accessToken : null };
 }
-var BOOKING_ACCESS_MISMATCH = "That booking reference and access code don\u2019t match.";
 async function ownedBooking(context, recordLocator, accessToken) {
   let accessTokenHash = null;
   try {
@@ -7429,7 +9054,6 @@ async function rotateCustomerBookingAccessToken(_root, args, context) {
     await transactionContext.prisma.booking.update({ where: { id: booking.id }, data: { accessTokenHash: hashStorefrontToken(nextToken), accessTokenExpiresAt: new Date(now.getTime() + 365 * 24 * 60 * 6e4), accessTokenVersion: (current.accessTokenVersion ?? 1) + 1 } });
     const eventKey = `booking-access-rotated:${booking.id}:${import_node_crypto9.default.randomUUID()}`;
     await transactionContext.prisma.auditEvent.create({ data: { carrierId: booking.carrier.id, eventKey, action: "booking.access-token.rotate", aggregateType: "Booking", aggregateId: booking.id, source: "storefront", beforeSummary: {}, afterSummary: { accessRevoked: true }, metadata: {}, occurredAt: now } });
-    await transactionContext.prisma.outboxEvent.create({ data: { carrierId: booking.carrier.id, eventKey, topic: "booking.access-token.rotated", aggregateType: "Booking", aggregateId: booking.id, payload: {}, status: "pending", availableAt: now } });
   });
   return { recordLocator: booking.recordLocator, accessToken: nextToken };
 }
@@ -7592,6 +9216,28 @@ async function getCustomerBooking(_root, args, context) {
     reaccommodations: booking.reaccommodations
   };
 }
+var import_node_crypto9, import_client4, BOOKING_ACCESS_MISMATCH;
+var init_storefront = __esm({
+  "features/keystone/mutations/storefront.ts"() {
+    "use strict";
+    import_node_crypto9 = __toESM(require("node:crypto"));
+    import_client4 = require("@prisma/client");
+    init_storefront_session();
+    init_rate_limit();
+    init_request_identity();
+    init_transactions();
+    init_booking_acceptance();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    init_service_eligibility();
+    init_branding();
+    init_domain_error();
+    init_passenger_age();
+    init_storefrontAccess();
+    init_storefrontPayments();
+    BOOKING_ACCESS_MISMATCH = "That booking reference and access code don\u2019t match.";
+  }
+});
 
 // features/keystone/mutations/storefrontAccess.ts
 function accessRecoveryEnabled() {
@@ -7649,9 +9295,167 @@ async function recoverCustomerBookingAccess(_root, args, context) {
   await emailBookingAccess(context, booking.id, token);
   return true;
 }
+var import_node_crypto10;
+var init_storefrontAccess = __esm({
+  "features/keystone/mutations/storefrontAccess.ts"() {
+    "use strict";
+    import_node_crypto10 = __toESM(require("node:crypto"));
+    init_domain_error();
+    init_mail();
+    init_money();
+    init_time();
+    init_rate_limit();
+    init_request_identity();
+    init_storefront_session();
+    init_storefront();
+  }
+});
+
+// features/airline/lib/cancellation-policy.ts
+function quoteCustomerCancellation(input) {
+  const now = input.now.getTime();
+  const departure = input.firstDepartureAt.getTime();
+  if (!Number.isFinite(departure) || departure <= now) return { allowed: false, reason: "departed" };
+  if (!Number.isSafeInteger(input.paidAmount) || input.paidAmount <= 0) return { allowed: true, refundAmount: 0, feeAmount: 0, basis: "unpaid" };
+  const bookedAt = input.bookedAt.getTime();
+  if (Number.isFinite(bookedAt) && now - bookedAt <= RISK_FREE_WINDOW_MS && departure - bookedAt >= RISK_FREE_MIN_ADVANCE_MS) {
+    return { allowed: true, refundAmount: input.paidAmount, feeAmount: 0, basis: "risk_free_24h" };
+  }
+  const rules = input.fareRules.length ? input.fareRules : [null];
+  const refundable = rules.every((rule) => rule ? rule.isRefundable : input.fallbackRefundable);
+  if (!refundable) return { allowed: false, reason: "non_refundable" };
+  const fee = Math.min(input.paidAmount, rules.reduce((sum, rule) => sum + Math.max(0, rule?.cancellationFeeAmount ?? 0), 0));
+  return { allowed: true, refundAmount: input.paidAmount - fee, feeAmount: fee, basis: "refundable_fare" };
+}
+var RISK_FREE_WINDOW_MS, RISK_FREE_MIN_ADVANCE_MS;
+var init_cancellation_policy = __esm({
+  "features/airline/lib/cancellation-policy.ts"() {
+    "use strict";
+    RISK_FREE_WINDOW_MS = 24 * 60 * 6e4;
+    RISK_FREE_MIN_ADVANCE_MS = 2 * 24 * 60 * 6e4;
+  }
+});
+
+// features/keystone/lib/booking-notices.ts
+async function sendBookingNotice(notice) {
+  try {
+    return await sendBookingNoticeEmail(notice);
+  } catch {
+    return false;
+  }
+}
+var init_booking_notices = __esm({
+  "features/keystone/lib/booking-notices.ts"() {
+    "use strict";
+    init_mail();
+  }
+});
+
+// features/keystone/mutations/storefrontCancellation.ts
+async function cancellationFacts(prisma, bookingId) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      id: true,
+      status: true,
+      paymentStatus: true,
+      createdAt: true,
+      currencyCode: true,
+      contactEmail: true,
+      recordLocator: true,
+      carrier: { select: { id: true, name: true, code: true } },
+      segments: { select: { status: true, flightInstance: { select: { scheduledDepartureAt: true } } } },
+      payments: { select: { id: true, status: true, capturedAmount: true, refundedAmount: true, metadata: true, provider: { select: { adapterType: true } } } },
+      lineItems: { where: { itemType: "flight" }, select: { sourceOfferItem: { select: { fareRule: { select: { isRefundable: true, cancellationFeeAmount: true } }, fareBrand: { select: { refundabilitySummary: true } } } } } }
+    }
+  });
+  if (!booking) throw new DomainError("Booking not found or inaccessible.");
+  const departures = booking.segments.filter((segment) => !["cancelled", "refunded", "reaccommodated"].includes(segment.status) && segment.flightInstance).map((segment) => new Date(segment.flightInstance.scheduledDepartureAt).getTime()).filter(Number.isFinite);
+  const farePayments = booking.payments.filter((payment) => (payment.metadata?.purchaseKind ?? "booking") !== "seat" && ["captured", "partially_refunded"].includes(payment.status));
+  const paidAmount = farePayments.reduce((sum, payment) => sum + payment.capturedAmount - payment.refundedAmount, 0);
+  const quote = quoteCustomerCancellation({
+    bookedAt: new Date(booking.createdAt),
+    firstDepartureAt: new Date(departures.length ? Math.min(...departures) : NaN),
+    now: /* @__PURE__ */ new Date(),
+    paidAmount,
+    fareRules: booking.lineItems.map((item) => item.sourceOfferItem?.fareRule ?? null),
+    // Without a fare rule the fare brand is the policy; a brand that says refunds need operator processing is
+    // treated as non-refundable online, so those travelers are sent to the airline rather than refunded blind.
+    fallbackRefundable: false
+  });
+  const cardOnly = farePayments.every((payment) => payment.provider?.adapterType === "stripe");
+  return { booking, quote, farePayments, cardOnly };
+}
+function quoteResult(quote, currencyCode, status, cardOnly) {
+  if (status === "cancelled") return { allowed: false, reason: "already_cancelled", refundAmount: 0, feeAmount: 0, currencyCode, summary: "This booking is already cancelled." };
+  if (!quote.allowed) {
+    const summary2 = quote.reason === "departed" ? "Your flight has departed, so this booking can\u2019t be cancelled online." : "This fare can\u2019t be refunded online. Contact the airline about changing your flight or a travel credit.";
+    return { allowed: false, reason: quote.reason, refundAmount: 0, feeAmount: 0, currencyCode, summary: summary2 };
+  }
+  if (quote.refundAmount > 0 && !cardOnly) return { allowed: false, reason: "not_card", refundAmount: 0, feeAmount: 0, currencyCode, summary: "This booking wasn\u2019t paid by card online. Contact the airline to cancel it." };
+  const summary = quote.basis === "unpaid" ? "Nothing has been charged. Cancelling releases your seats." : quote.basis === "risk_free_24h" ? `Booked within the last 24 hours: you get a full refund of ${formatMinorUnits(quote.refundAmount, currencyCode)} to your card.` : quote.feeAmount > 0 ? `You get ${formatMinorUnits(quote.refundAmount, currencyCode)} back to your card (fare less a ${formatMinorUnits(quote.feeAmount, currencyCode)} cancellation fee).` : `You get a full refund of ${formatMinorUnits(quote.refundAmount, currencyCode)} to your card.`;
+  return { allowed: true, reason: quote.basis, refundAmount: quote.refundAmount, feeAmount: quote.feeAmount, currencyCode, summary };
+}
+async function customerCancellationQuote(_root, args, context) {
+  const owned = await ownedBooking(context, args.recordLocator, args.accessToken);
+  const { booking, quote, cardOnly } = await cancellationFacts(context.prisma, owned.id);
+  return quoteResult(quote, booking.currencyCode, booking.status, cardOnly);
+}
+async function cancelCustomerBookingWithRefund(_root, args, context) {
+  const owned = await ownedBooking(context, args.recordLocator, args.accessToken);
+  const key = normalizeIdempotencyKey(args.idempotencyKey);
+  const storefrontContext = withStorefrontSession(context, owned.carrier, owned.id);
+  const outcome = await runSerializableTransaction(storefrontContext, async (transactionContext) => {
+    const { booking, quote, cardOnly } = await cancellationFacts(transactionContext.prisma, owned.id);
+    const offered = quoteResult(quote, booking.currencyCode, booking.status, cardOnly);
+    if (booking.status === "cancelled") return { status: "cancelled", refundAmount: 0, currencyCode: booking.currencyCode, replayed: true };
+    if (!offered.allowed) throw new DomainError(offered.summary);
+    if (offered.refundAmount > 0) {
+      await processBookingRefundInTransaction(transactionContext, {
+        bookingId: booking.id,
+        amount: offered.refundAmount,
+        reason: "customer_request",
+        providerReference: `self-cancel-${booking.recordLocator}-${key.slice(0, 24)}`,
+        idempotencyKey: `${key}:refund`
+      }, { authorize: false, cardOnly: true });
+    }
+    await cancelBookingInTransaction(transactionContext, {
+      bookingId: booking.id,
+      idempotencyKey: `${key}:cancel`,
+      reason: args.reason?.trim() || "Traveler cancelled online.",
+      customerBookingId: booking.id,
+      customerAccessTokenHash: hashStorefrontToken(args.accessToken)
+    }, booking.id, { refundSettled: offered.refundAmount > 0 });
+    return { status: "cancelled", refundAmount: offered.refundAmount, currencyCode: booking.currencyCode, replayed: false, email: booking.contactEmail, carrier: booking.carrier, recordLocator: booking.recordLocator };
+  });
+  if (!outcome.replayed && "email" in outcome && outcome.email) {
+    await sendBookingNotice({
+      to: outcome.email,
+      carrierName: outcome.carrier.name,
+      recordLocator: outcome.recordLocator,
+      subject: `Booking ${outcome.recordLocator} cancelled`,
+      heading: "Your booking is cancelled",
+      lines: [outcome.refundAmount > 0 ? `${formatMinorUnits(outcome.refundAmount, outcome.currencyCode)} is on its way back to your card. Refunds usually show within 5\u201310 business days.` : "Nothing was charged for this booking.", "Your seats have been released."]
+    });
+  }
+  return { status: outcome.status, refundAmount: outcome.refundAmount, currencyCode: outcome.currencyCode };
+}
+var init_storefrontCancellation = __esm({
+  "features/keystone/mutations/storefrontCancellation.ts"() {
+    "use strict";
+    init_domain_error();
+    init_money();
+    init_storefront_session();
+    init_transactions();
+    init_cancellation_policy();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    init_booking_notices();
+    init_storefront();
+  }
+});
 
 // features/keystone/mutations/airlineOperationsControl.ts
-var import_client5 = require("@prisma/client");
 function validTimezone(value) {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value });
@@ -7662,9 +9466,9 @@ function validTimezone(value) {
 }
 function optionalText(value, label, max) {
   if (value === void 0) return void 0;
-  const text60 = (value ?? "").trim();
-  if (text60.length > max) throw new DomainError(`${label} must be at most ${max} characters.`);
-  return text60 || null;
+  const text58 = (value ?? "").trim();
+  if (text58.length > max) throw new DomainError(`${label} must be at most ${max} characters.`);
+  return text58 || null;
 }
 function optionalInstant(value, label) {
   if (value === void 0) return void 0;
@@ -7709,7 +9513,6 @@ async function registerAirport(_root, args, context) {
     return result;
   });
 }
-var OPERATIONAL_STATUSES = ["delayed", "departed", "arrived"];
 async function updateFlightOperations(_root, args, context) {
   return runSerializableTransaction(context, async (transactionContext) => {
     const actor = await requireFreshPermission(transactionContext, "canManageAirportService");
@@ -7765,7 +9568,6 @@ async function updateFlightOperations(_root, args, context) {
     return result;
   });
 }
-var BAG_EVENT_TYPES = { load: "loaded", transfer: "transferred", arrive: "arrived", deliver: "delivered", delay: "exception", mishandle: "exception", close: "exception" };
 async function recordBagEvent(_root, args, context) {
   return runSerializableTransaction(context, async (transactionContext) => {
     const actor = await requireFreshPermission(transactionContext, "canManageAirportService");
@@ -7811,10 +9613,22 @@ async function recordBagEvent(_root, args, context) {
     return result;
   });
 }
+var import_client5, OPERATIONAL_STATUSES, BAG_EVENT_TYPES;
+var init_airlineOperationsControl = __esm({
+  "features/keystone/mutations/airlineOperationsControl.ts"() {
+    "use strict";
+    import_client5 = require("@prisma/client");
+    init_access();
+    init_domain_error();
+    init_lifecycle();
+    init_transactions();
+    init_airlineOperations();
+    OPERATIONAL_STATUSES = ["delayed", "departed", "arrived"];
+    BAG_EVENT_TYPES = { load: "loaded", transfer: "transferred", arrive: "arrived", deliver: "delivered", delay: "exception", mishandle: "exception", close: "exception" };
+  }
+});
 
 // features/keystone/mutations/airlinePaymentsDesk.ts
-var import_node_crypto11 = __toESM(require("node:crypto"));
-var METHODS = ["bank_transfer", "card_terminal", "cash", "other"];
 async function recordReceivedPayment(root, args, context) {
   await requireFreshPermission(context, "canManagePayments");
   const prisma = context.prisma;
@@ -7868,9 +9682,20 @@ async function reissueBookingAccessCode(_root, args, context) {
   await prisma.auditEvent.create({ data: { carrierId: booking.carrierId, actorId: actor.itemId, eventKey: `booking-access-reissued:${booking.id}:${import_node_crypto11.default.randomUUID()}`, action: "booking.access-token.reissue", aggregateType: "Booking", aggregateId: booking.id, source: "platform", beforeSummary: {}, afterSummary: { accessRevoked: true }, metadata: {}, occurredAt: now } });
   return { recordLocator: booking.recordLocator, accessToken: token };
 }
-
-// features/keystone/mutations/airlineRecovery.ts
-var import_client6 = require("@prisma/client");
+var import_node_crypto11, METHODS;
+var init_airlinePaymentsDesk = __esm({
+  "features/keystone/mutations/airlinePaymentsDesk.ts"() {
+    "use strict";
+    import_node_crypto11 = __toESM(require("node:crypto"));
+    init_access();
+    init_bounded_payment_policy();
+    init_domain_error();
+    init_storefront_session();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    METHODS = ["bank_transfer", "card_terminal", "cash", "other"];
+  }
+});
 
 // features/keystone/lib/recovery-party.ts
 function partitionRecoveryParty(passengers, ticketedBooking) {
@@ -7896,9 +9721,13 @@ function partitionRecoveryParty(passengers, ticketedBooking) {
   }
   return { eligiblePassengerIds, boardedOrFlownPassengerIds };
 }
+var init_recovery_party = __esm({
+  "features/keystone/lib/recovery-party.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/mutations/airlineRecovery.ts
-var disruptionTypes = /* @__PURE__ */ new Set(["delay", "cancellation", "schedule_change", "misconnection", "diversion", "equipment_change", "other"]);
 async function publishFlightDisruption(_root, args, context) {
   return runSerializableTransaction(context, async (transactionContext) => {
     await requireFreshPermission(transactionContext, "canManageDisruptions");
@@ -8262,9 +10091,22 @@ async function reaccommodateBooking(_root, args, context) {
     return result;
   });
 }
-
-// features/keystone/mutations/airlineDepartures.ts
-var import_client7 = require("@prisma/client");
+var import_client6, disruptionTypes;
+var init_airlineRecovery = __esm({
+  "features/keystone/mutations/airlineRecovery.ts"() {
+    "use strict";
+    import_client6 = require("@prisma/client");
+    init_access();
+    init_lifecycle();
+    init_transactions();
+    init_coupon_lineage();
+    init_recovery_party();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    init_domain_error();
+    disruptionTypes = /* @__PURE__ */ new Set(["delay", "cancellation", "schedule_change", "misconnection", "diversion", "equipment_change", "other"]);
+  }
+});
 
 // features/keystone/lib/refund-cleanup-queue.ts
 function statusCounts(rows, segmentId) {
@@ -8306,15 +10148,13 @@ function refundCleanupGate(input) {
   }
   return "review_required";
 }
+var init_refund_cleanup_queue = __esm({
+  "features/keystone/lib/refund-cleanup-queue.ts"() {
+    "use strict";
+  }
+});
 
 // features/keystone/lib/refund-cleanup-pagination.ts
-var REFUND_CLEANUP_PAGE_SIZE = 100;
-var REFUND_CLEANUP_ORDER_BY = [
-  { flightInstance: { scheduledDepartureAt: "asc" } },
-  { booking: { recordLocator: "asc" } },
-  { sequence: "asc" },
-  { id: "asc" }
-];
 function normalizeRefundCleanupCursor(value) {
   const cursor = value?.trim();
   if (!cursor) return null;
@@ -8352,6 +10192,19 @@ function refundCleanupPage(rows, totalCount) {
     nextCursor: hasNextPage ? items.at(-1)?.id ?? null : null
   };
 }
+var REFUND_CLEANUP_PAGE_SIZE, REFUND_CLEANUP_ORDER_BY;
+var init_refund_cleanup_pagination = __esm({
+  "features/keystone/lib/refund-cleanup-pagination.ts"() {
+    "use strict";
+    REFUND_CLEANUP_PAGE_SIZE = 100;
+    REFUND_CLEANUP_ORDER_BY = [
+      { flightInstance: { scheduledDepartureAt: "asc" } },
+      { booking: { recordLocator: "asc" } },
+      { sequence: "asc" },
+      { id: "asc" }
+    ];
+  }
+});
 
 // features/keystone/mutations/airlineDepartures.ts
 function dayRange(serviceDate) {
@@ -8389,7 +10242,7 @@ async function departureManifest(_root, args, context) {
   });
   if (!actor.canManageCarriers && !assignments.length) {
     if (cleanupCursor) throw new DomainError("Refund-cleanup cursor is outside your current station scope; reload the station manifest to restart.");
-    return { carrierId: actor.carrierId, serviceDate: normalized, canVerifyDocuments, canManageBookings, canOpenBookingDesk, flights: [], refundCleanup: refundCleanupPage([], 0) };
+    return { carrierId: actor.carrierId, serviceDate: normalized, canVerifyDocuments, canManageBookings, canOpenBookingDesk, noStationScope: true, flights: [], refundCleanup: refundCleanupPage([], 0) };
   }
   const originIds = assignments.map((assignment) => assignment.airportId);
   const cleanupWhere = buildRefundCleanupScope({
@@ -8419,8 +10272,8 @@ async function departureManifest(_root, args, context) {
     take: 50,
     include: {
       carrier: { select: { id: true, code: true, name: true, defaultTimezone: true } },
-      origin: { select: { id: true, iataCode: true, city: true } },
-      destination: { select: { id: true, iataCode: true, city: true } },
+      origin: { select: { id: true, iataCode: true, city: true, countryCode: true } },
+      destination: { select: { id: true, iataCode: true, city: true, countryCode: true } },
       bookingSegments: {
         where: { status: { notIn: ["cancelled", "refunded", "reaccommodated"] }, booking: { ticketingStatus: "ticketed", status: { in: ["ticketed", "in_progress"] } } },
         orderBy: [{ booking: { recordLocator: "asc" } }, { sequence: "asc" }],
@@ -8596,6 +10449,7 @@ async function departureManifest(_root, args, context) {
           segmentStatus: segment.status,
           passenger: { id: bookingPassenger.passenger.id, givenName: bookingPassenger.passenger.givenName, familyName: bookingPassenger.passenger.familyName, dateOfBirth: canVerifyDocuments ? bookingPassenger.passenger.dateOfBirth?.toISOString().slice(0, 10) ?? null : null },
           documents: documents.filter((document) => document.passengerId === bookingPassenger.passenger.id),
+          documentsRequired: travelDocumentsRequired(flight.origin?.countryCode, flight.destination?.countryCode),
           verificationPresent: currentProofs.has(`${bookingPassenger.passenger.id}:${segment.id}`),
           verification: canVerifyDocuments ? currentProofs.get(`${bookingPassenger.passenger.id}:${segment.id}`) ?? null : null,
           checkIn: checkIn ? {
@@ -8721,10 +10575,26 @@ function boardBookingPassenger(_root, args, context) {
 function offloadBookingPassenger(_root, args, context) {
   return passengerServiceAggregate("offload", args, context);
 }
+var import_client7;
+var init_airlineDepartures = __esm({
+  "features/keystone/mutations/airlineDepartures.ts"() {
+    "use strict";
+    init_segment_service_status();
+    import_client7 = require("@prisma/client");
+    init_access();
+    init_lifecycle();
+    init_refund_cleanup_queue();
+    init_refund_cleanup_pagination();
+    init_service_eligibility();
+    init_transactions();
+    init_airlineWorkflows();
+    init_airlineOperations();
+    init_domain_error();
+    init_travel_documents();
+  }
+});
 
 // features/keystone/mutations/airlineProvisioning.ts
-var import_client8 = require("@prisma/client");
-var launchSeatColumns = ["A", "B", "C", "D", "E", "F"];
 async function createDatedFlightRecords(tx, input, query) {
   const instanceKey = `${input.carrierCode}:${input.flightNumber}:${input.serviceDate}`;
   const existing = await tx.flightInstance.findUnique({ where: { instanceKey }, select: { id: true, carrierId: true, scheduleId: true, routeId: true, originId: true, destinationId: true, operatingCarrierId: true, flightNumber: true, serviceDate: true, scheduledDepartureAt: true, scheduledArrivalAt: true, status: true } });
@@ -8810,8 +10680,8 @@ function zonedLocalDateTime(value, timezone, label) {
   } catch {
     throw new DomainError(`${label} is not valid in the carrier timezone.`);
   }
-  const partsAt = (timestamp43) => {
-    const parts = formatter.formatToParts(new Date(timestamp43));
+  const partsAt = (timestamp41) => {
+    const parts = formatter.formatToParts(new Date(timestamp41));
     const part = (type) => Number(parts.find((entry) => entry.type === type)?.value);
     return [part("year"), part("month"), part("day"), part("hour"), part("minute"), part("second")];
   };
@@ -8974,9 +10844,25 @@ async function setInventoryAuthorization(_root, args, context) {
     return result;
   });
 }
+var import_client8, launchSeatColumns;
+var init_airlineProvisioning = __esm({
+  "features/keystone/mutations/airlineProvisioning.ts"() {
+    "use strict";
+    import_client8 = require("@prisma/client");
+    init_access();
+    init_lifecycle();
+    init_validation();
+    init_transactions();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    init_currency_policy();
+    init_money();
+    init_domain_error();
+    launchSeatColumns = ["A", "B", "C", "D", "E", "F"];
+  }
+});
 
 // features/keystone/lib/machine-auth.ts
-var import_node_crypto12 = __toESM(require("node:crypto"));
 function hashMachineToken(token) {
   return import_node_crypto12.default.createHash("sha256").update(token).digest("hex");
 }
@@ -8985,6 +10871,13 @@ function issueMachineToken() {
   const secret = import_node_crypto12.default.randomBytes(32).toString("base64url");
   return { keyId, token: `ofm_${keyId}.${secret}`, tokenHash: hashMachineToken(`ofm_${keyId}.${secret}`) };
 }
+var import_node_crypto12;
+var init_machine_auth = __esm({
+  "features/keystone/lib/machine-auth.ts"() {
+    "use strict";
+    import_node_crypto12 = __toESM(require("node:crypto"));
+  }
+});
 
 // features/keystone/mutations/machineCredentials.ts
 async function machineCredentialSummaries(_root, _args, context) {
@@ -9019,7 +10912,6 @@ async function issueMachineCredential(_root, args, context) {
     } });
     const now = /* @__PURE__ */ new Date();
     await tx.auditEvent.create({ data: { carrierId: actor.carrierId, actorId: actor.itemId, eventKey: `machine-credential:${created.id}:issued`, action: "machine-credential.issue", aggregateType: "MachineCredential", aggregateId: created.id, source: "platform", beforeSummary: {}, afterSummary: { status: "active", audience, scopes, expiresAt: expiresAt.toISOString() }, metadata: {}, occurredAt: now } });
-    await tx.outboxEvent.create({ data: { carrierId: actor.carrierId, eventKey: `machine-credential:${created.id}:issued`, topic: "machine-credential.issued", aggregateType: "MachineCredential", aggregateId: created.id, payload: { audience, scopes, expiresAt: expiresAt.toISOString() }, status: "pending", availableAt: now } });
     return created;
   });
   return { credentialId: credential.id, keyId: issued.keyId, token: issued.token, expiresAt: expiresAt.toISOString() };
@@ -9033,124 +10925,74 @@ async function revokeMachineCredential(_root, args, context) {
     const result = await tx.machineCredential.updateMany({ where: { id: credential.id, carrierId: actor.carrierId, status: "active" }, data: { status: "revoked", revokedAt: now } });
     if (result.count !== 1) throw new DomainError("Resource not found or inaccessible.");
     await tx.auditEvent.create({ data: { carrierId: actor.carrierId, actorId: actor.itemId, eventKey: `machine-credential:${credential.id}:revoked`, action: "machine-credential.revoke", aggregateType: "MachineCredential", aggregateId: credential.id, source: "platform", beforeSummary: { status: "active" }, afterSummary: { status: "revoked" }, metadata: { audience: credential.audience, scopes: credential.scopes }, occurredAt: now } });
-    await tx.outboxEvent.create({ data: { carrierId: actor.carrierId, eventKey: `machine-credential:${credential.id}:revoked`, topic: "machine-credential.revoked", aggregateType: "MachineCredential", aggregateId: credential.id, payload: { audience: credential.audience }, status: "pending", availableAt: now } });
     return true;
   });
 }
-
-// features/keystone/mutations/outboxRecovery.ts
-var import_client9 = require("@prisma/client");
-var DEAD_LETTER_REQUEUE = "outbox.dead-letter.requeue";
-function deadLetterRequeueReason(value) {
-  const reason = String(value ?? "").trim();
-  if (reason.length < 8 || reason.length > 500) throw new DomainError("Give a reason of 8 to 500 characters for requeueing this event.");
-  return reason;
-}
-async function requeueDeadLetteredOutboxEvent(_root, args, context) {
-  const reason = deadLetterRequeueReason(args.reason);
-  return runSerializableTransaction(context, async (transactionContext) => {
-    const prisma = transactionContext.prisma;
-    const located = await prisma.outboxEvent.findUnique({ where: { id: args.outboxEventId }, select: { id: true, carrierId: true } });
-    if (!located?.carrierId) throw new DomainError("Resource not found or inaccessible.");
-    await requireFreshCarrierPermission(transactionContext, "canManageIntegrations", located.carrierId);
-    const lock = await transactionContext.prisma.$queryRaw(import_client9.Prisma.sql`SELECT "id" FROM "OutboxEvent" WHERE "id" = ${located.id} FOR UPDATE`);
-    throwIfKeystonePrismaError(lock);
-    const sudo = transactionContext.sudo();
-    const key = normalizeIdempotencyKey(args.idempotencyKey);
-    const request = { outboxEventId: located.id, expectedAttemptCount: args.expectedAttemptCount, reason };
-    const inspected = await inspectOperation(sudo, located.carrierId, key, DEAD_LETTER_REQUEUE, request);
-    if (inspected.replay) return { ...inspected.replay.result ?? {}, replayed: true };
-    const event = await prisma.outboxEvent.findUnique({ where: { id: located.id }, select: { id: true, carrierId: true, topic: true, aggregateId: true, status: true, attemptCount: true, lastError: true } });
-    if (!event || event.carrierId !== located.carrierId) throw new DomainError("Resource not found or inaccessible.");
-    if (event.status !== "dead_lettered") throw new DomainError("Only a dead-lettered event can be requeued.");
-    if (event.attemptCount !== args.expectedAttemptCount) throw new DomainError("This event changed since it was reviewed. Reload it before requeueing.");
-    if (event.topic === "integration.webhook.received") throw new DomainError("No domain adapter is installed for this integration event, so a new attempt cannot succeed.");
-    let inbox = null;
-    if (event.topic === "payment.webhook.received") {
-      inbox = await prisma.webhookEvent.findFirst({ where: { id: event.aggregateId, carrierId: event.carrierId }, select: { status: true } });
-      if (!inbox) throw new DomainError("The payment inbox record for this event was not found.");
-      if (inbox.status === "dead_lettered") {
-        await prisma.webhookEvent.updateMany({ where: { id: event.aggregateId, carrierId: event.carrierId, status: "dead_lettered" }, data: { status: "failed", nextAttemptAt: /* @__PURE__ */ new Date() } });
-      }
-    }
-    const claim = await beginOperation(sudo, transactionContext, event.carrierId, key, DEAD_LETTER_REQUEUE, request);
-    if (claim.replay) return { ...claim.replay.result ?? {}, replayed: true };
-    const requeued = await prisma.outboxEvent.updateMany({
-      where: { id: event.id, carrierId: event.carrierId, status: "dead_lettered", attemptCount: event.attemptCount },
-      data: { status: "pending", availableAt: /* @__PURE__ */ new Date(), leasedAt: null, leaseOwner: "" }
-    });
-    if (requeued.count !== 1) throw new DomainError("This event changed since it was reviewed. Reload it before requeueing.");
-    await writeAudit(sudo, transactionContext, {
-      carrierId: event.carrierId,
-      key: claim.storageKey,
-      action: DEAD_LETTER_REQUEUE,
-      aggregateType: "OutboxEvent",
-      aggregateId: event.id,
-      before: { status: "dead_lettered", attemptCount: event.attemptCount, lastError: event.lastError ?? "", inboxStatus: inbox?.status ?? null },
-      after: { status: "pending" },
-      metadata: { topic: event.topic, reason }
-    });
-    const result = { resourceType: "OutboxEvent", resourceId: event.id, status: "pending", changed: true, replayed: false };
-    await finishOperation(sudo, claim.record.id, result);
-    return result;
-  });
-}
-
-// features/keystone/mutations/onboarding.ts
-var import_node_crypto13 = __toESM(require("node:crypto"));
+var init_machineCredentials = __esm({
+  "features/keystone/mutations/machineCredentials.ts"() {
+    "use strict";
+    init_access();
+    init_machine_auth();
+    init_domain_error();
+  }
+});
 
 // features/airline/lib/airport-catalog.ts
-var AIRPORT_CATALOG = {
-  JFK: { name: "John F. Kennedy International Airport", city: "New York", countryCode: "US", timezone: "America/New_York" },
-  BOS: { name: "Boston Logan International Airport", city: "Boston", countryCode: "US", timezone: "America/New_York" },
-  LGA: { name: "LaGuardia Airport", city: "New York", countryCode: "US", timezone: "America/New_York" },
-  EWR: { name: "Newark Liberty International Airport", city: "Newark", countryCode: "US", timezone: "America/New_York" },
-  DCA: { name: "Ronald Reagan Washington National Airport", city: "Washington", countryCode: "US", timezone: "America/New_York" },
-  IAD: { name: "Washington Dulles International Airport", city: "Washington", countryCode: "US", timezone: "America/New_York" },
-  ATL: { name: "Hartsfield-Jackson Atlanta International Airport", city: "Atlanta", countryCode: "US", timezone: "America/New_York" },
-  MIA: { name: "Miami International Airport", city: "Miami", countryCode: "US", timezone: "America/New_York" },
-  MCO: { name: "Orlando International Airport", city: "Orlando", countryCode: "US", timezone: "America/New_York" },
-  ORD: { name: "O'Hare International Airport", city: "Chicago", countryCode: "US", timezone: "America/Chicago" },
-  DFW: { name: "Dallas Fort Worth International Airport", city: "Dallas", countryCode: "US", timezone: "America/Chicago" },
-  IAH: { name: "George Bush Intercontinental Airport", city: "Houston", countryCode: "US", timezone: "America/Chicago" },
-  AUS: { name: "Austin-Bergstrom International Airport", city: "Austin", countryCode: "US", timezone: "America/Chicago" },
-  DEN: { name: "Denver International Airport", city: "Denver", countryCode: "US", timezone: "America/Denver" },
-  PHX: { name: "Phoenix Sky Harbor International Airport", city: "Phoenix", countryCode: "US", timezone: "America/Phoenix" },
-  LAS: { name: "Harry Reid International Airport", city: "Las Vegas", countryCode: "US", timezone: "America/Los_Angeles" },
-  LAX: { name: "Los Angeles International Airport", city: "Los Angeles", countryCode: "US", timezone: "America/Los_Angeles" },
-  SFO: { name: "San Francisco International Airport", city: "San Francisco", countryCode: "US", timezone: "America/Los_Angeles" },
-  SEA: { name: "Seattle-Tacoma International Airport", city: "Seattle", countryCode: "US", timezone: "America/Los_Angeles" },
-  HNL: { name: "Daniel K. Inouye International Airport", city: "Honolulu", countryCode: "US", timezone: "Pacific/Honolulu" },
-  YYZ: { name: "Toronto Pearson International Airport", city: "Toronto", countryCode: "CA", timezone: "America/Toronto" },
-  YVR: { name: "Vancouver International Airport", city: "Vancouver", countryCode: "CA", timezone: "America/Vancouver" },
-  MEX: { name: "Mexico City International Airport", city: "Mexico City", countryCode: "MX", timezone: "America/Mexico_City" },
-  CUN: { name: "Canc\xFAn International Airport", city: "Canc\xFAn", countryCode: "MX", timezone: "America/Cancun" },
-  GRU: { name: "S\xE3o Paulo/Guarulhos International Airport", city: "S\xE3o Paulo", countryCode: "BR", timezone: "America/Sao_Paulo" },
-  LHR: { name: "Heathrow Airport", city: "London", countryCode: "GB", timezone: "Europe/London" },
-  LGW: { name: "Gatwick Airport", city: "London", countryCode: "GB", timezone: "Europe/London" },
-  DUB: { name: "Dublin Airport", city: "Dublin", countryCode: "IE", timezone: "Europe/Dublin" },
-  CDG: { name: "Paris Charles de Gaulle Airport", city: "Paris", countryCode: "FR", timezone: "Europe/Paris" },
-  AMS: { name: "Amsterdam Airport Schiphol", city: "Amsterdam", countryCode: "NL", timezone: "Europe/Amsterdam" },
-  FRA: { name: "Frankfurt Airport", city: "Frankfurt", countryCode: "DE", timezone: "Europe/Berlin" },
-  MAD: { name: "Adolfo Su\xE1rez Madrid-Barajas Airport", city: "Madrid", countryCode: "ES", timezone: "Europe/Madrid" },
-  BCN: { name: "Barcelona-El Prat Airport", city: "Barcelona", countryCode: "ES", timezone: "Europe/Madrid" },
-  FCO: { name: "Leonardo da Vinci-Fiumicino Airport", city: "Rome", countryCode: "IT", timezone: "Europe/Rome" },
-  IST: { name: "Istanbul Airport", city: "Istanbul", countryCode: "TR", timezone: "Europe/Istanbul" },
-  DXB: { name: "Dubai International Airport", city: "Dubai", countryCode: "AE", timezone: "Asia/Dubai" },
-  DOH: { name: "Hamad International Airport", city: "Doha", countryCode: "QA", timezone: "Asia/Qatar" },
-  SIN: { name: "Singapore Changi Airport", city: "Singapore", countryCode: "SG", timezone: "Asia/Singapore" },
-  HKG: { name: "Hong Kong International Airport", city: "Hong Kong", countryCode: "HK", timezone: "Asia/Hong_Kong" },
-  HND: { name: "Tokyo Haneda Airport", city: "Tokyo", countryCode: "JP", timezone: "Asia/Tokyo" },
-  NRT: { name: "Narita International Airport", city: "Tokyo", countryCode: "JP", timezone: "Asia/Tokyo" },
-  ICN: { name: "Incheon International Airport", city: "Seoul", countryCode: "KR", timezone: "Asia/Seoul" },
-  SYD: { name: "Sydney Kingsford Smith Airport", city: "Sydney", countryCode: "AU", timezone: "Australia/Sydney" },
-  AKL: { name: "Auckland Airport", city: "Auckland", countryCode: "NZ", timezone: "Pacific/Auckland" },
-  JNB: { name: "O. R. Tambo International Airport", city: "Johannesburg", countryCode: "ZA", timezone: "Africa/Johannesburg" }
-};
+var AIRPORT_CATALOG;
+var init_airport_catalog = __esm({
+  "features/airline/lib/airport-catalog.ts"() {
+    "use strict";
+    AIRPORT_CATALOG = {
+      JFK: { name: "John F. Kennedy International Airport", city: "New York", countryCode: "US", timezone: "America/New_York" },
+      BOS: { name: "Boston Logan International Airport", city: "Boston", countryCode: "US", timezone: "America/New_York" },
+      LGA: { name: "LaGuardia Airport", city: "New York", countryCode: "US", timezone: "America/New_York" },
+      EWR: { name: "Newark Liberty International Airport", city: "Newark", countryCode: "US", timezone: "America/New_York" },
+      DCA: { name: "Ronald Reagan Washington National Airport", city: "Washington", countryCode: "US", timezone: "America/New_York" },
+      IAD: { name: "Washington Dulles International Airport", city: "Washington", countryCode: "US", timezone: "America/New_York" },
+      ATL: { name: "Hartsfield-Jackson Atlanta International Airport", city: "Atlanta", countryCode: "US", timezone: "America/New_York" },
+      MIA: { name: "Miami International Airport", city: "Miami", countryCode: "US", timezone: "America/New_York" },
+      MCO: { name: "Orlando International Airport", city: "Orlando", countryCode: "US", timezone: "America/New_York" },
+      ORD: { name: "O'Hare International Airport", city: "Chicago", countryCode: "US", timezone: "America/Chicago" },
+      DFW: { name: "Dallas Fort Worth International Airport", city: "Dallas", countryCode: "US", timezone: "America/Chicago" },
+      IAH: { name: "George Bush Intercontinental Airport", city: "Houston", countryCode: "US", timezone: "America/Chicago" },
+      AUS: { name: "Austin-Bergstrom International Airport", city: "Austin", countryCode: "US", timezone: "America/Chicago" },
+      DEN: { name: "Denver International Airport", city: "Denver", countryCode: "US", timezone: "America/Denver" },
+      PHX: { name: "Phoenix Sky Harbor International Airport", city: "Phoenix", countryCode: "US", timezone: "America/Phoenix" },
+      LAS: { name: "Harry Reid International Airport", city: "Las Vegas", countryCode: "US", timezone: "America/Los_Angeles" },
+      LAX: { name: "Los Angeles International Airport", city: "Los Angeles", countryCode: "US", timezone: "America/Los_Angeles" },
+      SFO: { name: "San Francisco International Airport", city: "San Francisco", countryCode: "US", timezone: "America/Los_Angeles" },
+      SEA: { name: "Seattle-Tacoma International Airport", city: "Seattle", countryCode: "US", timezone: "America/Los_Angeles" },
+      HNL: { name: "Daniel K. Inouye International Airport", city: "Honolulu", countryCode: "US", timezone: "Pacific/Honolulu" },
+      YYZ: { name: "Toronto Pearson International Airport", city: "Toronto", countryCode: "CA", timezone: "America/Toronto" },
+      YVR: { name: "Vancouver International Airport", city: "Vancouver", countryCode: "CA", timezone: "America/Vancouver" },
+      MEX: { name: "Mexico City International Airport", city: "Mexico City", countryCode: "MX", timezone: "America/Mexico_City" },
+      CUN: { name: "Canc\xFAn International Airport", city: "Canc\xFAn", countryCode: "MX", timezone: "America/Cancun" },
+      GRU: { name: "S\xE3o Paulo/Guarulhos International Airport", city: "S\xE3o Paulo", countryCode: "BR", timezone: "America/Sao_Paulo" },
+      LHR: { name: "Heathrow Airport", city: "London", countryCode: "GB", timezone: "Europe/London" },
+      LGW: { name: "Gatwick Airport", city: "London", countryCode: "GB", timezone: "Europe/London" },
+      DUB: { name: "Dublin Airport", city: "Dublin", countryCode: "IE", timezone: "Europe/Dublin" },
+      CDG: { name: "Paris Charles de Gaulle Airport", city: "Paris", countryCode: "FR", timezone: "Europe/Paris" },
+      AMS: { name: "Amsterdam Airport Schiphol", city: "Amsterdam", countryCode: "NL", timezone: "Europe/Amsterdam" },
+      FRA: { name: "Frankfurt Airport", city: "Frankfurt", countryCode: "DE", timezone: "Europe/Berlin" },
+      MAD: { name: "Adolfo Su\xE1rez Madrid-Barajas Airport", city: "Madrid", countryCode: "ES", timezone: "Europe/Madrid" },
+      BCN: { name: "Barcelona-El Prat Airport", city: "Barcelona", countryCode: "ES", timezone: "Europe/Madrid" },
+      FCO: { name: "Leonardo da Vinci-Fiumicino Airport", city: "Rome", countryCode: "IT", timezone: "Europe/Rome" },
+      IST: { name: "Istanbul Airport", city: "Istanbul", countryCode: "TR", timezone: "Europe/Istanbul" },
+      DXB: { name: "Dubai International Airport", city: "Dubai", countryCode: "AE", timezone: "Asia/Dubai" },
+      DOH: { name: "Hamad International Airport", city: "Doha", countryCode: "QA", timezone: "Asia/Qatar" },
+      SIN: { name: "Singapore Changi Airport", city: "Singapore", countryCode: "SG", timezone: "Asia/Singapore" },
+      HKG: { name: "Hong Kong International Airport", city: "Hong Kong", countryCode: "HK", timezone: "Asia/Hong_Kong" },
+      HND: { name: "Tokyo Haneda Airport", city: "Tokyo", countryCode: "JP", timezone: "Asia/Tokyo" },
+      NRT: { name: "Narita International Airport", city: "Tokyo", countryCode: "JP", timezone: "Asia/Tokyo" },
+      ICN: { name: "Incheon International Airport", city: "Seoul", countryCode: "KR", timezone: "Asia/Seoul" },
+      SYD: { name: "Sydney Kingsford Smith Airport", city: "Sydney", countryCode: "AU", timezone: "Australia/Sydney" },
+      AKL: { name: "Auckland Airport", city: "Auckland", countryCode: "NZ", timezone: "Pacific/Auckland" },
+      JNB: { name: "O. R. Tambo International Airport", city: "Johannesburg", countryCode: "ZA", timezone: "Africa/Johannesburg" }
+    };
+  }
+});
 
 // features/keystone/mutations/onboarding.ts
-var [PROFILE_STEP, CATALOG_STEP, DATED_SERVICE_STEP, STATION_STEP, SETTLEMENT_STEP, REVIEW_STEP] = seed_default.steps.map((step) => step.key);
-var initialAirportCatalog = AIRPORT_CATALOG;
 function required(value, label, pattern) {
   const normalized = value.trim();
   if (!pattern.test(normalized)) throw new DomainError(`${label} is invalid.`);
@@ -9375,11 +11217,6 @@ async function completeCarrierOnboarding(_root, args, context) {
         where: { carrierId: actor.carrierId, id: { not: actor.itemId }, onboardingStatus: { in: ["not_started", "in_progress", "dismissed"] }, role: { canManageOnboarding: true } },
         data: { onboardingStatus: "completed" }
       });
-      if (completed) await tx.outboxEvent.upsert({
-        where: { eventKey: `onboarding:${actor.carrierId}:${digest}` },
-        update: {},
-        create: { carrierId: actor.carrierId, eventKey: `onboarding:${actor.carrierId}:${digest}`, topic: "carrier.onboarding.completed", aggregateType: "Carrier", aggregateId: actor.carrierId, payload: { code: data.code, flightInstanceId: datedService.flight.id, boundedScope: seed_default.launchScope }, status: "pending", availableAt: now }
-      });
       return { completed, steps: steps.map((step) => ({ key: step.step, status: step.status, attemptCount: step.attemptCount, requirements: step.requirements ?? [] })) };
     });
   } catch (error) {
@@ -9422,6 +11259,26 @@ async function dismissCarrierOnboarding(_root, _args, context) {
     return { id: user.id, onboardingStatus: user.onboardingStatus };
   });
 }
+var import_node_crypto13, PROFILE_STEP, CATALOG_STEP, DATED_SERVICE_STEP, STATION_STEP, SETTLEMENT_STEP, REVIEW_STEP, initialAirportCatalog;
+var init_onboarding = __esm({
+  "features/keystone/mutations/onboarding.ts"() {
+    "use strict";
+    import_node_crypto13 = __toESM(require("node:crypto"));
+    init_access();
+    init_bounded_payment_policy();
+    init_currency_policy();
+    init_transactions();
+    init_seed();
+    init_airlineProvisioning();
+    init_airlineWorkflows();
+    init_domain_error();
+    init_airport_catalog();
+    init_branding();
+    init_money();
+    [PROFILE_STEP, CATALOG_STEP, DATED_SERVICE_STEP, STATION_STEP, SETTLEMENT_STEP, REVIEW_STEP] = seed_default.steps.map((step) => step.key);
+    initialAirportCatalog = AIRPORT_CATALOG;
+  }
+});
 
 // features/keystone/mutations/storefrontSettings.ts
 function optionalText2(value, label, max) {
@@ -9441,6 +11298,16 @@ function contactDetails(input) {
   if (storefrontContactPhone && !/^[+()0-9 .-]{5,40}$/.test(storefrontContactPhone)) throw new DomainError("Enter a valid contact phone.");
   return { storefrontContactEmail, storefrontContactPhone, storefrontServiceHours: optionalText2(input.storefrontServiceHours, "Service hours", 200) };
 }
+function logoDetails(input) {
+  const logo = {};
+  if (input.logoIcon) {
+    const logoIcon = sanitizeStoreLogoSvg(input.logoIcon);
+    if (!logoIcon) throw new DomainError("Logo must be a valid, safe SVG document.");
+    logo.logoIcon = logoIcon;
+  }
+  if (input.logoColor !== void 0 && input.logoColor !== null) logo.logoColor = normalizeStoreLogoColor(input.logoColor);
+  return logo;
+}
 function normalizeStorefrontSettingsInput(input) {
   const storefrontBrandColor = normalizeStorefrontBrandColor(input.storefrontBrandColor);
   if (!storefrontBrandColor) throw new DomainError("Choose one of the approved storefront colors.");
@@ -9450,14 +11317,15 @@ function normalizeStorefrontSettingsInput(input) {
     storefrontBrandColor,
     storefrontHomepageTitle: boundedText(input.storefrontHomepageTitle, "Homepage title", 120),
     storefrontHomepageDescription: boundedText(input.storefrontHomepageDescription, "Homepage description", 320),
-    ...contactDetails(input)
+    ...contactDetails(input),
+    ...logoDetails(input)
   };
 }
 async function updateCarrierStorefrontSettings(_root, args, context) {
   const actor = await requireFreshPermission(context, "canManageOnboarding");
   const data = normalizeStorefrontSettingsInput(args);
   return context.prisma.$transaction(async (tx) => {
-    const before = await tx.carrier.findUniqueOrThrow({ where: { id: actor.carrierId }, select: { name: true, legalName: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true } });
+    const before = await tx.carrier.findUniqueOrThrow({ where: { id: actor.carrierId }, select: { name: true, legalName: true, logoIcon: true, logoColor: true, storefrontBrandColor: true, storefrontHomepageTitle: true, storefrontHomepageDescription: true, storefrontContactEmail: true, storefrontContactPhone: true, storefrontServiceHours: true } });
     const updated = await tx.carrier.update({ where: { id: actor.carrierId }, data });
     const now = /* @__PURE__ */ new Date();
     await tx.auditEvent.create({ data: {
@@ -9476,13 +11344,22 @@ async function updateCarrierStorefrontSettings(_root, args, context) {
     return updated;
   });
 }
+var init_storefrontSettings = __esm({
+  "features/keystone/mutations/storefrontSettings.ts"() {
+    "use strict";
+    init_access();
+    init_branding();
+    init_domain_error();
+    init_store_logo();
+    init_storeLogo();
+  }
+});
 
 // features/keystone/mutations/index.ts
-var graphql = String.raw;
 function extendGraphqlSchema(baseSchema) {
   return (0, import_schema.mergeSchemas)({
     schemas: [baseSchema],
-    typeDefs: graphql`
+    typeDefs: graphql2`
       enum AirlineSalesStatus {
         open_for_sale
         closed_for_sale
@@ -9532,10 +11409,13 @@ function extendGraphqlSchema(baseSchema) {
         defaultTimezone: String!
         salesEnabled: Boolean!
         storefrontBrandColor: String
+        logoIcon: String
+        logoColor: String
         storefrontHomepageTitle: String
         storefrontHomepageDescription: String
         storefrontConfigured: Boolean!
         accessRecoveryEnabled: Boolean!
+        onlinePaymentEnabled: Boolean!
         storefrontContactEmail: String
         storefrontContactPhone: String
         storefrontServiceHours: String
@@ -9598,6 +11478,16 @@ function extendGraphqlSchema(baseSchema) {
         disruption: PublicFlightDisruption
       }
 
+      type CustomerCheckoutSession {
+        url: String!
+        checkoutSessionId: String!
+      }
+
+      type CustomerCheckoutResult {
+        status: String!
+        ticketingStatus: String!
+      }
+
       type RotatedBookingAccess {
         recordLocator: String!
         accessToken: String!
@@ -9625,6 +11515,21 @@ function extendGraphqlSchema(baseSchema) {
         keyId: String!
         token: String!
         expiresAt: String!
+      }
+
+      type CustomerCancellationQuote {
+        allowed: Boolean!
+        reason: String!
+        refundAmount: Int!
+        feeAmount: Int!
+        currencyCode: String!
+        summary: String!
+      }
+
+      type CustomerCancellationResult {
+        status: String!
+        refundAmount: Int!
+        currencyCode: String!
       }
 
       type CustomerBooking {
@@ -9663,6 +11568,7 @@ function extendGraphqlSchema(baseSchema) {
           passengerCount: Int = 1
         ): [AirlineFlightOption!]!
         customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
+        customerCancellationQuote(recordLocator: String!, accessToken: String!): CustomerCancellationQuote!
         operatorBookingReceipt(bookingId: ID!): JSON!
         publicCarrierIdentity(carrierCode: String!): PublicCarrierIdentity
         departureManifest(serviceDate: String!, originCode: String, cleanupCursor: String): JSON!
@@ -9691,6 +11597,8 @@ function extendGraphqlSchema(baseSchema) {
           storefrontContactEmail: String
           storefrontContactPhone: String
           storefrontServiceHours: String
+          logoIcon: String
+          logoColor: String
         ): Carrier!
         completeCarrierOnboarding(
           name: String!
@@ -9711,7 +11619,6 @@ function extendGraphqlSchema(baseSchema) {
         dismissCarrierOnboarding: OnboardingStatusResult!
         issueMachineCredential(name: String!, audience: String!, scopes: [String!]!, expiresAt: String!): IssuedMachineCredential!
         revokeMachineCredential(credentialId: ID!): Boolean!
-        requeueDeadLetteredOutboxEvent(outboxEventId: ID!, expectedAttemptCount: Int!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
         registerAirport(iataCode: String!, icaoCode: String, name: String!, city: String!, countryCode: String!, subdivisionCode: String, timezone: String!, idempotencyKey: String!): AirlineOperationResult!
         updateFlightOperations(
           flightInstanceId: ID!
@@ -9727,11 +11634,14 @@ function extendGraphqlSchema(baseSchema) {
           idempotencyKey: String!
         ): AirlineOperationResult!
         recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
+        startCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!): CustomerCheckoutSession!
+        completeCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!, checkoutSessionId: String): CustomerCheckoutResult!
         recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
         reissueBookingAccessCode(bookingId: ID!): RotatedBookingAccess!
         rotateCustomerBookingAccessToken(recordLocator: String!, accessToken: String!): RotatedBookingAccess!
         recoverCustomerBookingAccess(carrierCode: String!, recordLocator: String!, email: String!): Boolean!
         cancelCustomerBooking(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
+        cancelCustomerBookingWithRefund(recordLocator: String!, accessToken: String!, reason: String!, idempotencyKey: String!): CustomerCancellationResult!
         assignCustomerSeat(recordLocator: String!, accessToken: String!, bookingPassengerId: ID!, bookingSegmentId: ID!, seatId: ID!, idempotencyKey: String!): AirlineOperationResult!
         checkInCustomerBooking(
           recordLocator: String!
@@ -9869,6 +11779,7 @@ function extendGraphqlSchema(baseSchema) {
       Query: {
         redirectToInit: redirectToInit_default,
         customerBooking: getCustomerBooking,
+        customerCancellationQuote,
         operatorBookingReceipt,
         publicCarrierIdentity: getPublicCarrierIdentity,
         departureManifest,
@@ -9901,7 +11812,6 @@ function extendGraphqlSchema(baseSchema) {
         dismissCarrierOnboarding,
         issueMachineCredential,
         revokeMachineCredential,
-        requeueDeadLetteredOutboxEvent,
         createCustomerOffer,
         createCustomerBooking,
         rotateCustomerBookingAccessToken,
@@ -9909,9 +11819,12 @@ function extendGraphqlSchema(baseSchema) {
         updateFlightOperations,
         recordBagEvent,
         recordReceivedPayment,
+        startCustomerCheckout,
+        completeCustomerCheckout,
         reissueBookingAccessCode,
         recoverCustomerBookingAccess,
         cancelCustomerBooking,
+        cancelCustomerBookingWithRefund,
         assignCustomerSeat,
         checkInCustomerBooking,
         createOfferFromShopping,
@@ -9938,44 +11851,177 @@ function extendGraphqlSchema(baseSchema) {
     }
   });
 }
+var import_schema, graphql2;
+var init_mutations = __esm({
+  "features/keystone/mutations/index.ts"() {
+    "use strict";
+    import_schema = require("@graphql-tools/schema");
+    init_redirectToInit();
+    init_airlineOperations();
+    init_airlineWorkflows();
+    init_storefrontAccess();
+    init_storefrontCancellation();
+    init_airlineOperationsControl();
+    init_airlinePaymentsDesk();
+    init_storefrontPayments();
+    init_storefront();
+    init_airlineRecovery();
+    init_airlineDepartures();
+    init_airlineProvisioning();
+    init_machineCredentials();
+    init_onboarding();
+    init_storefrontSettings();
+    graphql2 = String.raw;
+  }
+});
+
+// features/keystone/database-url.ts
+function pooledDatabaseUrl(url, role = "web") {
+  if (!url || !/^postgres(ql)?:\/\//.test(url)) return url;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.searchParams.has("connection_limit")) return url;
+  const override = Number(process.env[OVERRIDE_ENV[role]]);
+  parsed.searchParams.set("connection_limit", String(Number.isInteger(override) && override > 0 ? override : POOL_SIZES[role]));
+  return parsed.toString();
+}
+var POOL_SIZES, OVERRIDE_ENV;
+var init_database_url = __esm({
+  "features/keystone/database-url.ts"() {
+    "use strict";
+    POOL_SIZES = { web: 15, worker: 5 };
+    OVERRIDE_ENV = {
+      web: "DATABASE_CONNECTION_LIMIT",
+      worker: "DATABASE_CONNECTION_LIMIT_WORKER"
+    };
+  }
+});
+
+// features/keystone/lib/keystonePrismaErrors.ts
+function isKeystonePrismaError(value) {
+  return value instanceof Error && value.extensions?.code === "KS_PRISMA_ERROR";
+}
+function rethrowKeystonePrismaError(value) {
+  if (!isKeystonePrismaError(value)) return value;
+  const prisma = value.extensions.prisma ?? {};
+  throw Object.assign(value, { code: prisma.code, meta: prisma.meta, clientVersion: prisma.clientVersion });
+}
+function throwing(result) {
+  if (!result || typeof result.then !== "function") return rethrowKeystonePrismaError(result);
+  const settled = () => result.then(rethrowKeystonePrismaError);
+  return new Proxy(result, {
+    get(target, key) {
+      if (key === "then") return (ok, fail) => settled().then(ok, fail);
+      if (key === "catch") return (fail) => settled().catch(fail);
+      if (key === "finally") return (done) => settled().finally(done);
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    }
+  });
+}
+function throwingDelegate(delegate) {
+  const cached = delegates.get(delegate);
+  if (cached) return cached;
+  const wrapped = new Proxy(delegate, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? (...args) => throwing(value.apply(target, args)) : value;
+    }
+  });
+  delegates.set(delegate, wrapped);
+  return wrapped;
+}
+function throwKeystonePrismaErrors(client) {
+  const cached = clients.get(client);
+  if (cached) return cached;
+  const wrapped = new Proxy(client, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key === "$transaction" && typeof value === "function") {
+        return (work, ...options) => {
+          if (typeof work === "function") return value.call(target, (tx) => work(throwKeystonePrismaErrors(tx)), ...options);
+          return Promise.resolve(value.call(target, work, ...options)).then((results) => Array.isArray(results) ? results.map(rethrowKeystonePrismaError) : results);
+        };
+      }
+      if (key === "$extends" && typeof value === "function") return (...args) => throwKeystonePrismaErrors(value.apply(target, args));
+      if (typeof key === "string" && RAW_METHOD.test(key) && typeof value === "function") return (...args) => throwing(value.apply(target, args));
+      if (typeof value === "function") return value.bind(target);
+      if (typeof key === "string" && !key.startsWith("$") && value && typeof value === "object" && typeof value.findFirst === "function") return throwingDelegate(value);
+      return value;
+    }
+  });
+  clients.set(client, wrapped);
+  return wrapped;
+}
+var RAW_METHOD, clients, delegates;
+var init_keystonePrismaErrors = __esm({
+  "features/keystone/lib/keystonePrismaErrors.ts"() {
+    "use strict";
+    RAW_METHOD = /^\$(queryRaw|executeRaw|queryRawUnsafe|executeRawUnsafe|queryRawTyped|runCommandRaw)$/;
+    clients = /* @__PURE__ */ new WeakMap();
+    delegates = /* @__PURE__ */ new WeakMap();
+  }
+});
 
 // features/keystone/index.ts
-var isProduction = process.env.NODE_ENV === "production";
 function productionValue(name, developmentFallback) {
   const value = process.env[name]?.trim();
   if (value) return value;
   if (isProduction) throw new Error(`${name} is required in production.`);
   return developmentFallback;
 }
-var databaseURL = productionValue("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/openfront_airline");
-var sessionConfig = {
-  maxAge: 60 * 60 * 24 * 30,
-  secret: resolveSessionSecret()
-};
-var bucketName = productionValue("S3_BUCKET_NAME", "keystone-test");
-var region = productionValue("S3_REGION", "us-east-1");
-var accessKeyId = productionValue("S3_ACCESS_KEY_ID", "keystone");
-var secretAccessKey = productionValue("S3_SECRET_ACCESS_KEY", "keystone");
-var endpoint = productionValue("S3_ENDPOINT", "http://localhost:9000");
-var { withAuth } = (0, import_auth.createAuth)({
-  listKey: "User",
-  identityField: "email",
-  secretField: "password",
-  // Keystone's normal empty-database init flow, as in E-commerce: it is permitted only while no User exists.
-  initFirstItem: initialOperatorSetupEnabled() ? {
-    fields: ["name", "email", "password"]
-    // The carrier and role are attached by the User resolveInput hook, in one transaction, only for valid details.
-  } : void 0,
-  passwordResetLink: {
-    async sendToken(args) {
-      const recipient = await args.context.prisma.user.findUnique({
-        where: { id: String(args.itemId) },
-        select: { carrier: { select: { name: true } } }
-      });
-      await sendPasswordResetEmail(args.token, args.identity, { carrierName: recipient?.carrier?.name });
-    }
-  },
-  sessionData: `
+var import_auth, import_core58, import_config, import_session2, isProduction, databaseURL, sessionConfig, bucketName, region, accessKeyId, secretAccessKey, endpoint, withAuth, keystone_default;
+var init_keystone = __esm({
+  "features/keystone/index.ts"() {
+    "use strict";
+    init_s3_storage();
+    import_auth = require("@keystone-6/auth");
+    import_core58 = require("@keystone-6/core");
+    import_config = require("dotenv/config");
+    init_models();
+    import_session2 = require("@keystone-6/core/session");
+    init_mutations();
+    init_mail();
+    init_session();
+    init_access();
+    init_fields();
+    init_initial_operator_setup();
+    init_database_url();
+    init_keystonePrismaErrors();
+    isProduction = process.env.NODE_ENV === "production";
+    databaseURL = productionValue("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/openfront_airline");
+    sessionConfig = {
+      maxAge: 60 * 60 * 24 * 30,
+      secret: resolveSessionSecret()
+    };
+    bucketName = productionValue("S3_BUCKET_NAME", "keystone-test");
+    region = productionValue("S3_REGION", "us-east-1");
+    accessKeyId = productionValue("S3_ACCESS_KEY_ID", "keystone");
+    secretAccessKey = productionValue("S3_SECRET_ACCESS_KEY", "keystone");
+    endpoint = productionValue("S3_ENDPOINT", "http://localhost:9000");
+    ({ withAuth } = (0, import_auth.createAuth)({
+      listKey: "User",
+      identityField: "email",
+      secretField: "password",
+      // Keystone's normal empty-database init flow, as in E-commerce: it is permitted only while no User exists.
+      initFirstItem: initialOperatorSetupEnabled() ? {
+        fields: ["name", "email", "password"]
+        // The carrier and role are attached by the User resolveInput hook, in one transaction, only for valid details.
+      } : void 0,
+      passwordResetLink: {
+        async sendToken(args) {
+          const recipient = await args.context.prisma.user.findUnique({
+            where: { id: String(args.itemId) },
+            select: { carrier: { select: { name: true } } }
+          });
+          await sendPasswordResetEmail(args.token, args.identity, { carrierName: recipient?.carrier?.name });
+        }
+      },
+      sessionData: `
     id
     name
     email
@@ -9983,37 +12029,47 @@ var { withAuth } = (0, import_auth.createAuth)({
     approvedAgent { id status }
     role { id name ${permissionsList.join(" ")} }
   `
+    }));
+    keystone_default = withAuth(
+      (0, import_core58.config)({
+        db: {
+          provider: "postgresql",
+          url: pooledDatabaseUrl(databaseURL),
+          // Keystone returns failed queries as values; this makes them throw so transactions roll back.
+          extendPrismaClient: throwKeystonePrismaErrors
+        },
+        lists: models,
+        storage: {
+          my_images: {
+            kind: "s3",
+            type: "image",
+            bucketName,
+            region,
+            accessKeyId,
+            secretAccessKey,
+            endpoint,
+            signed: { expiry: 5e3 },
+            forcePathStyle: s3ForcePathStyle(endpoint)
+          }
+        },
+        ui: {
+          isAccessAllowed: (context) => hasFreshPermission({ session: context.session, context }, "canAccessDashboard")
+        },
+        session: (0, import_session2.statelessSessions)(sessionConfig),
+        graphql: {
+          extendGraphqlSchema
+        }
+      })
+    );
+  }
 });
-var keystone_default = withAuth(
-  (0, import_core60.config)({
-    db: {
-      provider: "postgresql",
-      url: databaseURL
-    },
-    lists: models,
-    storage: {
-      my_images: {
-        kind: "s3",
-        type: "image",
-        bucketName,
-        region,
-        accessKeyId,
-        secretAccessKey,
-        endpoint,
-        signed: { expiry: 5e3 },
-        forcePathStyle: s3ForcePathStyle(endpoint)
-      }
-    },
-    ui: {
-      isAccessAllowed: (context) => hasFreshPermission({ session: context.session, context }, "canAccessDashboard")
-    },
-    session: (0, import_session2.statelessSessions)(sessionConfig),
-    graphql: {
-      extendGraphqlSchema
-    }
-  })
-);
 
 // keystone.ts
+var keystone_exports = {};
+__export(keystone_exports, {
+  default: () => keystone_default2
+});
+module.exports = __toCommonJS(keystone_exports);
+init_keystone();
 var keystone_default2 = keystone_default;
 //# sourceMappingURL=config.js.map

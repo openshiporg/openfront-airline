@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type { NextApiRequest, NextApiResponse } from 'next'
 
 import { keystoneContext } from '../../../../features/keystone/context'
+import { processPaymentWebhookEvent } from '../../../../features/integrations/payment/process-webhook'
 import { verifyTimestampedWebhook, webhookSecretFromEnvironment } from '../../../../features/integrations/webhook-security'
 
 export const config = { api: { bodyParser: false } }
@@ -34,21 +35,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const recordedDigest = (existing.payloadSummary as any)?.bodyDigest
         const sameContent = recordedDigest ? recordedDigest === bodyDigest : JSON.stringify(existing.payload) === JSON.stringify(event) && existing.eventType === event.type
         if (!sameContent) return { conflict: true }
-        return { replayed: true, status: existing.status }
+        return { replayed: true, status: existing.status, id: existing.id, retry: existing.status !== 'succeeded' && existing.status !== 'dead_lettered' }
       }
       const webhook = await tx.webhookEvent.create({ data: {
         carrierId: provider.carrierId, eventKey: `stripe:${dedupeKey}`, dedupeKey, providerEventId: event.id,
         direction: 'inbound', eventType: event.type, status: 'pending', signatureVerified: true,
         payload: event, payloadSummary: { id: event.id, type: event.type, bodyDigest, signingProviderId: provider.id }, occurredAt: new Date(event.created * 1000 || Date.now()), attemptCount: 0,
       } })
-      await tx.outboxEvent.create({ data: { carrierId: provider.carrierId, eventKey: `payment-webhook:${dedupeKey}`, topic: 'payment.webhook.received', aggregateType: 'WebhookEvent', aggregateId: webhook.id, payload: { providerId: provider.id, providerEventId: event.id }, status: 'pending', availableAt: new Date() } })
-      return { replayed: false, status: 'pending' }
+      return { replayed: false, status: 'pending', id: webhook.id, retry: true }
     })
     if (result.conflict) {
       console.warn('Payment webhook event id reused with different signed content; original retained.', { providerId: provider.id, dedupeKey })
       return res.status(409).json({ error: 'This event id was already received with different content.' })
     }
-    return res.status(result.replayed ? 200 : 202).json({ accepted: true, replayed: result.replayed, status: result.status })
+    // Settlement runs inline. A failure is recorded on the event and the provider's redelivery retries it; there is no queue or worker.
+    let status = result.status
+    if (result.retry) {
+      try {
+        await processPaymentWebhookEvent(keystoneContext.prisma as any, result.id, provider.id)
+        status = 'succeeded'
+      } catch (error) {
+        console.error('Payment webhook processing failed', error)
+        status = 'failed'
+        await (keystoneContext.prisma as any).webhookEvent.updateMany({ where: { id: result.id, status: { in: ['pending', 'processing', 'failed'] } }, data: { status: 'failed', errorMessage: 'Processing failed; the provider redelivery retries it.', lastAttemptedAt: new Date(), attemptCount: { increment: 1 } } }).catch(() => undefined)
+        return res.status(500).json({ error: 'Webhook processing failed; retry the delivery.' })
+      }
+    }
+    return res.status(result.replayed ? 200 : 202).json({ accepted: true, replayed: result.replayed, status })
   } catch (error) {
     console.error('Payment webhook receipt failed', error)
     return res.status(400).json({ error: 'Webhook request could not be accepted.' })

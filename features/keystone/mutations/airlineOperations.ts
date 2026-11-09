@@ -211,18 +211,6 @@ export async function writeAudit(
       occurredAt: new Date().toISOString(),
     },
   })
-  await sudo.query.OutboxEvent.createOne({
-    data: {
-      carrier: { connect: { id: input.carrierId } },
-      eventKey: `outbox:${input.key}`,
-      topic: input.action,
-      aggregateType: input.aggregateType,
-      aggregateId: input.aggregateId,
-      payload: sanitizeAuditMetadata({ before: input.before ?? {}, after: input.after ?? {}, metadata: input.metadata ?? {} }),
-      status: 'pending',
-      availableAt: new Date().toISOString(),
-    },
-  })
 }
 
 type TransitionResult = {
