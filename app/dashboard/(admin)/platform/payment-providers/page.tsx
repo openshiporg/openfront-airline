@@ -1,1 +1,4 @@
-export { PaymentProvidersPage as default } from '@/features/platform/payment-providers/screens/PaymentProvidersPage'
+import { gatePlatformPage } from '@/features/dashboard/lib/platformGate'
+import { PaymentProvidersPage } from '@/features/platform/payment-providers/screens/PaymentProvidersPage'
+
+export default gatePlatformPage('payment-providers', PaymentProvidersPage)

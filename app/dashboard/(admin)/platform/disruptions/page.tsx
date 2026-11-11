@@ -1,3 +1,4 @@
+import { gatePlatformPage } from '@/features/dashboard/lib/platformGate'
 import { PlatformDisruptionsPage } from '@/features/platform/screens/Canonical/PlatformDeskPages'
 
-export default PlatformDisruptionsPage
+export default gatePlatformPage('disruptions', PlatformDisruptionsPage)

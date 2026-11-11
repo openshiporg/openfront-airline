@@ -154,7 +154,7 @@ export async function getAuthenticatedUser() {
       authenticatedItem {
         ... on User {
           id email name onboardingStatus carrierLaunched
-          role { canAccessDashboard canManageOnboarding }
+          role { canAccessDashboard canManageCarriers canReadUsers canManageUsers canReadRoles canManageRoles canManageAgents canReadNetwork canManageNetwork canReadInventory canManageInventory canReadOffers canManageOffers canReadBookings canManageBookings canReadPassengers canManagePassengers canManageSecurePassengerData canReadTicketing canManageTicketing canReadPayments canManagePayments canReadAirportService canManageAirportService canReadDisruptions canManageDisruptions canReadIntegrations canManageIntegrations canReadAudit canManageOnboarding }
         }
       }
     }
