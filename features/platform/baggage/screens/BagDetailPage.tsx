@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { safeDeskReturn } from '@/features/platform/lib/desk-return'
@@ -90,9 +91,7 @@ export async function BagDetailPage({ params, searchParams }: { params: Params; 
     return <Shell title="Bag" eyebrow="Baggage" parent={parent} actions={back}><Notice tone="bad">Bag could not be loaded. Try again.</Notice></Shell>
   }
   const bag = response.data.bag
-  if (!bag) {
-    return <Shell title="Bag" eyebrow="Baggage" tone="bad" status="Not found" parent={parent} actions={back}><Notice tone="bad" role="alert">Bag not found or outside your stations.</Notice></Shell>
-  }
+  if (!bag) notFound()
 
   const events = bag.events ?? []
   const actions = role?.canManageAirportService ? allowedBagActions(bag.status) : []

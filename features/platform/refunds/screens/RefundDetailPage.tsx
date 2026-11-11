@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
@@ -53,6 +54,7 @@ export async function RefundDetailPage({ params }: { params: Promise<{ id: strin
     { id },
   )
   const refund = response.success ? response.data.refund : null
+  if (response.success && !refund) notFound()
   const title = refund?.refundKey ?? 'Refund'
   const payment = refund?.payment ?? null
   const currency = payment?.currencyCode ?? refund?.currencyCode ?? null
