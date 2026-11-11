@@ -87,9 +87,7 @@ export async function TicketDetailPage({ params, searchParams }: { params: Param
   if (!actorResponse.success) {
     return <Shell title="Ticket" eyebrow="Tickets" parent={parent} actions={nav()}><Notice tone="bad">Ticket could not be loaded. Try again.</Notice></Shell>
   }
-  if (!canReadTickets(actorResponse.data.authenticatedItem)) {
-    return <Shell title="Ticket" eyebrow="Tickets" tone="bad" status="Unavailable" parent={parent} actions={nav()}><Notice tone="bad" role="alert">Tickets are unavailable under your current access.</Notice></Shell>
-  }
+  if (!canReadTickets(actorResponse.data.authenticatedItem)) notFound()
   const response = await keystoneClient<{ ticket: TicketDetail | null }>(TICKET_QUERY, { id })
   if (!response.success) {
     return <Shell title="Ticket" eyebrow="Tickets" parent={parent} actions={nav()}><Notice tone="bad">Ticket could not be loaded. Try again.</Notice></Shell>

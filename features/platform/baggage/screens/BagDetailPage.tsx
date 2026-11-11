@@ -82,9 +82,7 @@ export async function BagDetailPage({ params, searchParams }: { params: Params; 
   const actor = actorResponse.data.authenticatedItem
   const role = actor?.role
   const canRead = Boolean((role?.canReadAirportService || role?.canManageAirportService) && (role?.canManageCarriers || actor?.carrier?.id))
-  if (!canRead) {
-    return <Shell title="Bag" eyebrow="Baggage" tone="bad" status="Unavailable" parent={parent} actions={back}><Notice tone="bad" role="alert">Bag records are unavailable under your current access.</Notice></Shell>
-  }
+  if (!canRead) notFound()
 
   const response = await keystoneClient<{ bag: BagDetail | null }>(BAG_QUERY, { id })
   if (!response.success) {
