@@ -40,11 +40,12 @@ export async function ItemPage({ params }: ItemPageParams) {
 
   let fetchedItem: Record<string, unknown> = {}
 
-  if (!response.success || !response.data?.item) {
-    if (!response.success) console.error('Error fetching item:', response.error)
-    notFound()
+  if (response.success) {
+    fetchedItem = response.data.item as Record<string, unknown>
+  } else {
+    console.error('Error fetching item:', response.error)
+    fetchedItem = {}
   }
-  fetchedItem = response.data.item as Record<string, unknown>
 
   // Get adminMeta for the list structure
   const adminMetaResponse = await getAdminMetaAction(list.key)
