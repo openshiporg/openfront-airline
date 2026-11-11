@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
@@ -94,9 +95,7 @@ export async function TicketDetailPage({ params, searchParams }: { params: Param
     return <Shell title="Ticket" eyebrow="Tickets" parent={parent} actions={nav()}><Notice tone="bad">Ticket could not be loaded. Try again.</Notice></Shell>
   }
   const ticket = response.data.ticket
-  if (!ticket) {
-    return <Shell title="Ticket" eyebrow="Tickets" tone="bad" status="Not found" parent={parent} actions={nav()}><Notice tone="bad" role="alert">Ticket not found.</Notice></Shell>
-  }
+  if (!ticket) notFound()
 
   const locator = ticket.booking?.recordLocator
   const coupons = ticket.coupons ?? []

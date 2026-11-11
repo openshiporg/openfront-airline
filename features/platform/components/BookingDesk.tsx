@@ -105,6 +105,18 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
     } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Payment could not be recorded.') }
     endTask(aggregate)
   }
+  async function refreshClocks() {
+    if (!beginTask('refresh-clocks')) return
+    setMessageFailed(false); setMessage('')
+    try {
+      const response = await fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ query: 'mutation{refreshAirlineClocks{expiredHolds expiredBookings}}' }) })
+      const body = await response.json() as { data?: { refreshAirlineClocks?: { expiredHolds: number; expiredBookings: number } }; errors?: Array<{ message: string }> }
+      const result = body.data?.refreshAirlineClocks
+      if (!result) throw new Error(body.errors?.[0]?.message ?? 'Expired holds and unpaid bookings could not be refreshed.')
+      setMessage(`Refreshed: ${plural(result.expiredHolds, 'expired hold')} released, ${plural(result.expiredBookings, 'unpaid booking')} cancelled.`); router.refresh()
+    } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Expired holds and unpaid bookings could not be refreshed.') }
+    endTask('refresh-clocks')
+  }
   async function reissueAccess(booking: Booking) {
     if (!window.confirm(`Issue a new access code for ${booking.recordLocator}? The customer's current code stops working.`)) return
     const aggregate = booking.id
@@ -296,7 +308,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
       </div> : <Well>No bookings</Well>}
     </DeskSection>}
 
-    {!sectionErrors.offers && <DeskSection title="Held offers" count={heldOffers.length}>
+    {!sectionErrors.offers && <DeskSection title="Held offers" count={heldOffers.length} actions={<Pill size="sm" disabled={Boolean(working)} onClick={refreshClocks}>Refresh</Pill>}>
       {heldOffers.length ? <Panel className="divide-y">{heldOffers.map(offer => <article key={offer.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">

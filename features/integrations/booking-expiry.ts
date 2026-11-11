@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client'
 
-function dueBookingQuery() {
+function dueBookingQuery(bookingId?: string) {
   return Prisma.sql`
     SELECT "id"
     FROM "Booking"
@@ -11,6 +11,7 @@ function dueBookingQuery() {
         THEN ("metadata"->>'paymentDueAt')::timestamptz
         ELSE NULL
       END <= NOW()
+      ${bookingId ? Prisma.sql`AND "id" = ${bookingId}` : Prisma.empty}
       AND NOT EXISTS (SELECT 1 FROM "Payment" payment WHERE payment."booking" = "Booking"."id" AND payment."status" IN ('authorized', 'captured', 'partially_refunded'))
       AND NOT EXISTS (SELECT 1 FROM "ManualPaymentEvidence" evidence WHERE evidence."booking" = "Booking"."id" AND evidence."status" IN ('submitted', 'approved', 'consumed'))
       AND NOT EXISTS (SELECT 1 FROM "Ticket" ticket WHERE ticket."booking" = "Booking"."id")
@@ -22,14 +23,17 @@ function dueBookingQuery() {
   `
 }
 
-/** Expire unpaid storefront bookings without deleting immutable commercial evidence. */
-export async function expireUnpaidBookings(prisma: PrismaClient, limit = 25) {
+/**
+ * Expire unpaid storefront bookings without deleting immutable commercial evidence. Runs on the request that touches a
+ * booking (pass its id) or from the staff Refresh button; there is no timer. Row locks make concurrent calls safe.
+ */
+export async function expireUnpaidBookings(prisma: PrismaClient, limit = 25, bookingId?: string) {
   let expiredBookings = 0
   let skippedBookings = 0
   for (let index = 0; index < limit; index += 1) {
     let candidateId: string | undefined
     const outcome = await prisma.$transaction(async tx => {
-      const rows = await tx.$queryRaw<Array<{ id: string }>>(dueBookingQuery())
+      const rows = await tx.$queryRaw<Array<{ id: string }>>(dueBookingQuery(bookingId))
       const id = rows[0]?.id
       if (!id) return 'empty' as const
       candidateId = id

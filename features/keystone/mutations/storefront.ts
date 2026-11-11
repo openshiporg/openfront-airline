@@ -14,6 +14,7 @@ import { hasConfiguredStorefrontBrand, normalizeStorefrontBrandColor } from '../
 import { DomainError } from '../lib/domain-error'
 import { hasAccompanyingAdult, travelerDateOfBirth } from '../lib/passenger-age'
 import { accessRecoveryEnabled, emailBookingAccess } from './storefrontAccess'
+import { expireUnpaidBookings } from '../../integrations/booking-expiry'
 import { onlinePaymentEnabled } from './storefrontPayments'
 
 // Creation budgets are charged only for admitted new work (and failed proofs), after the exact accepted command has
@@ -507,7 +508,13 @@ export async function getCustomerBooking(
   args: { recordLocator: string; accessToken: string },
   context: Context,
 ) {
-  const booking = await ownedBooking(context, args.recordLocator, args.accessToken)
+  let booking = await ownedBooking(context, args.recordLocator, args.accessToken)
+  // An unpaid booking past its payment deadline is released on the request that reads it (no background timer).
+  const dueAt = Date.parse(booking.metadata?.paymentDueAt ?? '')
+  if (booking.status === 'pending' && ['unpaid', 'failed'].includes(booking.paymentStatus) && Number.isFinite(dueAt) && dueAt <= Date.now()) {
+    const { expiredBookings } = await expireUnpaidBookings(context.prisma as any, 1, booking.id)
+    if (expiredBookings) booking = await ownedBooking(context, args.recordLocator, args.accessToken)
+  }
   const retained = await (context.prisma as any).idempotencyKey.findUnique({ where: { key: booking.idempotencyKey }, select: { scope: true, carrierId: true, status: true, result: true } })
   let bookingReceipt: Record<string, unknown> = { version: 0, state: 'legacy_or_incomplete', message: 'Original acceptance receipt needs operator reconciliation; current booking state remains separately shown.' }
   if (retained?.carrierId === booking.carrierId && retained.scope === 'booking.create-from-offer' && retained.status === 'completed' && retained.result?.resourceId === booking.id) {

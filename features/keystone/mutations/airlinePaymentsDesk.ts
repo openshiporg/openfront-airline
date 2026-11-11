@@ -4,6 +4,8 @@ import type { Context } from '.keystone/types'
 import { requireFreshCarrierPermission, requireFreshPermission } from '../access'
 import { isEvidenceOnlyManualProvider } from '../lib/bounded-payment-policy'
 import { DomainError } from '../lib/domain-error'
+import { expireUnpaidBookings } from '../../integrations/booking-expiry'
+import { reapExpiredInventoryHolds } from '../../integrations/hold-reaper'
 import { hashStorefrontToken } from '../lib/storefront-session'
 import { normalizeIdempotencyKey } from './airlineOperations'
 import { submitManualPaymentEvidence } from './airlineWorkflows'
@@ -71,4 +73,14 @@ export async function reissueBookingAccessCode(
   await prisma.booking.update({ where: { id: booking.id }, data: { accessTokenHash: hashStorefrontToken(token), accessTokenExpiresAt: new Date(now.getTime() + 365 * 24 * 60 * 60_000), accessTokenVersion: (booking.accessTokenVersion ?? 1) + 1 } })
   await prisma.auditEvent.create({ data: { carrierId: booking.carrierId, actorId: actor.itemId, eventKey: `booking-access-reissued:${booking.id}:${crypto.randomUUID()}`, action: 'booking.access-token.reissue', aggregateType: 'Booking', aggregateId: booking.id, source: 'platform', beforeSummary: {}, afterSummary: { accessRevoked: true }, metadata: {}, occurredAt: now } })
   return { recordLocator: booking.recordLocator, accessToken: token }
+}
+
+// Staff Refresh: advances expired fare holds and unpaid bookings past their payment deadline. There is no background
+// timer; this and the customer request that touches a booking are the only triggers. Both steps are idempotent.
+export async function refreshAirlineClocks(_root: unknown, _args: Record<string, never>, context: Context) {
+  await requireFreshPermission(context, 'canManageBookings')
+  const prisma = context.prisma as any
+  const holds = await reapExpiredInventoryHolds(prisma, 1_000)
+  const bookings = await expireUnpaidBookings(prisma, 100)
+  return { status: 'refreshed', expiredHolds: holds.expiredHolds, expiredBookings: bookings.expiredBookings, skippedBookings: bookings.skippedBookings }
 }

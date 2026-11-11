@@ -7,6 +7,7 @@ import { durableRequestFingerprint } from '../lib/request-identity'
 import { runSerializableTransaction, throwIfKeystonePrismaError } from '../lib/transactions'
 import { beginOperation, finishOperation, inspectOperation, randomReference, writeAudit } from './airlineOperations'
 import { issueBookingTicketsInTransaction } from './airlineWorkflows'
+import { expireUnpaidBookings } from '../../integrations/booking-expiry'
 import { isConfiguredPublicCarrier, ownedBooking } from './storefront'
 
 // Online card payment for storefront reservations through Stripe Checkout. A carrier turns it on by activating a
@@ -60,7 +61,11 @@ export async function startCustomerCheckout(
   if (booking.status === 'cancelled') throw new DomainError('Cancelled bookings can’t be paid.')
   if (!['unpaid', 'failed'].includes(booking.paymentStatus)) throw new DomainError('This booking is already paid.')
   const dueAt = Date.parse(booking.metadata?.paymentDueAt ?? '')
-  if (Number.isFinite(dueAt) && dueAt <= Date.now()) throw new DomainError('The payment window for this reservation has closed. Contact the airline.')
+  if (Number.isFinite(dueAt) && dueAt <= Date.now()) {
+    // Past its deadline: release the seats now, on the request that touches the booking.
+    await expireUnpaidBookings(context.prisma as any, 1, booking.id)
+    throw new DomainError('The payment window for this reservation has closed. Contact the airline.')
+  }
   const provider = await activeStripeProvider(context.prisma, carrier.id)
   if (!provider) throw new DomainError('Online payment isn’t available for this airline.')
   await consumeDurableRateLimit(context.prisma as any, 'storefront.checkout.client', durableRequestFingerprint((context as any).req ?? {}), 20, 15 * 60_000)
