@@ -55,6 +55,7 @@ import { TravelDocument } from './TravelDocument'
 import { User } from './User'
 import { WebhookEndpoint } from './WebhookEndpoint'
 import { WebhookEvent } from './WebhookEvent'
+import { guardFilterAccess } from './filterAccess'
 
 const rawModels = {
   User,
@@ -119,7 +120,7 @@ const rawModels = {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Sidebar visibility follows the role: a list whose query access denies the session is hidden from navigation
 // (Keystone evaluates ui.isHidden per session in admin meta). Explicit isHidden settings are kept.
-export const models = Object.fromEntries(Object.entries(rawModels).map(([key, config]: [string, any]) => {
+export const models = Object.fromEntries(Object.entries(guardFilterAccess(rawModels)).map(([key, config]: [string, any]) => {
   const operationQuery = config?.access?.operation?.query
   const filterQuery = config?.access?.filter?.query
   if (typeof operationQuery !== 'function' && typeof filterQuery !== 'function') return [key, config]
