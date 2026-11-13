@@ -220,7 +220,7 @@ export async function PlatformPassengersPage({ searchParams }: { searchParams?: 
           : page?.state === 'empty' ? <Empty>No passengers match.</Empty>
             : <div className="space-y-3">
               {page?.state === 'inconsistent' && <StateNotice href={firstPageHref ?? withWorklistSearch(passengerServiceHref('/dashboard/platform/passengers'), filters)} label="Reload first page">{page.items.length ? 'Passenger rows and their count disagree.' : `No rows returned for ${plural(page.totalCount ?? 0, 'passenger')}.`}</StateNotice>}
-              {page && page.items.length > 0 && <DeskSection title="Passengers" count={page.totalCount ?? undefined} actions={nextPageHref ? <PageLink href={nextPageHref}>Next 100</PageLink> : undefined}><Panel className="divide-y">{page.items.map(passenger => <RowLink key={passenger.id} href={detailWithReturn(`/dashboard/platform/passengers/${passenger.id}`, params)}><div className="min-w-0 flex-1"><TitleLine as="h3" tone={statusTone(passenger.status)} status={passenger.status ?? undefined} className="font-medium">{passenger.givenName ?? 'Name unavailable'} {passenger.familyName ?? ''}</TitleLine><p className="mt-0.5 pl-4"><Code>{passenger.passengerKey ?? 'No key'}</Code>{passenger.preferredLanguage ? <span className="ml-2 text-xs text-muted-foreground">{passenger.preferredLanguage}</span> : null}</p></div><dl className="grid grid-cols-4 gap-4 text-right tabular-nums text-xs "><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Bkg</dt><dd>{passenger.bookingPassengersCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Req</dt><dd>{passenger.serviceRequestsCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Chk</dt><dd>{passenger.checkInsCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Bags</dt><dd>{passenger.bagsCount ?? '—'}</dd></div></dl></RowLink>)}</Panel></DeskSection>}
+              {page && page.items.length > 0 && <DeskSection title="Passengers" count={page.totalCount ?? undefined} actions={nextPageHref ? <PageLink href={nextPageHref}>Next 100</PageLink> : undefined}><Panel className="divide-y">{page.items.map(passenger => <RowLink key={passenger.id} href={detailWithReturn(`/dashboard/platform/passengers/${passenger.id}`, params)}><div className="min-w-0 flex-1"><TitleLine as="h3" tone={statusTone(passenger.status)} status={passenger.status ?? undefined} className="font-medium">{passenger.givenName ?? 'Name unavailable'} {passenger.familyName ?? ''}</TitleLine><p className="mt-0.5 pl-4"><span className="text-xs text-muted-foreground">{passengerRefLabel(passenger.passengerKey)}</span>{passenger.preferredLanguage ? <span className="ml-2 text-xs text-muted-foreground">{passenger.preferredLanguage}</span> : null}</p></div><dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-right tabular-nums text-xs sm:grid-cols-4"><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Bookings</dt><dd>{passenger.bookingPassengersCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Requests</dt><dd>{passenger.serviceRequestsCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Check-ins</dt><dd>{passenger.checkInsCount ?? '—'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-muted-foreground">Bags</dt><dd>{passenger.bagsCount ?? '—'}</dd></div></dl></RowLink>)}</Panel></DeskSection>}
             </div>}
   </Shell>
 }
@@ -569,4 +569,11 @@ export async function PlatformSettingsPage({ searchParams }: { searchParams?: Se
       </DeskSection>
     </div>}
   </Shell>
+}
+
+function passengerRefLabel(key: string | null | undefined) {
+  if (!key) return 'No reference'
+  const parts = key.split(':')
+  const tail = (parts[parts.length - 1] ?? key).slice(0, 8)
+  return `${parts[1] === 'WEB' ? 'Online booking' : 'Passenger'} ref ${tail}`
 }

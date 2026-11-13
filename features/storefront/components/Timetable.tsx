@@ -37,8 +37,8 @@ export function Timetable({ network, carrierCode }: { network: StorefrontNetwork
             const dates = network.serviceDates[key]
             const days = operatingDays(dates)
             const query = new URLSearchParams({ from: route.origin, to: route.destination, ...(dates?.[0] ? { date: dates[0] } : {}) })
-            return <tr key={key} className="group align-baseline [&>td]:py-2.5">
-              <td className="pr-3"><Link href={`/?${query.toString()}#book`} className="font-semibold underline-offset-4 group-hover:underline">{city(route.destination)}</Link> <span className="text-xs font-bold tracking-[0.06em] text-[var(--af-ink-3)]">{route.destination}</span></td>
+            return <tr key={key} className="group align-baseline [&>td]:py-0 [&>td]:align-middle">
+              <td className="pr-3"><Link href={`/?${query.toString()}#book`} className="inline-flex min-h-11 items-center font-semibold underline-offset-4 group-hover:underline">{city(route.destination)}</Link> <span className="text-xs font-bold tracking-[0.06em] text-[var(--af-ink-3)]">{route.destination}</span></td>
               <td className="whitespace-nowrap pr-3 text-[var(--af-ink-2)]">{line ? `${carrierCode} ${line.flightNumber}` : '—'}</td>
               <td className="whitespace-nowrap pr-3 font-semibold">{line ? clock(line.departsAt, line.originTimezone) : '—'}</td>
               <td className="whitespace-nowrap pr-3">{line ? clock(line.arrivesAt, line.destinationTimezone) : '—'}</td>

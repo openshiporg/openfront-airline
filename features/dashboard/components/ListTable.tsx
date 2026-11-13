@@ -178,14 +178,7 @@ export function ListTable({
 
     // Fallback for fields without Cell components - handle null/undefined
     if (item[fieldKey] === null || item[fieldKey] === undefined) {
-      return (
-        <div 
-          className="font-mono text-xs rounded-sm px-2 py-1 border-dashed border italic select-text"
-          style={{ userSelect: 'text' }}
-        >
-          null
-        </div>
-      );
+      return <span className="text-muted-foreground">—</span>;
     }
 
     // Basic fallback for primitive values
