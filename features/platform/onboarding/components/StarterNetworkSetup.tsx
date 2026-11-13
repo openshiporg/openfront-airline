@@ -4,14 +4,14 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Code, DeskSection, Meter, Notice, Panel, Pill, Track } from '@/features/platform/components/desk'
-import { demoNetworkSummary, useDemoNetwork } from '../hooks/useDemoNetwork'
+import { starterNetworkSummary, useStarterNetwork } from '../hooks/useStarterNetwork'
 import { plural } from '@/features/platform/lib/plural'
 
 // The full template: shows what the starter network creates, then loads it through the operator's own setup commands.
-export function DemoNetworkSetup({ carrierId, onBusyChange, onBack }: { carrierId: string; onBusyChange?: (busy: boolean) => void; onBack?: () => void }) {
+export function StarterNetworkSetup({ carrierId, onBusyChange, onBack }: { carrierId: string; onBusyChange?: (busy: boolean) => void; onBack?: () => void }) {
   const router = useRouter()
-  const summary = demoNetworkSummary()
-  const { progress, run } = useDemoNetwork(carrierId)
+  const summary = starterNetworkSummary()
+  const { progress, run } = useStarterNetwork(carrierId)
   const busy = progress.phase === 'running'
   useEffect(() => { onBusyChange?.(busy) }, [busy, onBusyChange])
   useEffect(() => { if (progress.phase === 'done' || progress.phase === 'failed') router.refresh() }, [progress.phase, router])

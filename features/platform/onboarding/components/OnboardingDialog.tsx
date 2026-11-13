@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { getOnboardingCarrier, type OnboardingCarrierResult } from '../actions/onboarding'
 import { Notice, Pill, Track, Well } from '@/features/platform/components/desk'
 import { CarrierOnboardingForm } from './CarrierOnboardingForm'
-import { DemoNetworkSetup } from './DemoNetworkSetup'
+import { StarterNetworkSetup } from './StarterNetworkSetup'
 
 type Template = 'full' | 'custom'
 
@@ -23,7 +23,7 @@ export default function OnboardingDialog({ isOpen, onClose }: { isOpen: boolean;
   const [closeMessage, setCloseMessage] = useState('')
   const [result, setResult] = useState<OnboardingCarrierResult | null>(null)
   const [template, setTemplate] = useState<Template | null>(null)
-  const [demoBusy, setDemoBusy] = useState(false)
+  const [starterBusy, setStarterBusy] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -37,13 +37,13 @@ export default function OnboardingDialog({ isOpen, onClose }: { isOpen: boolean;
 
   if (!isOpen) return null
   const serviceDate = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10)
-  return <Dialog open={isOpen} onOpenChange={open => { if (open) return; if (risk.busy || risk.unknown || demoBusy) { setCloseMessage(demoBusy ? 'Keep this window open until the starter network finishes loading.' : 'Keep this window open until the credential operation is reconciled.'); return } if ((risk.dirty || risk.hasSecret) && !window.confirm('Close setup? Unsaved edits and the displayed one-time credential will no longer be available here. Copy the credential first.')) return; onClose() }}>
+  return <Dialog open={isOpen} onOpenChange={open => { if (open) return; if (risk.busy || risk.unknown || starterBusy) { setCloseMessage(starterBusy ? 'Keep this window open until the starter network finishes loading.' : 'Keep this window open until the credential operation is reconciled.'); return } if ((risk.dirty || risk.hasSecret) && !window.confirm('Close setup? Unsaved edits and the displayed one-time credential will no longer be available here. Copy the credential first.')) return; onClose() }}>
     <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto overflow-x-hidden">
       <DialogHeader><DialogTitle>Carrier launch setup</DialogTitle><DialogDescription className="sr-only">Carrier identity and first sellable flight</DialogDescription></DialogHeader>
       {closeMessage && <Notice tone="bad">{closeMessage}</Notice>}
       {!result ? <Well role="status">Loading carrier identity…</Well>
         : result.success && result.carrier ? (
-          template === 'full' ? <DemoNetworkSetup carrierId={result.carrier.id} onBusyChange={setDemoBusy} onBack={() => setTemplate(null)} />
+          template === 'full' ? <StarterNetworkSetup carrierId={result.carrier.id} onBusyChange={setStarterBusy} onBack={() => setTemplate(null)} />
           : template === 'custom' ? <CarrierOnboardingForm key={result.carrier.id} initialCarrier={result.carrier} initialServiceDate={serviceDate} onExitRiskChange={setRisk} />
           : <div role="radiogroup" aria-label="Setup template" className="grid gap-3 sm:grid-cols-2">{TEMPLATES.map(option => <button key={option.key} type="button" role="radio" aria-checked={false} onClick={() => setTemplate(option.key)} className="rounded-xl border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <span className="block text-sm font-semibold text-foreground">{option.title}</span>

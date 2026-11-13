@@ -8,12 +8,12 @@ Openfront Airline is a self-hostable airline retailing and passenger-service app
 
 **Documentation:** [docs.openship.org/docs/openfront/airline](https://docs.openship.org/docs/openfront/airline)
 
-## Demo
+## Setup
 
-| | |
-|---|---|
-| **Storefront** | [airline.openship.org](https://airline.openship.org) |
-| **Dashboard** | [airline.openship.org/dashboard](https://airline.openship.org/dashboard) |
+1. Set `DATABASE_URL`, `SESSION_SECRET`, `S3_BUCKET_NAME`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (and `S3_ENDPOINT` for non-AWS storage).
+2. Apply the migrations with `npm run migrate`, then start with `npm run build && npm start`.
+3. Open `/dashboard`, create the first operator, and follow carrier onboarding. The "Full starter network" template loads a working carrier with routes, daily flights and a storefront.
+4. Take card payments: on **Payment providers**, add a Stripe secret key (`sk_live_…` for real charges; Stripe's own `sk_test_…` key runs the same code with test cards).
 
 [Learn more →](https://openship.org/products/openfront-airline)
 
@@ -21,9 +21,9 @@ Openfront Airline is a self-hostable airline retailing and passenger-service app
 
 ## The Openfront Ecosystem
 
-Every Openfront is open source and self-hostable. Try any of them on its live demo.
+Every Openfront is open source and self-hostable. Each one has its own live site.
 
-| Product | For | Repository | Demo | Docs |
+| Product | For | Repository | Live site | Docs |
 |---|---|---|---|---|
 | Openfront E-commerce | Online store: catalog, checkout, orders, fulfillment | [openfront](https://github.com/openshiporg/openfront) | [e-commerce.openship.org](https://e-commerce.openship.org) | [Docs](https://docs.openship.org/docs/openfront/ecommerce) |
 | Openfront Restaurant | Online ordering, POS and kitchen display | [openfront-restaurant](https://github.com/openshiporg/openfront-restaurant) | [restaurant.openship.org](https://restaurant.openship.org) | [Docs](https://docs.openship.org/docs/openfront/restaurant) |

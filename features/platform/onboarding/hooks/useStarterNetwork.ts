@@ -3,15 +3,17 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { decimalToMinorUnits } from '@/features/keystone/lib/money'
-import demoSeed from '../lib/seed.json'
+import starterSeed from '../lib/seed.json'
 
 // The "Full starter network" template. Every write goes through the same authority-checked operations an operator
 // uses by hand: storefront settings, the carrier record, carrier launch setup (one call per route, which creates the
 // airports, route, schedule, launch cabin and Standard fare, station access and settlement providers), then
 // provisionDatedFlight for the remaining service days. Every step is idempotent, so a rerun only fills gaps.
 
-export type DemoRoute = (typeof demoSeed.routes)[number]
-export type DemoNetworkProgress = { phase: 'idle' | 'running' | 'done' | 'failed'; label: string; done: number; total: number; failures: string[] }
+const LEGACY_KEY_PREFIX = 'demo-network'
+
+export type StarterRoute = (typeof starterSeed.routes)[number]
+export type StarterNetworkProgress = { phase: 'idle' | 'running' | 'done' | 'failed'; label: string; done: number; total: number; failures: string[] }
 
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 
@@ -30,21 +32,21 @@ function carrierDate(timezone: string, daysAhead: number) {
   return date.toISOString().slice(0, 10)
 }
 
-const minor = (value: string) => decimalToMinorUnits(value, demoSeed.carrier.currencyCode)
+const minor = (value: string) => decimalToMinorUnits(value, starterSeed.carrier.currencyCode)
 
-export function demoNetworkSummary() {
-  const airports = new Set(demoSeed.routes.flatMap(route => [route.origin, route.destination]))
-  return { carrier: demoSeed.carrier, storefront: demoSeed.storefront, routes: demoSeed.routes, airports: [...airports], serviceDays: demoSeed.serviceDays, flights: demoSeed.routes.length * demoSeed.serviceDays }
+export function starterNetworkSummary() {
+  const airports = new Set(starterSeed.routes.flatMap(route => [route.origin, route.destination]))
+  return { carrier: starterSeed.carrier, storefront: starterSeed.storefront, routes: starterSeed.routes, airports: [...airports], serviceDays: starterSeed.serviceDays, flights: starterSeed.routes.length * starterSeed.serviceDays }
 }
 
-export function useDemoNetwork(carrierId: string) {
-  const [progress, setProgress] = useState<DemoNetworkProgress>({ phase: 'idle', label: '', done: 0, total: 0, failures: [] })
+export function useStarterNetwork(carrierId: string) {
+  const [progress, setProgress] = useState<StarterNetworkProgress>({ phase: 'idle', label: '', done: 0, total: 0, failures: [] })
   const running = useRef(false)
 
   const run = useCallback(async () => {
     if (running.current) return
     running.current = true
-    const { carrier, storefront, routes, serviceDays } = demoSeed
+    const { carrier, storefront, routes, serviceDays } = starterSeed
     const dates = Array.from({ length: serviceDays }, (_, index) => carrierDate(carrier.timezone, index + 1))
     const total = 2 + routes.length * 2 + routes.length * (dates.length - 1)
     let done = 0
@@ -99,12 +101,18 @@ export function useDemoNetwork(carrierId: string) {
           await attempt(`${carrier.code}${route.flightNumber} ${serviceDate}`, async () => {
             const scheduleId = scheduleIds.get(route.flightNumber)
             if (!scheduleId) throw new Error('No published schedule for this route.')
-            await graphql(`mutation($scheduleId:ID!,$cabinId:ID!,$fareBrandId:ID!,$serviceDate:String!,$dep:String!,$arr:String!,$capacity:Int!,$base:Int!,$tax:Int!,$currency:String!,$key:String!){provisionDatedFlight(scheduleId:$scheduleId,cabinId:$cabinId,fareBrandId:$fareBrandId,serviceDate:$serviceDate,scheduledDepartureAt:$dep,scheduledArrivalAt:$arr,capacity:$capacity,baseAmount:$base,taxAmount:$tax,currencyCode:$currency,idempotencyKey:$key){resourceId status}}`, {
+            const provision = (key: string) => graphql(`mutation($scheduleId:ID!,$cabinId:ID!,$fareBrandId:ID!,$serviceDate:String!,$dep:String!,$arr:String!,$capacity:Int!,$base:Int!,$tax:Int!,$currency:String!,$key:String!){provisionDatedFlight(scheduleId:$scheduleId,cabinId:$cabinId,fareBrandId:$fareBrandId,serviceDate:$serviceDate,scheduledDepartureAt:$dep,scheduledArrivalAt:$arr,capacity:$capacity,baseAmount:$base,taxAmount:$tax,currencyCode:$currency,idempotencyKey:$key){resourceId status}}`, {
               scheduleId, cabinId: `${carrierId}:launch-cabin-y`, fareBrandId: `${carrierId}:launch-fare-standard`, serviceDate,
               dep: `${serviceDate}T${route.departure}`, arr: `${serviceDate}T${route.arrival}`, capacity: route.capacity,
               base: minor(route.baseFare), tax: minor(route.tax), currency: carrier.currencyCode,
-              key: `demo-network:${carrier.code}:${route.flightNumber}:${serviceDate}`,
+              key,
             })
+            const tail = `${carrier.code}:${route.flightNumber}:${serviceDate}`
+            // Networks loaded before the rename used the legacy key prefix; its stored result still replays.
+            try { await provision(`starter-network:${tail}`) } catch (error) {
+              if (/changed concurrently|retry the request/i.test(error instanceof Error ? error.message : '')) throw error
+              await provision(`${LEGACY_KEY_PREFIX}:${tail}`)
+            }
           })
         }
       }
