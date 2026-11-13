@@ -65,6 +65,12 @@ const passengerFieldLabels = { givenName: 'Given name', familyName: 'Family name
 const fieldLabel = (field: keyof typeof passengerFieldLabels, index: number) => field === 'email' && index > 0 ? 'Email (optional)' : passengerFieldLabels[field]
 
 // Mirrors the server gate in assignCustomerSeat: ticket issuance refuses bookings that already hold seat artifacts.
+function formatServiceDay(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!match) return value
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
 function seatSelectionOpen(booking: { status: string; paymentStatus: string; ticketingStatus: string }) {
   return ['ticketed', 'in_progress'].includes(booking.status) && booking.paymentStatus === 'paid' && booking.ticketingStatus === 'ticketed'
 }
@@ -544,10 +550,10 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         </div>
         <div className="af-rule bg-[var(--af-paper)] px-5 py-4 sm:px-6">
           {managedBooking.bookingReceipt.accepted ? <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1"><p className="af-field-label">Booked fare · <span className="normal-case tracking-normal">{managedBooking.bookingReceipt.accepted.offerNumber}</span></p>{managedBooking.bookingReceipt.accepted.items.map((item, index) => <p key={index} className="text-sm">{item.description} · {item.quantity} travelers · {item.fareName ?? 'Accepted fare'}{item.includedBaggage ? ` · ${item.includedBaggage.pieces} bag(s), ${item.includedBaggage.maxWeightGrams / 1000} kg` : ''}</p>)}</div>
+            <div className="min-w-0 space-y-1"><p className="af-field-label">Booked fare · <span className="normal-case tracking-normal">{managedBooking.bookingReceipt.accepted.offerNumber}</span></p>{managedBooking.bookingReceipt.accepted.items.map((item, index) => <p key={index} className="text-sm">{item.description} · {item.quantity === 1 ? '1 traveler' : `${item.quantity} travelers`} · {item.fareName ?? 'Accepted fare'}{item.includedBaggage ? ` · ${item.includedBaggage.pieces} ${item.includedBaggage.pieces === 1 ? 'bag' : 'bags'}, ${item.includedBaggage.maxWeightGrams / 1000} kg` : ''}</p>)}</div>
             <p className="af-mono text-xl font-semibold">{formatMinorUnits(managedBooking.bookingReceipt.accepted.totalAmount, managedBooking.bookingReceipt.accepted.currencyCode)}</p>
           </div> : <p role="status" className="text-sm text-[var(--af-ink-2)]">Original fare details unavailable.</p>}
-          <p className="af-mono mt-3 text-[0.6875rem] text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
+          <p className="af-mono mt-3 text-[0.6875rem] text-[var(--af-ink-3)]">{managedBooking.status === 'cancelled' ? 'This booking is cancelled' : managedBooking.paymentStatus === 'paid' ? 'Paid by card online' : carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
         </div>
       </div>
       {managedBooking.segments.map(segment => {
@@ -555,7 +561,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         const arrival = localTime(segment.actualArrivalAt ?? segment.estimatedArrivalAt ?? segment.scheduledArrivalAt, segment.destinationTimezone)
         return <article key={segment.id} className="af-card overflow-hidden">
           <header className="af-board px-5 py-5 sm:px-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-3"><p className="af-board-cell af-signal text-sm font-semibold">{managedBooking.carrier.code} {segment.flightNumber}{segment.serviceDate ? ` · ${segment.serviceDate}` : ''}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={segmentTone(segment.status)} />{label(segmentStatusLabels, segment.status)}</p></div>
+            <div className="flex flex-wrap items-baseline justify-between gap-3"><p className="af-board-cell af-signal text-sm font-semibold">{managedBooking.carrier.code} {segment.flightNumber}{segment.serviceDate ? ` · ${formatServiceDay(segment.serviceDate)}` : ''}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={segmentTone(segment.status)} />{label(segmentStatusLabels, segment.status)}</p></div>
             <p className="af-display mt-3 flex items-center gap-3 text-5xl uppercase">{segment.originCode}<span className="af-path" />{segment.destinationCode}</p>
             {segment.scheduledDepartureAt && <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="af-eyebrow">Departs · {segment.actualDepartureAt ? 'actual' : segment.estimatedDepartureAt ? 'estimated' : 'scheduled'}</dt><dd className="af-board-cell mt-1">{departure}{segment.estimatedDepartureAt && !segment.actualDepartureAt ? <span className="block text-xs text-[var(--af-board-ink-2)]">Scheduled {localTime(segment.scheduledDepartureAt, segment.originTimezone)}</span> : null}</dd></div><div><dt className="af-eyebrow">Arrives · {segment.actualArrivalAt ? 'actual' : segment.estimatedArrivalAt ? 'estimated' : 'scheduled'}</dt><dd className="af-board-cell mt-1">{arrival}</dd></div></dl>}
           </header>

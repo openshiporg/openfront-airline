@@ -686,7 +686,7 @@ export async function processBookingRefundInTransaction(
         for (const coupon of ticket.coupons ?? []) {
           if (['open', 'checked_in', 'suspended'].includes(coupon.status)) await sudo.query.TicketCoupon.updateOne({ where: { id: coupon.id }, data: { status: 'refunded' } })
         }
-        await sudo.query.Ticket.updateOne({ where: { id: ticket.id }, data: { status: 'refunded', refundedAt: processedAt } })
+        await sudo.query.Ticket.updateOne({ where: { id: ticket.id }, data: { status: 'voided', voidedAt: processedAt } })
       }
       const retiredObligations = await (transactionContext.prisma as any).serviceObligation.updateMany({ where: { bookingId: booking.id, status: 'active' }, data: { status: 'retired' } })
       throwIfKeystonePrismaError(retiredObligations)

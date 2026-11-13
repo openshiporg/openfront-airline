@@ -23,7 +23,7 @@ export default async function ContactPage() {
     <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
       <section className="af-card p-5 sm:p-6">
         <h2 className="text-lg font-bold">Online</h2>
-        <ul className="mt-3 divide-y divide-[var(--af-line)]">{online.map(item => <li key={item.href}><Link href={item.href} className="flex min-h-12 items-center justify-between gap-3 font-semibold hover:text-[var(--af-accent)]">{item.label}<span className="af-mono text-xs text-[var(--af-ink-3)]">{item.href}</span></Link></li>)}</ul>
+        <ul className="mt-3 divide-y divide-[var(--af-line)]">{online.map(item => <li key={item.href}><Link href={item.href} className="flex min-h-12 items-center justify-between gap-3 font-semibold hover:text-[var(--af-accent)]">{item.label}<span aria-hidden="true" className="text-[var(--af-ink-3)]">›</span></Link></li>)}</ul>
       </section>
       <section className="af-card p-5 sm:p-6">
         <h2 className="text-lg font-bold">Customer service</h2>

@@ -196,8 +196,8 @@ export async function PlatformRecordDetail({ desk, id, returnTo }: { desk: Desk;
             <span className="min-w-0 break-words font-medium">{item.description}</span>
             <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-muted-foreground">
               <span>{item.fareName ?? 'Fare unavailable'}</span>
-              <span className="tabular-nums ">{item.quantity} travelers</span>
-              {item.includedBaggage && <span className="tabular-nums ">{item.includedBaggage.pieces} bag(s) · {item.includedBaggage.maxWeightGrams / 1000} kg</span>}
+              <span className="tabular-nums ">{item.quantity === 1 ? '1 traveler' : `${item.quantity} travelers`}</span>
+              {item.includedBaggage && <span className="tabular-nums ">{item.includedBaggage.pieces} {item.includedBaggage.pieces === 1 ? 'bag' : 'bags'} · {item.includedBaggage.maxWeightGrams / 1000} kg</span>}
               <span className="tabular-nums  text-foreground">{formatMinorUnits(item.totalAmount,item.currencyCode)}</span>
             </span>
           </div>)}

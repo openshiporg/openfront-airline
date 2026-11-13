@@ -3,6 +3,8 @@ import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { DeskHeader, DeskSection, Notice, Plate, Route, StatusLabel, Well } from '@/features/platform/components/desk'
 import { OnboardingLaunchCard } from '@/features/platform/onboarding/components/OnboardingLaunchCard'
 import Link from 'next/link'
+import { getAuthenticatedUser } from '@/features/dashboard/actions/auth'
+import { canUsePlatformPage } from '@/features/dashboard/lib/sidebarAccess'
 import { formatAirportClock } from '@/features/airline/lib/time'
 
 // Desks grouped by the job an operator opens them for: plan, sell, fly, settle, administer.
@@ -78,11 +80,17 @@ function load(flight: NextFlight) {
 
 export default async function OperationsPage() {
   const now = new Date().toISOString()
-  const [identity, departures, ...queueResults] = await Promise.all([
+  const [me, identity, departures, ...queueResults] = await Promise.all([
+    getAuthenticatedUser(),
     keystoneClient<{ authenticatedItem: { onboardingStatus: string; carrierLaunched?: boolean | null; carrier?: { name: string; legalName: string; code: string; defaultCurrencyCode: string; defaultTimezone: string } | null; role?: { canManageOnboarding: boolean } | null } | null }>(`query OperatorOperationsIdentity { authenticatedItem { ... on User { onboardingStatus carrierLaunched carrier { name legalName code defaultCurrencyCode defaultTimezone } role { canManageOnboarding } } } }`),
     keystoneClient<{ flightInstances: NextFlight[] | null }>(NEXT_DEPARTURES_QUERY, { now }),
     ...QUEUES.map(queue => keystoneClient<{ count: number | null }>(queue.query)),
   ])
+  const viewer = me.success ? (me.data as { authenticatedItem?: Parameters<typeof canUsePlatformPage>[1] } | undefined)?.authenticatedItem : null
+  const canOpen = (href: string) => canUsePlatformPage(href.split('/platform/')[1]?.split(/[/?#]/)[0] ?? '', viewer)
+  const visibleGroups = workspaceGroups.map(group => ({ ...group, items: group.items.filter(item => canOpen(item.href)) })).filter(group => group.items.length > 0)
+  const canOpenFlightOps = canOpen('/dashboard/platform/flight-ops')
+  const canOpenDepartures = canOpen('/dashboard/platform/departures')
   const operator = identity.success ? identity.data.authenticatedItem : null
   const carrier = operator?.carrier
   const launchStatus = operator?.carrierLaunched ? 'completed' : operator?.onboardingStatus
@@ -91,7 +99,7 @@ export default async function OperationsPage() {
   const queues = QUEUES.map((queue, index) => {
     const result = queueResults[index]
     return { ...queue, count: result.success ? result.data.count ?? 0 : null }
-  }).filter(queue => queue.count !== null)
+  }).filter(queue => queue.count !== null && canOpen(queue.href))
   return <PageContainer
     title="Carrier operations"
     breadcrumbs={[{ type: 'link' as const, label: 'Dashboard', href: '/dashboard' }, { type: 'page' as const, label: 'Platform' }, { type: 'page' as const, label: 'Carrier operations' }]}
@@ -107,7 +115,7 @@ export default async function OperationsPage() {
       {carrier && launchStatus !== 'completed' && operator?.role?.canManageOnboarding && <OnboardingLaunchCard initialCarrier={carrier} initialServiceDate={new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10)} />}
 
       <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <DeskSection title="Next departures" count={flights?.length} actions={<Link href="/dashboard/platform/flight-ops" className="text-sm font-medium underline-offset-4 hover:underline">Flight operations</Link>}>
+        <DeskSection title="Next departures" count={flights?.length} actions={canOpenFlightOps ? <Link href="/dashboard/platform/flight-ops" className="text-sm font-medium underline-offset-4 hover:underline">Flight operations</Link> : undefined}>
           {flights === null ? <Notice tone="warn">Flights could not be loaded. Check your network access.</Notice>
             : flights.length === 0 ? <Well>No upcoming departures. Publish a schedule to generate dated flights.</Well>
             : <div className="overflow-x-auto rounded-[4px] border">
@@ -123,7 +131,7 @@ export default async function OperationsPage() {
                     const date = flight.serviceDate?.slice(0, 10)
                     return <tr key={flight.id} className="tabular-nums [&>td]:px-3 [&>td]:py-2">
                       <td className="whitespace-nowrap font-semibold">{formatAirportClock(flight.estimatedDepartureAt ?? flight.scheduledDepartureAt, flight.origin?.timezone) ?? '—'}<span className="ml-2 hidden text-xs font-normal text-muted-foreground sm:inline">{date}</span></td>
-                      <td><Link href={`/dashboard/platform/departures?date=${encodeURIComponent(date ?? '')}&origin=${encodeURIComponent(flight.origin?.iataCode ?? '')}`} className="font-semibold underline-offset-4 hover:underline">{flight.flightNumber || '—'}</Link></td>
+                      <td>{canOpenDepartures ? <Link href={`/dashboard/platform/departures?date=${encodeURIComponent(date ?? '')}&origin=${encodeURIComponent(flight.origin?.iataCode ?? '')}`} className="font-semibold underline-offset-4 hover:underline">{flight.flightNumber || '—'}</Link> : <span className="font-semibold">{flight.flightNumber || '—'}</span>}</td>
                       <td><Route from={flight.origin?.iataCode} to={flight.destination?.iataCode} /></td>
                       <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">{formatAirportClock(flight.scheduledArrivalAt, flight.destination?.timezone) ?? '—'}</td>
                       <td className="hidden md:table-cell">{flight.departureGate || <span className="text-muted-foreground">—</span>}</td>
@@ -151,7 +159,7 @@ export default async function OperationsPage() {
 
       <DeskSection title="Desks">
         <nav aria-label="Desks" className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
-          {workspaceGroups.map(group => <div key={group.title} className="min-w-0">
+          {visibleGroups.map(group => <div key={group.title} className="min-w-0">
             <h3 className="border-b pb-1.5 text-xs font-semibold text-muted-foreground">{group.title}</h3>
             <ul className="mt-1">
               {group.items.map(item => <li key={item.href}><Link href={item.href} className="block rounded-[3px] px-1 py-1.5 text-sm font-medium text-foreground hover:bg-muted/60">{item.title}</Link></li>)}

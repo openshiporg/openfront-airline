@@ -32,6 +32,7 @@ export const PLATFORM_PAGE_PERMISSIONS: Record<string, string[]> = {
   manifests: ['canReadAudit'],
   stations: ['canReadUsers', 'canManageUsers'],
   'store-settings': ['canManageOnboarding'],
+  onboarding: ['canManageOnboarding'],
   settings: ['canReadIntegrations', 'canManageIntegrations'],
 }
 
