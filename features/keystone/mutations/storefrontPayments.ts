@@ -80,7 +80,7 @@ export async function startCustomerCheckout(
       amount: booking.totalAmount,
       currencyCode: booking.currencyCode,
       customerEmail: booking.contactEmail,
-      successUrl: `${origin}/manage-booking?ref=${locator}&checkout={CHECKOUT_SESSION_ID}`,
+      successUrl: `${origin}/manage-booking?ref=${locator}&checkout={CHECKOUT_SESSION_ID}#code=${encodeURIComponent(args.accessToken)}`,
       cancelUrl: `${origin}/manage-booking?ref=${locator}&checkout=cancelled`,
       // One Checkout session per booking amount and ten-minute window: double clicks reuse it.
       idempotencyKey: `checkout:${booking.id}:${booking.totalAmount}:${Math.floor(Date.now() / 600_000)}`,

@@ -193,6 +193,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
     // Back from Stripe: retrieve the booking with the code saved in this browser, which finishes the payment.
     if (reference && new URLSearchParams(window.location.search).get('checkout')) {
       try {
+        // The return link carries the access code in its fragment (never sent to a server) for browsers that don't have it saved.
+        const returned = new URLSearchParams(window.location.hash.slice(1)).get('code')
+        if (returned) { localStorage.setItem(`${storagePrefix}:booking:${reference}`, returned); history.replaceState(null, '', window.location.pathname + window.location.search) }
         const saved = localStorage.getItem(`${storagePrefix}:booking:${reference}`)
         if (saved) { setBookingCredentials(reference, saved); requestAnimationFrame(() => manageForm.current?.requestSubmit()) }
       } catch { /* the customer enters the code */ }
