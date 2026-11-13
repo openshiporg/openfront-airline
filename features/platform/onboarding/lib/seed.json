@@ -1,7 +1,7 @@
 {
   "version": 1,
   "template": "full",
-  "description": "Avante Air demo network: a New York JFK carrier with four nonstop city pairs, daily service for the next two weeks, and a configured storefront.",
+  "description": "Avante Air starter network: a New York JFK carrier with four nonstop city pairs, daily service for the next two weeks, and a configured storefront.",
   "carrier": {
     "name": "Avante Air",
     "legalName": "Avante Air LLC",

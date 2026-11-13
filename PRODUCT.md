@@ -23,7 +23,7 @@ A carrier-owned, open-source passenger service system: the carrier's own direct 
 
 ## Operating Context
 
-- Demo carrier: **Avante Air (AV)**, Avante Air LLC, hub New York JFK, nonstop to Boston, Chicago, Miami and Los Angeles; eight routes, daily flights for two weeks. Seeded by the dashboard onboarding "Full demo network".
+- Reference carrier: **Avante Air (AV)**, Avante Air LLC, hub New York JFK, nonstop to Boston, Chicago, Miami and Los Angeles; eight routes, daily flights for two weeks. Seeded by the dashboard onboarding "Full starter network".
 - Times are stored in UTC and shown per airport; service dates and record locators are the operator's primary keys.
 - Payments are recorded by the operator (bank transfer, receipt reference) with maker/checker settlement approval.
 

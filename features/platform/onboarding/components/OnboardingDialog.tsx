@@ -12,12 +12,12 @@ import { DemoNetworkSetup } from './DemoNetworkSetup'
 type Template = 'full' | 'custom'
 
 const TEMPLATES: Array<{ key: Template; title: string; body: string }> = [
-  { key: 'full', title: 'Full demo network', body: 'Avante Air from New York JFK: four nonstop city pairs flying daily for two weeks, storefront brand, customer service details and direct sales.' },
+  { key: 'full', title: 'Full starter network', body: 'Avante Air from New York JFK: four nonstop city pairs flying daily for two weeks, storefront brand, customer service details and direct sales.' },
   { key: 'custom', title: 'Custom launch', body: 'Enter your own carrier identity and first sellable flight, then complete launch readiness step by step.' },
 ]
 
 // The shared DashboardLayout's onboarding dialog: the same carrier launch form as the Operations launch card and
-// /dashboard/onboarding, prefilled from the persisted carrier so a replay never starts from the demo defaults.
+// /dashboard/onboarding, prefilled from the persisted carrier so a replay never starts from the starter defaults.
 export default function OnboardingDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [risk, setRisk] = useState({ busy: false, dirty: false, hasSecret: false, unknown: false })
   const [closeMessage, setCloseMessage] = useState('')
@@ -37,7 +37,7 @@ export default function OnboardingDialog({ isOpen, onClose }: { isOpen: boolean;
 
   if (!isOpen) return null
   const serviceDate = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10)
-  return <Dialog open={isOpen} onOpenChange={open => { if (open) return; if (risk.busy || risk.unknown || demoBusy) { setCloseMessage(demoBusy ? 'Keep this window open until the demo network finishes loading.' : 'Keep this window open until the credential operation is reconciled.'); return } if ((risk.dirty || risk.hasSecret) && !window.confirm('Close setup? Unsaved edits and the displayed one-time credential will no longer be available here. Copy the credential first.')) return; onClose() }}>
+  return <Dialog open={isOpen} onOpenChange={open => { if (open) return; if (risk.busy || risk.unknown || demoBusy) { setCloseMessage(demoBusy ? 'Keep this window open until the starter network finishes loading.' : 'Keep this window open until the credential operation is reconciled.'); return } if ((risk.dirty || risk.hasSecret) && !window.confirm('Close setup? Unsaved edits and the displayed one-time credential will no longer be available here. Copy the credential first.')) return; onClose() }}>
     <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto overflow-x-hidden">
       <DialogHeader><DialogTitle>Carrier launch setup</DialogTitle><DialogDescription className="sr-only">Carrier identity and first sellable flight</DialogDescription></DialogHeader>
       {closeMessage && <Notice tone="bad">{closeMessage}</Notice>}

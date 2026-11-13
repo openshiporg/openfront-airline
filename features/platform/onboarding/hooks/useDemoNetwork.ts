@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react'
 import { decimalToMinorUnits } from '@/features/keystone/lib/money'
 import demoSeed from '../lib/seed.json'
 
-// The "Full demo network" template. Every write goes through the same authority-checked operations an operator
+// The "Full starter network" template. Every write goes through the same authority-checked operations an operator
 // uses by hand: storefront settings, the carrier record, carrier launch setup (one call per route, which creates the
 // airports, route, schedule, launch cabin and Standard fare, station access and settlement providers), then
 // provisionDatedFlight for the remaining service days. Every step is idempotent, so a rerun only fills gaps.
@@ -81,7 +81,7 @@ export function useDemoNetwork(carrierId: string) {
           scheduledDepartureAt: `${dates[0]}T${route.departure}`, scheduledArrivalAt: `${dates[0]}T${route.arrival}`,
           capacity: route.capacity, baseAmount: minor(route.baseFare), taxAmount: minor(route.tax),
         }))
-        // Launch setup publishes the schedule for one weekday; the demo flies daily.
+        // Launch setup publishes the schedule for one weekday; the starter network flies daily.
         await attempt(`${carrier.code}${route.flightNumber} daily schedule`, async () => {
           const data = await graphql<{ flightSchedule: { id: string } | null }>(`query($key:String!){flightSchedule(where:{scheduleKey:$key}){id}}`, { key: `${carrier.code}:${route.flightNumber}` })
           if (!data.flightSchedule) throw new Error('Schedule was not created.')
@@ -109,7 +109,7 @@ export function useDemoNetwork(carrierId: string) {
         }
       }
       await Promise.all([worker(), worker()])
-      setProgress({ phase: failures.length ? 'failed' : 'done', label: failures.length ? `${failures.length} step(s) need attention` : 'Demo network loaded', done, total, failures })
+      setProgress({ phase: failures.length ? 'failed' : 'done', label: failures.length ? `${failures.length} step(s) need attention` : 'Starter network loaded', done, total, failures })
     } finally {
       running.current = false
     }

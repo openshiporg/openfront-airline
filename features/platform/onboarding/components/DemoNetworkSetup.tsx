@@ -7,7 +7,7 @@ import { Code, DeskSection, Meter, Notice, Panel, Pill, Track } from '@/features
 import { demoNetworkSummary, useDemoNetwork } from '../hooks/useDemoNetwork'
 import { plural } from '@/features/platform/lib/plural'
 
-// The full template: shows what the demo network creates, then loads it through the operator's own setup commands.
+// The full template: shows what the starter network creates, then loads it through the operator's own setup commands.
 export function DemoNetworkSetup({ carrierId, onBusyChange, onBack }: { carrierId: string; onBusyChange?: (busy: boolean) => void; onBack?: () => void }) {
   const router = useRouter()
   const summary = demoNetworkSummary()
@@ -40,12 +40,12 @@ export function DemoNetworkSetup({ carrierId, onBusyChange, onBack }: { carrierI
       <Meter value={progress.total ? progress.done / progress.total : 0} tone={progress.phase === 'failed' ? 'warn' : progress.phase === 'done' ? 'ok' : 'accent'} label={`${progress.done} of ${progress.total}`} />
       <p className="text-xs text-muted-foreground" role="status">{progress.label} · {progress.done}/{progress.total}</p>
     </div>}
-    {progress.phase === 'done' && <Notice tone="ok">Demo network loaded. To finish launch review, add a second payment operator and a settlement credential in Carrier launch setup.</Notice>}
+    {progress.phase === 'done' && <Notice tone="ok">Starter network loaded. To finish launch review, add a second payment operator and a settlement credential in Carrier launch setup.</Notice>}
     {progress.failures.length > 0 && <Notice tone="warn"><span className="space-y-1">{progress.failures.slice(0, 6).map(failure => <span key={failure} className="block">{failure}</span>)}{progress.failures.length > 6 && <span className="block">…and {progress.failures.length - 6} more. Run it again to retry only what is missing.</span>}</span></Notice>}
 
     <Track className="flex-wrap">
       {onBack && <Pill disabled={busy} onClick={onBack}>Back</Pill>}
-      <Pill variant="primary" disabled={busy || progress.phase === 'done'} onClick={() => void run()}>{busy ? 'Loading demo network…' : progress.phase === 'failed' ? 'Retry demo network' : progress.phase === 'done' ? 'Demo network loaded' : 'Load demo network'}</Pill>
+      <Pill variant="primary" disabled={busy || progress.phase === 'done'} onClick={() => void run()}>{busy ? 'Loading starter network…' : progress.phase === 'failed' ? 'Retry starter network' : progress.phase === 'done' ? 'Starter network loaded' : 'Load starter network'}</Pill>
       {progress.phase === 'done' && <><Pill asChild><a href="/" target="_blank" rel="noreferrer">View storefront</a></Pill><Pill asChild><a href="/dashboard/platform/network">Network</a></Pill></>}
     </Track>
   </div>

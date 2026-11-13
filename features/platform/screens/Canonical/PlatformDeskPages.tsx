@@ -352,7 +352,7 @@ export async function PlatformInventoryPage({ searchParams }: { searchParams?: S
 
 export async function PlatformOffersPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
-  // No demo route: inventory is searched only once the operator enters valid IATA codes and a date.
+  // No preset route: inventory is searched only once the operator enters valid IATA codes and a date.
   const airport = (value: unknown) => typeof value === 'string' && /^[A-Za-z]{3}$/.test(value.trim()) ? value.trim().toUpperCase() : ''
   const origin = airport(params.origin); const destination = airport(params.destination)
   const date = typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : await carrierToday()
