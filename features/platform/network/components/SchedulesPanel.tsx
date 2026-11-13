@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 
 import { Code, DeskSection, Panel, Pill, Route, StatusLabel, TitleLine, Track, Well, deskInput, statusTone } from '@/features/platform/components/desk'
-import { createScheduleAction, setScheduleStatusAction, updateScheduleAction } from '@/features/platform/network/actions/schedules'
+import { createScheduleAction, extendScheduleAction, setScheduleStatusAction, updateScheduleAction } from '@/features/platform/network/actions/schedules'
 import { dateInput, FLIGHT_NUMBER_PATTERN, SCHEDULE_TRANSITIONS, TIME_PATTERN, WEEKDAYS } from '@/features/platform/network/lib/desk-shared'
 import type { RouteOption, ScheduleRow } from '@/features/platform/network/lib/types'
 import { cn } from '@/lib/utils'
@@ -63,7 +63,9 @@ function ScheduleItem({ schedule, onEdit }: { schedule: ScheduleRow; onEdit: () 
           disabled={action.pending}
           onEdit={schedule.status === 'retired' ? undefined : onEdit}
           onTransition={to => action.run(() => setScheduleStatusAction(schedule.id, to))}
-        />
+        >
+          {schedule.status === 'published' && <Pill size="sm" disabled={action.pending} onClick={() => action.run(() => extendScheduleAction(schedule.id))}>{action.pending ? 'Creating flights' : 'Create next 30 days'}</Pill>}
+        </TransitionPills>
       }
     >
       <TitleLine tone={statusTone(schedule.status)} status={schedule.status} className="text-sm font-medium text-foreground">
