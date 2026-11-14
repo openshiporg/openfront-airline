@@ -12,11 +12,11 @@ export async function generateMetadata() {
 export default async function NotFound() {
   const carrier = await getStorefrontCarrierIdentityDirect()
   return <StorefrontFrame carrier={carrier}>
-    <section className="af-board">
-      <div className="af-container py-24 sm:py-32">
-        <p className="af-eyebrow"><span className="af-signal">404</span> · Page not found</p>
-        <h1 className="af-display mt-4 max-w-3xl text-6xl uppercase sm:text-8xl">This gate doesn&apos;t exist</h1>
-        <div className="af-track mt-10"><Link href="/" className="af-pill af-pill-primary">Book a flight</Link><Link href="/status" className="af-pill">Flight status</Link><Link href="/manage-booking" className="af-pill">Manage booking</Link></div>
+    <section className="af-board border-t border-[var(--af-board-line)]">
+      <div className="af-container py-20 sm:py-28">
+        <p className="af-kicker text-white/85"><span className="af-signal">404</span> · Page not found</p>
+        <h1 className="af-display mt-4 max-w-3xl text-5xl sm:text-7xl">This gate doesn&apos;t exist</h1>
+        <div className="mt-10 flex flex-wrap gap-3"><Link href="/" className="af-pill af-pill-primary">Book a flight</Link><Link href="/status" className="af-pill af-pill-ghost">Flight status</Link><Link href="/manage-booking" className="af-pill af-pill-ghost">Manage booking</Link></div>
       </div>
     </section>
   </StorefrontFrame>

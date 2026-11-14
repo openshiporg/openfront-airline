@@ -2,7 +2,7 @@
 name: Openfront Airline
 description: Two printed-world systems for one carrier platform; wayfinding signage for the ops desks, a pocket timetable for the traveller storefront.
 colors:
-  # Storefront: pocket timetable (features/storefront/styles/timetable.css)
+  # Storefront (earlier pocket-timetable palette; current tokens are in features/storefront/styles/stride.css)
   cover-brand: "#334155"
   cover-brand-hover: "#1e293b"
   cover-brand-soft: "#f1f5f9"
@@ -162,6 +162,15 @@ components:
     backgroundColor: "{colors.signage-yellow}"
     textColor: "{colors.signage-graphite}"
 ---
+
+> **Storefront update (2026-11-13): the traveller storefront now follows the owner-picked "Stride" design.**
+> Source of truth: `features/storefront/styles/stride.css`. A deep cabin-blue ground mixed from the carrier's
+> brand colour carries the header, the home hero (cabin window with the hub city, search widget at first paint),
+> page heads and the footer; work sits on warm white (`#f8f8f6`) in white cards with 12px corners and a soft shadow.
+> One family, Figtree: light display lines with an accented italic word, tracked caps for labels, bold tabular
+> figures for times and fares. Primary buttons are a brand-colour gradient with 8px corners. Destination photos
+> live in `public/storefront/`. The storefront colour, type and component notes below still describe the earlier
+> pocket-timetable look and are superseded by this note; the platform desk sections are unchanged.
 
 # Design System: Openfront Airline
 

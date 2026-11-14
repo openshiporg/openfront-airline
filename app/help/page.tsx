@@ -24,7 +24,7 @@ export default async function HelpPage() {
   return <PublicPageShell carrier={carrier} current="/help" eyebrow="Help" title="How can we help?">
     <nav aria-label="Help topics" className="af-card max-w-3xl divide-y divide-[var(--af-line)] overflow-hidden">
       {services.map(service => <Link key={service.href} href={service.href} className="group flex items-center gap-4 p-5 transition-colors hover:bg-[var(--af-paper)] sm:p-6">
-        <span className="min-w-0 flex-1"><span className="af-display block text-2xl uppercase sm:text-3xl">{service.title}</span><span className="af-mono mt-1 block text-xs text-[var(--af-ink-3)]">{service.needs}</span></span>
+        <span className="min-w-0 flex-1"><span className="block text-xl font-medium tracking-[-0.01em] sm:text-2xl">{service.title}</span><span className="mt-1 block text-sm text-[var(--af-ink-2)]">{service.needs}</span></span>
         <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-[var(--af-ink-3)] transition-transform group-hover:translate-x-0.5" />
       </Link>)}
     </nav>

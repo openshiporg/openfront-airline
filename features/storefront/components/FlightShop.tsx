@@ -1,10 +1,14 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeftRight, ArrowRight, CalendarDays, ChevronDown, Luggage, MapPin, Minus, Plane, Plus, UserRound } from 'lucide-react'
+
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
 import { PlatformSelect } from '@/features/platform/components/PlatformSelect'
 
+import { HomeHero } from '@/features/storefront/components/HomeHero'
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import type { StorefrontNetwork } from '@/features/storefront/lib/network'
 import { parseBookingAccessForm, parseStorefrontPassengers, parseStorefrontSearchForm } from '@/features/storefront/lib/forms'
@@ -106,7 +110,8 @@ function seatRows<T extends { designator: string; rowNumber?: number | null; col
   return { columns, aisleAfter, rows: [...rows.entries()].sort(([left], [right]) => left - right) }
 }
 
-export function FlightShop({ initialDate, carrier, mode = 'book', network }: { initialDate: string; carrier: PublicCarrierIdentity; mode?: FlightShopMode; network?: StorefrontNetwork }) {
+// `hero` (home only) puts the search widget inside the home hero, under the given headline block.
+export function FlightShop({ initialDate, carrier, mode = 'book', network, hero }: { initialDate: string; carrier: PublicCarrierIdentity; mode?: FlightShopMode; network?: StorefrontNetwork; hero?: { lead: ReactNode; windowImage?: string | null } }) {
   const storagePrefix = `airline:${carrier.code.toLowerCase()}`
   const shoppingEnabled = mode === 'book'
   const [flights, setFlights] = useState<Flight[]>([])
@@ -127,6 +132,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
   // Search console: route pickers fed by the carrier's network, trip type and the party by fare type.
   const routes = network?.routes ?? []
   const [tripType, setTripType] = useState<TripType>('one-way')
+  // Home widget: the search and the booking lookup share one panel.
+  const [widgetTab, setWidgetTab] = useState<'book' | 'manage'>('book')
   const [origin, setOrigin] = useState(routes[0]?.origin ?? '')
   const [destination, setDestination] = useState(routes[0]?.destination ?? '')
   // Upcoming dates with a flight for a route (dates are carrier-local service dates).
@@ -150,6 +157,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
   const [recovering, setRecovering] = useState(false)
   const partySize = party.adults + party.children + party.infants
   const destinations = useMemo(() => routes.filter(route => route.origin === origin).map(route => route.destination), [routes, origin])
+  const airportCity = (code: string) => network?.airports.find(entry => entry.code === code)?.city || code
+  const canSwap = routes.some(route => route.origin === destination && route.destination === origin)
+  const partyLabel = `${partySize} passenger${partySize === 1 ? '' : 's'}`
   const airportLabel = (code: string) => { const airport = network?.airports.find(entry => entry.code === code); return airport?.city ? `${airport.city} (${code})` : code }
   const intentStorageKey = `${storagePrefix}:original-booking-intent`
   useEffect(() => {
@@ -204,6 +214,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
   const accessTokenInput = useRef<HTMLInputElement>(null)
   const money = useMemo(() => (amount: number) => formatMinorUnits(amount, selected?.currencyCode ?? carrier.defaultCurrencyCode), [selected?.currencyCode, carrier.defaultCurrencyCode])
   const departureDateTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium', timeStyle: 'short' }), [carrier.defaultTimezone])
+  const shortDate = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }), [])
   const arrivalTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, timeStyle: 'short' }), [carrier.defaultTimezone])
   const departureDate = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium' }), [carrier.defaultTimezone])
   const flightDuration = (departure: string, arrival: string) => {
@@ -250,6 +261,11 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
     await runSearch({ ...lastSearch.current, serviceDate: nextServiceDate })
   }
 
+  // On the home page the results sit under the hero, so bring them into view once they change.
+  function revealFlow() {
+    if (hero) requestAnimationFrame(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
   async function runSearch(input: SearchInput) {
     lastSearch.current = input
     if (pendingBooking || intentUnavailable) { setStatus('Check your previous reservation request first. It may have gone through even if the page didn’t confirm it.'); return }
@@ -263,7 +279,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         setStatus(`No ${carrier.name} flights are available for this route, date, and party size.`)
       } else setNextServiceDate(null)
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.') }
-    setBusy(false)
+    setBusy(false); revealFlow()
   }
 
   // Books the return leg of a round trip for the same travelers.
@@ -349,6 +365,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
       else { setManagedBooking(null); setConfirmation(null); setStatus(error instanceof Error ? error.message : 'Booking could not be retrieved.') }
     }
     setBusy(false)
+    if (!refreshAfterChange) revealFlow()
   }
 
   async function payOnline(locator: string, token: string) {
@@ -434,22 +451,56 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
 
   const passLabel = selected ? `${selected.passengerCount} traveler${selected.passengerCount === 1 ? '' : 's'}` : ''
 
-  return <div className="space-y-6">
-    {shoppingEnabled && <form onSubmit={search} className="af-card p-4 sm:p-6">
-      <div role="group" aria-label="Trip type" className="af-track mb-5"><button type="button" aria-pressed={tripType === 'one-way'} onClick={() => setTripType('one-way')} className="af-pill af-pill-sm">One way</button><button type="button" aria-pressed={tripType === 'round-trip'} onClick={() => setTripType('round-trip')} className="af-pill af-pill-sm">Round trip</button></div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="af-field relative"><span className="af-field-label">From</span>{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination(reachable[0] ?? '') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code text-lg" />}</div>
-        <div className="af-field relative"><span className="af-field-label">To</span>{routes.length ? <PlatformSelect aria-label="Destination airport" name="destinationCode" value={destination} onValueChange={setDestination} required className="af-input af-trigger" options={destinations.map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code text-lg" />}</div>
-        <div className="af-field relative"><span className="af-field-label">Departure</span><PlatformDateInput aria-label="Departure date" name="serviceDate" value={departDate} onChange={setDepartDate} required className="af-input af-trigger" /></div>
-        {tripType === 'round-trip' ? <div className="af-field relative"><span className="af-field-label">Return</span><PlatformDateInput aria-label="Return date" value={returnDate} min={departDate} onChange={setReturnDate} required className="af-input af-trigger" /></div> : <div className="hidden lg:block" />}
-      </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto] sm:items-end">
+  const partyRows = [['adults', 'Adults', '12 and over', 1, 9], ['children', 'Children', '2 to 11', 0, 8], ['infants', 'Infants', 'Under 2, own seat', 0, party.adults]] as const
+  const setPartyCount = (key: keyof Party, value: number) => setParty(current => { const next = { ...current, [key]: value }; return { ...next, infants: Math.min(next.infants, next.adults) } })
+  const searchForm = <form onSubmit={search}>
+    <div role="group" aria-label="Trip type" className="-mt-1 mb-1 flex gap-6"><button type="button" aria-pressed={tripType === 'one-way'} onClick={() => setTripType('one-way')} className="af-choice">One way</button><button type="button" aria-pressed={tripType === 'round-trip'} onClick={() => setTripType('round-trip')} className="af-choice">Round trip</button></div>
+    <div className="af-widget-grid" data-return={tripType === 'round-trip' ? 'true' : undefined}>
+      <div className="af-field af-icon-field"><span className="af-field-label">From</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination(reachable[0] ?? '') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code" />}</div>
+      <button type="button" aria-label="Swap origin and destination" disabled={!canSwap} onClick={() => { setOrigin(destination); setDestination(origin) }} className="af-swap"><ArrowLeftRight aria-hidden="true" className="size-5" /></button>
+      <div className="af-field af-icon-field"><span className="af-field-label">To</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Destination airport" name="destinationCode" value={destination} onValueChange={setDestination} required placeholder="Select a destination" className="af-input af-trigger" options={destinations.map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code" />}</div>
+      <div className="af-field"><span className="af-field-label">Depart</span><PlatformDateInput aria-label="Departure date" name="serviceDate" value={departDate} onChange={setDepartDate} required placeholder="Select date" className="af-input af-trigger" /></div>
+      {tripType === 'round-trip' && <div className="af-field"><span className="af-field-label">Return</span><PlatformDateInput aria-label="Return date" value={returnDate} min={departDate} onChange={setReturnDate} required placeholder="Select date" className="af-input af-trigger" /></div>}
+      <div className="af-field af-icon-field"><span className="af-field-label">Passengers</span><UserRound aria-hidden="true" />
         <input type="hidden" name="passengerCount" value={partySize} />
-        {([['adults', 'Adults 12+', 1, 9], ['children', 'Children 2–11', 0, 8], ['infants', 'Infants under 2', 0, party.adults]] as const).map(([key, text, min, max]) => <div key={key} className="af-field relative"><span className="af-field-label">{text}</span><PlatformSelect aria-label={text} value={String(party[key])} onValueChange={value => setParty(current => { const next = { ...current, [key]: Number(value) }; return { ...next, infants: Math.min(next.infants, next.adults) } })} className="af-input af-trigger" options={Array.from({ length: max - min + 1 }, (_, index) => ({ value: String(index + min), label: String(index + min) }))} /></div>)}
-        <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Searching…' : 'Search flights'}</button></div>
+        <Popover>
+          <PopoverTrigger asChild><button type="button" aria-label={`Passengers: ${partyLabel}`} className="af-input af-trigger flex items-center justify-between gap-2 text-left"><span className="truncate capitalize">{partyLabel}</span><ChevronDown aria-hidden="true" className="size-4 shrink-0 text-[var(--af-ink-3)]" /></button></PopoverTrigger>
+          <PopoverContent align="start" collisionPadding={12} className="w-[19rem] max-w-[calc(100vw-1.5rem)] rounded-xl p-4">
+            <div className="grid gap-3">{partyRows.map(([key, text, hint, min, max]) => <div key={key} className="flex items-center justify-between gap-3">
+              <div><p className="text-base font-semibold">{text}</p><p className="text-sm text-muted-foreground">{hint}</p></div>
+              <div className="flex items-center gap-2"><button type="button" aria-label={`Fewer ${text.toLowerCase()}`} disabled={party[key] <= min} onClick={() => setPartyCount(key, party[key] - 1)} className="af-stepper"><Minus aria-hidden="true" /></button><span aria-live="polite" aria-label={`${text}: ${party[key]}`} className="w-6 text-center text-base font-semibold tabular-nums">{party[key]}</span><button type="button" aria-label={`More ${text.toLowerCase()}`} disabled={party[key] >= max || partySize >= 9} onClick={() => setPartyCount(key, party[key] + 1)} className="af-stepper"><Plus aria-hidden="true" /></button></div>
+            </div>)}</div>
+            <p className="mt-3 border-t pt-3 text-sm text-muted-foreground">Up to 9 travelers, with one aged 18 or over.</p>
+          </PopoverContent>
+        </Popover>
       </div>
-      <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--af-line)] pt-3 text-xs text-[var(--af-ink-3)] [&>span+span]:before:mr-4 [&>span+span]:before:text-[var(--af-line-2)] [&>span+span]:before:content-['/']">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
-    </form>}
+      <button disabled={busy} className="af-pill af-pill-primary af-widget-submit">{busy ? 'Searching…' : <>Find flights<ArrowRight aria-hidden="true" /></>}</button>
+    </div>
+    <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem] text-[var(--af-ink-3)] [&>span+span]:before:mr-4 [&>span+span]:before:text-[var(--af-line-2)] [&>span+span]:before:content-['/']">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
+  </form>
+  const inWidget = Boolean(hero)
+  const manageBlock = <>
+    <form ref={manageForm} onSubmit={manage} className={inWidget ? '' : 'af-card p-4 sm:p-6'}>
+      <h2 className={inWidget ? 'sr-only' : 'text-xl font-semibold'}>{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
+      <div className={`grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end ${inWidget ? '' : 'mt-4'}`}>
+        <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
+        <label className="af-field"><span className="af-field-label">Access code</span><input ref={accessTokenInput} aria-label="Access code" name="accessToken" type="password" defaultValue="" autoComplete="off" className="af-input" /></label>
+        <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
+      </div>
+    </form>
+    {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card px-4 py-3 sm:px-6">
+      <div className="flex flex-wrap items-center gap-3"><h2 className="af-field-label">Your trips</h2><div className="af-track flex-wrap">{savedTrips.map(locator => <button key={locator} type="button" disabled={busy} onClick={() => openSavedTrip(locator)} aria-pressed={managedBooking?.recordLocator === locator} className="af-pill af-pill-sm af-mono tracking-[0.14em]">{locator}</button>)}</div></div>
+    </section>}
+    {carrier.accessRecoveryEnabled ? <div className={inWidget ? 'mt-4 border-t border-[var(--af-line)] pt-3' : 'af-card px-4 py-3 sm:px-6'}>
+      {recovering ? <form onSubmit={recoverAccess} className="grid gap-4 py-2 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
+        <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
+        <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
+        <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
+      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Lost your access code?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a new one</button></div></div>}
+    </div> : <p className={`text-sm ${inWidget ? 'mt-4' : ''}`}>Lost your access code? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
+  </>
+  const flow = <>
+    {shoppingEnabled && !hero && <div className="af-card af-widget-panel !rounded-xl">{searchForm}</div>}
     {status && <p role="status" className="af-notice" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'}><span className="af-dot" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'} />{status}</p>}
     {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-raised af-pill-sm">Next flight: {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextServiceDate}T00:00:00.000Z`))}</button></div>}
     {pendingBooking && <section aria-label="Original reservation command recovery" className="af-notice flex-col items-stretch gap-3 p-5" data-tone="warn">
@@ -480,30 +531,39 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className="af-pill af-pill-primary">Book return flight</button></div>}
       </div>
     </section>}
-    {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-table overflow-hidden">
-      {returnSearch && <p className="af-eyebrow px-5 pt-4"><span className="af-signal">{leg === 'return' ? 'Return' : 'Outbound'}</span> · {flights[0].originCode}–{flights[0].destinationCode}</p>}
-      <div className="af-table-head grid-cols-[1.1fr_1fr_1fr_1fr_auto] gap-4 px-5 py-2.5"><span className="af-eyebrow">Flight</span><span className="af-eyebrow">Departs</span><span className="af-eyebrow">Arrives</span><span className="af-eyebrow">Fare</span><span className="af-eyebrow w-36 text-right">Per traveler</span></div>
+    {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-table space-y-4">
+      <p className="af-results-head">{returnSearch && <><span className="font-semibold">{leg === 'return' ? 'Return' : 'Outbound'}</span><span aria-hidden="true" className="af-sep" /></>}{airportCity(flights[0].originCode)} {flights[0].originCode} to {airportCity(flights[0].destinationCode)} {flights[0].destinationCode}<span aria-hidden="true" className="af-sep" />{shortDate.format(new Date(`${flights[0].serviceDate}T00:00:00.000Z`))}, <span className="capitalize">{flights[0].passengerCount} passenger{flights[0].passengerCount === 1 ? '' : 's'}</span></p>
       {flights.map(flight => {
         const duration = flightDuration(flight.scheduledDepartureAt, flight.scheduledArrivalAt)
         const isSelected = selected?.id === flight.id && selected?.inventoryBucketId === flight.inventoryBucketId
         const soldOut = flight.availability.available < flight.passengerCount
-        return <article key={`${flight.id}:${flight.inventoryBucketId}`} data-selected={isSelected ? 'true' : undefined} className="af-board-row grid gap-3 px-5 py-4 md:grid-cols-[1.1fr_1fr_1fr_1fr_auto] md:items-center md:gap-4">
-          <div className="flex items-baseline justify-between gap-3 md:block"><p className="af-board-cell af-signal text-lg font-semibold">{carrier.code} {flight.flightNumber}</p><p className="af-board-cell text-sm text-[var(--af-board-ink-2)]">{flight.originCode}–{flight.destinationCode}</p></div>
-          <div className="grid grid-cols-3 gap-3 md:contents">
-            <div><p className="af-board-cell text-xl font-semibold">{arrivalTime.format(new Date(flight.scheduledDepartureAt))}</p><p className="text-xs text-[var(--af-board-ink-2)]">{departureDate.format(new Date(flight.scheduledDepartureAt))}</p></div>
-            <div><p className="af-board-cell text-xl font-semibold">{arrivalTime.format(new Date(flight.scheduledArrivalAt))}</p><p className="text-xs text-[var(--af-board-ink-2)]">{duration ?? '—'}</p></div>
-            <div><p className="text-sm font-semibold">{flight.fareBrand.name}</p><p className="af-board-cell text-xs text-[var(--af-board-ink-2)]">{[flight.cabinName, flight.fareBrand.baggagePieces ? `${flight.fareBrand.baggagePieces} bag${flight.fareBrand.baggagePieces === 1 ? '' : 's'}${flight.fareBrand.baggageWeightGrams ? ` ${Math.round(flight.fareBrand.baggageWeightGrams / 1000)} kg` : ''}` : 'No checked bag', `${flight.availability.available} seats`].filter(Boolean).join(' · ')}</p>{flight.fareBrand.description && <p className="mt-1 hidden text-xs text-[var(--af-board-ink-2)] md:block">{flight.fareBrand.description}</p>}</div>
+        const bags = flight.fareBrand.baggagePieces ?? 0
+        const bagText = bags ? `${bags} checked bag${bags === 1 ? '' : 's'}${flight.fareBrand.baggageWeightGrams ? `, ${Math.round(flight.fareBrand.baggageWeightGrams / 1000)} kg each` : ''}` : 'No checked bag'
+        const price = formatMinorUnits(flight.perTravelerTotalAmount, flight.currencyCode)
+        return <article key={`${flight.id}:${flight.inventoryBucketId}`} data-selected={isSelected ? 'true' : undefined} className="af-flight">
+          <div className="min-w-0 min-[900px]:self-center">
+            <p className="text-lg text-[var(--af-ink-2)]">{carrier.code} {flight.flightNumber}<span aria-hidden="true" className="mx-2 text-[var(--af-line-2)]">|</span>Nonstop{duration ? <><span aria-hidden="true" className="mx-2 text-[var(--af-line-2)]">|</span>{duration}</> : null}</p>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div><p className="af-time">{arrivalTime.format(new Date(flight.scheduledDepartureAt))}</p><p className="mt-1 text-lg text-[var(--af-ink-2)]">{flight.originCode}</p></div>
+              <span aria-hidden="true" className="af-path mb-9 hidden text-[var(--af-ink-3)] sm:block" />
+              <div className="text-right"><p className="af-time">{arrivalTime.format(new Date(flight.scheduledArrivalAt))}</p><p className="mt-1 text-lg text-[var(--af-ink-2)]">{flight.destinationCode}</p></div>
+            </div>
+            <p className="mt-2 text-sm text-[var(--af-ink-3)]">{departureDate.format(new Date(flight.scheduledDepartureAt))} · {(carrier.defaultTimezone.split('/').pop() ?? carrier.defaultTimezone).replaceAll('_', ' ')} time</p>
           </div>
-          <div className="flex items-center justify-between gap-4 md:w-36 md:flex-col md:items-end md:gap-2">
-            <div className="md:text-right"><p className="af-board-cell text-xl font-semibold">{formatMinorUnits(flight.perTravelerTotalAmount, flight.currencyCode)}</p><p className="af-board-cell text-xs text-[var(--af-board-ink-2)]">{formatMinorUnits(flight.partyTotalAmount, flight.currencyCode)} · {flight.passengerCount} pax</p></div>
-            <div className="af-track"><button onClick={() => { setSelected(flight); setHeldOffer(null); bookingAttempt.current = null }} disabled={busy || Boolean(pendingBooking) || intentUnavailable || soldOut} aria-pressed={isSelected} className={`af-pill af-pill-sm ${isSelected ? '' : 'af-pill-primary'}`}>{soldOut ? 'Sold out' : isSelected ? 'Selected' : 'Select'}</button></div>
+          <div className="af-flight-fare flex min-w-0 flex-col">
+            <p className="text-xl font-bold">{[flight.fareBrand.name, flight.cabinName].filter(Boolean).join(' · ')}</p>
+            <p className="af-price mt-1.5">{price}</p>
+            <p className="mt-2 text-base leading-snug text-[var(--af-ink-2)]">Per traveler. Includes {formatMinorUnits(flight.perTravelerTaxAmount, flight.currencyCode)} taxes{bags ? `, seat selection, ${bagText}` : ', seat selection'}.{flight.passengerCount > 1 ? ` ${formatMinorUnits(flight.partyTotalAmount, flight.currencyCode)} for ${flight.passengerCount} passengers.` : ''}</p>
+            {flight.fareBrand.description && <p className="mt-1 text-sm text-[var(--af-ink-3)]">{flight.fareBrand.description}</p>}
+            <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-base text-[var(--af-ink-2)]"><span className="inline-flex items-center gap-2"><Luggage aria-hidden="true" className="size-5" strokeWidth={1.5} />{bags ? 'Checked bag' : 'Carry-on only'}</span><span>{flight.availability.available} seat{flight.availability.available === 1 ? '' : 's'} left</span></p>
+            <button onClick={() => { setSelected(flight); setHeldOffer(null); bookingAttempt.current = null }} disabled={busy || Boolean(pendingBooking) || intentUnavailable || soldOut} aria-pressed={isSelected} className={`af-pill mt-4 min-h-[3.25rem] w-full text-lg ${isSelected ? '' : 'af-pill-primary'}`}>{soldOut ? 'Sold out' : isSelected ? `Selected · ${price}` : `Select flight · ${price}`}</button>
           </div>
         </article>
       })}
     </section>}
     {shoppingEnabled && selected && !pendingBooking && !intentUnavailable && <form key={`${selected.id}:${selected.inventoryBucketId}`} onSubmit={holdOffer} className="af-pass">
       <div className="min-w-0">
-        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">Travelers · {passLabel}</span><div className="af-track !bg-black/20"><button type="button" onClick={() => { setSelected(null); setHeldOffer(null); bookingAttempt.current = null }} className="af-pill af-pill-sm !text-white/85 hover:!text-white">Close</button></div></div>
+        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">Travelers · {passLabel}</span><button type="button" onClick={() => { setSelected(null); setHeldOffer(null); bookingAttempt.current = null }} className="af-pill af-pill-sm af-pill-ghost !border-white/50">Close</button></div>
         <div className="space-y-6 p-5 sm:p-6">{Array.from({ length: selected.passengerCount }, (_, passengerIndex) => <fieldset disabled={Boolean(heldOffer)} key={passengerIndex} className="grid gap-4 disabled:opacity-70 sm:grid-cols-2">
           <legend className="af-title-line mb-3 text-sm font-semibold"><span className="af-mono grid size-6 place-items-center rounded-[3px] bg-[var(--af-accent)] text-xs text-white">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}<span className="text-xs font-medium text-[var(--af-ink-3)]">{travelerBand(passengerIndex, searchParty)}</span></legend>
           {travelerFields.map(field => <label key={field} className={`af-field ${field === 'email' ? 'sm:col-span-1' : ''}`}><span className="af-field-label">{fieldLabel(field, passengerIndex)}</span><input required={field !== 'phone' && (field !== 'email' || passengerIndex === 0)} type={field === 'email' ? 'email' : field === 'dateOfBirth' ? 'date' : 'text'} max={field === 'dateOfBirth' ? birthDateMax : undefined} name={`passenger.${passengerIndex}.${field}`} autoComplete={field === 'email' ? 'email' : field === 'phone' ? 'tel' : passengerIndex === 0 && field === 'givenName' ? 'given-name' : passengerIndex === 0 && field === 'familyName' ? 'family-name' : passengerIndex === 0 && field === 'dateOfBirth' ? 'bday' : 'off'} defaultValue={travelerValues[passengerIndex]?.[field] ?? ''} className="af-input" /></label>)}
@@ -519,24 +579,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         </div> : <div className="af-track mt-auto" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">Hold fare for {passLabel}</button></div>}
       </div>
     </form>}
-    <form ref={manageForm} onSubmit={manage} className="af-card p-4 sm:p-6">
-      <h2 className="text-lg font-bold">{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
-        <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
-        <label className="af-field"><span className="af-field-label">Access code</span><input ref={accessTokenInput} aria-label="Access code" name="accessToken" type="password" defaultValue="" autoComplete="off" className="af-input" /></label>
-        <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
-      </div>
-    </form>
-    {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card px-4 py-3 sm:px-6">
-      <div className="flex flex-wrap items-center gap-3"><h2 className="af-field-label">Your trips</h2><div className="af-track flex-wrap">{savedTrips.map(locator => <button key={locator} type="button" disabled={busy} onClick={() => openSavedTrip(locator)} aria-pressed={managedBooking?.recordLocator === locator} className="af-pill af-pill-sm af-mono tracking-[0.14em]">{locator}</button>)}</div></div>
-    </section>}
-    {carrier.accessRecoveryEnabled ? <div className="af-card px-4 py-3 sm:px-6">
-      {recovering ? <form onSubmit={recoverAccess} className="grid gap-4 py-2 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
-        <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
-        <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
-        <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
-      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Lost your access code?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a new one</button></div></div>}
-    </div> : <p className="text-sm">Lost your access code? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
+    {!hero && manageBlock}
     {managedBooking && <section aria-label={`Booking ${managedBooking.recordLocator}`} className="space-y-5">
       <div className="af-card overflow-hidden">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
@@ -604,5 +647,20 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network }: { i
         </article>
       })}
     </section>}
-  </div>
+  </>
+
+  if (!hero) return <div className="space-y-6">{flow}</div>
+  return <>
+    <HomeHero lead={hero.lead} windowImage={hero.windowImage}>
+      <div role="tablist" aria-label="Book or manage" className="af-widget-tabs">
+        <button type="button" role="tab" id="af-tab-book" aria-selected={widgetTab === 'book'} aria-controls="af-panel-book" onClick={() => setWidgetTab('book')} className="af-widget-tab"><Plane aria-hidden="true" />Book a flight</button>
+        <button type="button" role="tab" id="af-tab-manage" aria-selected={widgetTab === 'manage'} aria-controls="af-panel-manage" onClick={() => setWidgetTab('manage')} className="af-widget-tab"><CalendarDays aria-hidden="true" />Manage booking</button>
+      </div>
+      <div className="af-widget-panel">
+        <div role="tabpanel" id="af-panel-book" aria-labelledby="af-tab-book" hidden={widgetTab !== 'book'}>{searchForm}</div>
+        <div role="tabpanel" id="af-panel-manage" aria-labelledby="af-tab-manage" hidden={widgetTab !== 'manage'}>{manageBlock}</div>
+      </div>
+    </HomeHero>
+    <div id="results" className="af-container scroll-mt-4 space-y-6 pt-8 empty:hidden">{flow}</div>
+  </>
 }

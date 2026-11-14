@@ -1,7 +1,7 @@
-import { Archivo } from 'next/font/google'
+import { Figtree } from 'next/font/google'
 
-// One family, as on a printed pocket timetable: Archivo's width axis sets the condensed display caps and the
-// normal-width text; tabular figures carry times and fares.
-const archivo = Archivo({ subsets: ['latin'], axes: ['wdth'], variable: '--af-font-body', display: 'swap' })
+// One family for the whole storefront: Figtree's light weight sets the display lines (with a true italic for the
+// accented word), its medium and bold weights carry labels, times and fares.
+const figtree = Figtree({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--af-font-body', display: 'swap' })
 
-export const storefrontFontVariables = archivo.variable
+export const storefrontFontVariables = figtree.variable

@@ -82,9 +82,9 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
       <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Checking…' : 'Check status'}</button></div>
     </form>
     {message && <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />{message}</p>}
-    {results.map(flight => <article key={flight.id} className="af-board overflow-hidden rounded-[3px]">
+    {results.map(flight => <article key={flight.id} className="af-board overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pt-5 sm:px-6"><p className="af-board-cell af-signal text-sm font-semibold">{carrier.code} {flight.flightNumber} · {flight.serviceDate}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={statusTone(flight.status)} />{displayStatus(flight.status)}</p></div>
-      <h2 className="af-display flex items-center gap-3 px-5 pt-3 text-5xl uppercase sm:px-6 sm:text-6xl">{flight.originCode}<span className="af-path" />{flight.destinationCode}</h2>
+      <h2 className="flex items-center gap-3 px-5 pt-3 text-5xl font-semibold tracking-[-0.01em] sm:px-6 sm:text-6xl">{flight.originCode}<span className="af-path" />{flight.destinationCode}</h2>
       <p className="px-5 pt-1 text-sm text-[var(--af-board-ink-2)] sm:px-6">{flight.originCity} to {flight.destinationCity}</p>
       <dl className="af-board-row mt-5 grid sm:grid-cols-2">
         {(['Departure', 'Arrival'] as const).map(leg => <div key={leg} className="px-5 py-4 sm:px-6 sm:[&:last-child]:border-l sm:[&:last-child]:border-[var(--af-board-line)]">

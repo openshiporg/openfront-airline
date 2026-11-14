@@ -1,11 +1,14 @@
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { Armchair, ArrowRight, Clock3, Luggage, Star } from 'lucide-react'
 
+import { DestinationTiles } from '@/features/storefront/components/DestinationTiles'
 import { FlightShop } from '@/features/storefront/components/FlightShop'
+import { HomeHero } from '@/features/storefront/components/HomeHero'
 import { StorefrontFrame } from '@/features/storefront/components/StorefrontChrome'
-import { Timetable } from '@/features/storefront/components/Timetable'
 import { getStorefrontCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { carrierCalendarDate } from '@/features/storefront/lib/branding'
+import { destinationArt } from '@/features/storefront/lib/destination-art'
+import { networkHub } from '@/features/storefront/lib/hub'
 import { storefrontBrandPalette } from '@/features/storefront/lib/theme'
 import { storefrontPageMetadata } from '@/features/storefront/lib/metadata'
 import { getStorefrontNetwork } from '@/features/storefront/lib/network'
@@ -17,11 +20,19 @@ export async function generateMetadata() {
   return storefrontPageMetadata()
 }
 
-const services = [
-  { href: '/status', label: 'Flight status', needs: 'Flight number and date' },
-  { href: '/check-in', label: 'Check in', needs: 'Booking reference and access code' },
-  { href: '/manage-booking', label: 'Manage booking', needs: 'Booking reference and access code' },
+const facts = [
+  { icon: Armchair, title: 'A more comfortable trip', text: 'Choose your own seat as soon as your ticket is issued.' },
+  { icon: Clock3, title: 'On your schedule', text: 'Nonstop flights, shown in local airport time.' },
+  { icon: Luggage, title: 'Travel with ease', text: 'Check in online and keep your boarding pass on your phone.' },
+  { icon: Star, title: 'Flexible when plans change', text: 'Cancel online and see what comes back before you confirm.' },
 ] as const
+
+// The carrier's own headline: one line per sentence on wide screens, and a word or phrase wrapped in
+// *asterisks* is set in the accented italic.
+function Headline({ text }: { text: string }) {
+  const sentences = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text]
+  return <>{sentences.map((sentence, line) => <span key={line}>{sentence.split(/\*([^*]+)\*/).map((part, index) => index % 2 ? <em key={index}>{part}</em> : part)}</span>)}</>
+}
 
 export default async function Home() {
   const carrier = await getStorefrontCarrierIdentity()
@@ -31,37 +42,32 @@ export default async function Home() {
   const initialDate = carrierCalendarDate(new Date(Date.now() + 14 * 86_400_000), carrier?.defaultTimezone ?? 'UTC')
   const network = carrier ? await getStorefrontNetwork(carrier.id) : null
   const selling = Boolean(configured && carrier!.salesEnabled)
+  const hub = networkHub(network)
+  const title = configured ? carrier!.storefrontHomepageTitle! : carrier ? carrier.name : 'Flights'
+  const kicker = hub ? `Nonstop from ${hub.city}` : null
 
-  return <StorefrontFrame carrier={carrier} current="/">
-    <section className="af-board" id="book">
-      <div className="af-container pb-10 pt-10 sm:pt-14">
-        <div className="min-w-0 max-w-[64rem]">
-          <h1 className="af-display max-w-4xl text-6xl uppercase sm:text-8xl">{configured ? carrier!.storefrontHomepageTitle : carrier ? carrier.name : 'Flights'}</h1>
-          {configured && <p className="mt-4 max-w-2xl text-lg leading-7 text-[var(--af-board-ink-2)]">{carrier!.storefrontHomepageDescription}</p>}
-          <div className="mt-8">
-            {selling ? <FlightShop initialDate={initialDate} carrier={carrier!} network={network!} />
-              : <div className="af-card flex flex-col gap-4 p-5 text-[var(--af-ink)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
-                <p role="status" className="af-title-line font-semibold"><span className="af-dot" data-tone="warn" />{configured ? 'Online booking is temporarily unavailable.' : 'Online booking isn’t available yet.'}</p>
-                {!configured && <Link href="/dashboard" className="af-pill af-pill-sm w-fit">Operator sign in</Link>}
-              </div>}
-          </div>
+  const lead = <>
+    {kicker && kicker.toLowerCase() !== title.replaceAll('*', '').trim().toLowerCase() && <p className="af-kicker text-white/90">{kicker}</p>}
+    <h1 className="af-display af-hero-title mt-4 "><Headline text={title} /></h1>
+    {configured && <p className="mt-4 max-w-[34rem] text-lg leading-[1.4] text-[var(--af-board-ink-2)] sm:text-xl">{carrier!.storefrontHomepageDescription}</p>}
+    {hub && <a href="#routes" className="af-pill af-pill-ghost mt-6 px-7">Explore our routes<ArrowRight aria-hidden="true" /></a>}
+  </>
+  const windowImage = hub ? destinationArt(hub.code) : null
+
+  return <StorefrontFrame carrier={carrier} current="/" overlay>
+    {selling ? <FlightShop initialDate={initialDate} carrier={carrier!} network={network!} hero={{ lead, windowImage }} />
+      : <HomeHero lead={lead} windowImage={windowImage}>
+        <div className="af-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <p role="status" className="af-title-line font-semibold"><span className="af-dot" data-tone="warn" />{configured ? 'Online booking is temporarily unavailable.' : 'Online booking isn’t available yet.'}</p>
+          {!configured && <Link href="/dashboard" className="af-pill af-pill-sm w-fit">Operator sign in</Link>}
         </div>
-      </div>
-      <nav aria-label="Passenger services" className="border-t border-[var(--af-board-line)]">
-        <ul className="af-container grid sm:grid-cols-3 sm:divide-x sm:divide-[var(--af-board-line)]">
-          {services.map(service => <li key={service.href} className="border-b border-[var(--af-board-line)] last:border-b-0 sm:border-b-0"><Link href={service.href} className="group flex items-center justify-between gap-4 py-4 sm:px-5 sm:first:pl-0">
-            <span><span className="af-display block text-3xl uppercase">{service.label}</span><span className="block text-sm text-[var(--af-board-ink-2)]">{service.needs}</span></span>
-            <ChevronRight aria-hidden="true" className="size-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
-          </Link></li>)}
-        </ul>
-      </nav>
-    </section>
-    {carrier && network && network.routes.length > 0 && <section aria-labelledby="timetable-heading" className="af-container py-14">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <h2 id="timetable-heading" className="af-display text-5xl uppercase">Timetable</h2>
-        <p className="text-sm text-[var(--af-ink-3)]">Local times · next flight on sale per route</p>
-      </div>
-      <Timetable network={network} carrierCode={carrier.code} />
+      </HomeHero>}
+    {carrier && network && hub && <section id="routes" aria-labelledby="routes-heading" className="af-container scroll-mt-6 pt-8 lg:pt-9">
+      <h2 id="routes-heading" className="af-section-head">Our nonstop routes from {hub.code}</h2>
+      <div className="mt-5 lg:mt-6"><DestinationTiles network={network} origin={hub.code} /></div>
     </section>}
+    <section aria-label="What to expect" className="af-container pb-10 pt-9 lg:pb-9 lg:pt-8">
+      <ul className="af-facts">{facts.map(fact => <li key={fact.title} className="af-fact"><fact.icon aria-hidden="true" /><div className="min-w-0"><p className="af-fact-title">{fact.title}</p><p className="af-fact-text">{fact.text}</p></div></li>)}</ul>
+    </section>
   </StorefrontFrame>
 }
