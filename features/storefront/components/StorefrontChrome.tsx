@@ -12,10 +12,26 @@ import { DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '@/features/pla
 
 export type StorefrontRoute = (typeof publicNavigation)[number]['href']
 
-// The carrier's saved logo icon, always shown beside its name with the saved hue. An empty icon renders the default icon.
+// The carrier's saved logo icon, shown beside its name with the saved hue.
 type CarrierLogo = { logoIcon?: string | null; logoColor?: string | null }
 
-export function CarrierMark({ carrier, className }: { carrier: CarrierLogo; className?: string }) {
+// The storefront's own mark: a swept three-stroke wing in the sky accent.
+export function WingMark({ className }: { className?: string }) {
+  return <svg aria-hidden="true" data-testid="carrier-logo" viewBox="0 0 72 34" fill="none" className={className}>
+    <path d="M21 12.5C39 12.5 56 8.5 71.5 0.5 61.5 11 47.5 17.5 31 18.5Z" style={{ fill: 'color-mix(in oklab, var(--af-sky) 82%, #fff)' }} />
+    <path d="M10.5 19.5C28.5 20.5 44.5 17.5 58.5 11 49.5 20 36.5 25 21 25.5Z" style={{ fill: 'var(--af-sky)' }} />
+    <path d="M0.5 27C16.5 29 31.5 27 45.5 21 37.5 29 25.5 33 11 33.5Z" style={{ fill: 'color-mix(in oklab, var(--af-sky) 78%, var(--af-accent))' }} />
+  </svg>
+}
+
+// A carrier that chose its own logo icon in store settings keeps it; the platform's default icon gives way to the wing.
+function hasOwnLogo(carrier: CarrierLogo) {
+  const icon = carrier.logoIcon?.trim()
+  return Boolean(icon && icon !== DEFAULT_STORE_LOGO_ICON.trim())
+}
+
+export function CarrierMark({ carrier, className, wingClassName }: { carrier: CarrierLogo; className?: string; wingClassName?: string }) {
+  if (!hasOwnLogo(carrier)) return <WingMark className={wingClassName ?? className} />
   return <span aria-hidden="true" data-testid="carrier-logo" style={{ filter: `hue-rotate(${normalizeStoreLogoColor(carrier.logoColor)}deg)` }} className={`${className ?? ''} [&>svg]:block [&>svg]:h-full [&>svg]:w-full`} dangerouslySetInnerHTML={{ __html: carrier.logoIcon?.trim() || DEFAULT_STORE_LOGO_ICON }} />
 }
 
@@ -27,8 +43,8 @@ const TRIPS_ROUTE = '/manage-booking'
 const centreNavigation = publicNavigation.filter(item => item.href !== TRIPS_ROUTE)
 
 export function StorefrontLogo({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'logoIcon' | 'logoColor'> }) {
-  return <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-2.5 text-white">
-    <CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0 lg:h-9 lg:w-8" />
+  return <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-2 text-white">
+    <CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0 lg:h-9 lg:w-8" wingClassName="block h-6 w-[3.25rem] shrink-0 lg:h-8 lg:w-[4.25rem]" />
     <span className="af-wordmark truncate">{carrier.name}</span>
   </Link>
 }
@@ -64,10 +80,10 @@ export function StorefrontFooter({ carrier }: { carrier: Pick<PublicCarrierIdent
       </svg>
       <div className="af-container relative flex flex-col gap-5 pb-8 pt-4 lg:flex-row lg:items-center lg:gap-10">
         <div className="flex flex-wrap items-center gap-x-9 gap-y-2 lg:shrink-0">
-          <div className="flex items-center gap-2.5"><CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0" /><span className="af-wordmark">{carrier.name}</span></div>
+          <div className="flex items-center gap-2.5"><CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0" wingClassName="block h-7 w-[3.75rem] shrink-0" /><span className="af-wordmark">{carrier.name}</span></div>
           {carrier.legalName && <><span aria-hidden="true" className="hidden h-7 w-px bg-white/60 sm:block" /><p className="af-kicker text-xs text-white/85">{carrier.legalName}{carrier.code ? ` · ${carrier.code}` : ''}</p></>}
         </div>
-        <nav aria-label="Footer" className="af-footer-nav flex flex-wrap gap-x-6 text-[0.9375rem] lg:ml-auto lg:mr-[min(15rem,18vw)] lg:justify-end">{publicNavigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
+        <nav aria-label="Footer" className="af-footer-nav flex flex-wrap gap-x-5 text-[0.9375rem] lg:ml-auto lg:mr-[min(13rem,15vw)] lg:justify-end xl:flex-nowrap xl:whitespace-nowrap">{publicNavigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
       </div>
     </div>
   </footer>

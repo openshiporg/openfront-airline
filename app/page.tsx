@@ -1,9 +1,10 @@
 import Link from 'next/link'
-import { Armchair, ArrowRight, Clock3, Luggage, Star } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 import { DestinationTiles } from '@/features/storefront/components/DestinationTiles'
 import { FlightShop } from '@/features/storefront/components/FlightShop'
 import { HomeHero } from '@/features/storefront/components/HomeHero'
+import { StorefrontFacts } from '@/features/storefront/components/StorefrontFacts'
 import { StorefrontFrame } from '@/features/storefront/components/StorefrontChrome'
 import { getStorefrontCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { carrierCalendarDate } from '@/features/storefront/lib/branding'
@@ -19,13 +20,6 @@ export const dynamic = 'force-dynamic'
 export async function generateMetadata() {
   return storefrontPageMetadata()
 }
-
-const facts = [
-  { icon: Armchair, title: 'A more comfortable trip', text: 'Choose your own seat as soon as your ticket is issued.' },
-  { icon: Clock3, title: 'On your schedule', text: 'Nonstop flights, shown in local airport time.' },
-  { icon: Luggage, title: 'Travel with ease', text: 'Check in online and keep your boarding pass on your phone.' },
-  { icon: Star, title: 'Flexible when plans change', text: 'Cancel online and see what comes back before you confirm.' },
-] as const
 
 // The carrier's own headline: one line per sentence on wide screens, and a word or phrase wrapped in
 // *asterisks* is set in the accented italic.
@@ -66,8 +60,6 @@ export default async function Home() {
       <h2 id="routes-heading" className="af-section-head">Our nonstop routes from {hub.code}</h2>
       <div className="mt-5 lg:mt-6"><DestinationTiles network={network} origin={hub.code} /></div>
     </section>}
-    <section aria-label="What to expect" className="af-container pb-10 pt-9 lg:pb-9 lg:pt-8">
-      <ul className="af-facts">{facts.map(fact => <li key={fact.title} className="af-fact"><fact.icon aria-hidden="true" /><div className="min-w-0"><p className="af-fact-title">{fact.title}</p><p className="af-fact-text">{fact.text}</p></div></li>)}</ul>
-    </section>
+    <StorefrontFacts />
   </StorefrontFrame>
 }
