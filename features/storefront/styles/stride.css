@@ -85,7 +85,7 @@
 .af-hero-title { font-size: clamp(2.125rem, 3.65vw, 3.5rem); text-shadow: 0 1px 14px rgb(3 8 22 / 0.55); }
 .af-hero-title > span { display: inline; }
 @media (min-width: 640px) { .af-hero-title > span { display: block; } }
-.af-window { position: absolute; z-index: -1; top: 4.75rem; right: -4.5rem; width: 12.5rem; aspect-ratio: 0.8; border-radius: 40% / 32%; overflow: hidden; background-color: #20324f; background-size: cover; background-position: center; box-shadow: 0 0 0 0.5rem #c9c2b6, 0 0 0 0.75rem #8f8a82, 0 0 0 1.75rem color-mix(in oklab, var(--af-deep-2) 70%, #6b7890), 0 0 5rem 1.5rem rgb(255 188 120 / 0.3); opacity: 0.6; }
+.af-window { position: absolute; z-index: -1; top: 4.75rem; right: -4.5rem; width: 12.5rem; aspect-ratio: 0.8; border-radius: 40% / 32%; overflow: hidden; background-color: #20324f; background-size: cover; background-position: center; box-shadow: 0 0 0 0.5rem #c9c2b6, 0 0 0 0.75rem #8f8a82, 0 0 0 1.75rem color-mix(in oklab, var(--af-deep-2) 70%, #6b7890), 0 0 5rem 1.5rem rgb(255 188 120 / 0.3); opacity: 0.32; }
 .af-window::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 2.5rem rgb(3 8 22 / 0.55); }
 @media (min-width: 640px) { .af-window { right: 2%; width: 15rem; opacity: 1; } }
 @media (min-width: 1024px) { .af-window { top: 3.5rem; right: auto; left: 50%; width: clamp(16rem, 20vw, 19.5rem); } }
@@ -345,5 +345,8 @@
 /* The narrowest phones (320px): flight numbers wrap under the carrier code and the days fold into two rows. */
 @media (max-width: 379px) {
   .af-timetable td:nth-child(2), .af-timetable th:nth-child(2) { white-space: normal; }
+  .af-timetable { font-size: 0.75rem; }
+  .af-timetable td, .af-timetable th { padding-right: 0.25rem; }
+  .af-timetable td:nth-child(n+3) { white-space: normal; }
   .af-days { grid-template-columns: repeat(4, 1.125rem); }
 }
