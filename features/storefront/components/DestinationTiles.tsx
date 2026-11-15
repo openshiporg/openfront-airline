@@ -7,11 +7,11 @@ import { routeDatesKey, type StorefrontNetwork } from '@/features/storefront/lib
 const COUNT_WORDS = ['', 'one', 'two', 'three', 'four'] as const
 
 /** The routes from one origin as photo tiles: city, the lowest fare on sale, and a link that opens the search on that route. */
-export function DestinationTiles({ network, origin }: { network: StorefrontNetwork; origin: string }) {
+export function DestinationTiles({ network, origin, rows = false }: { network: StorefrontNetwork; origin: string; rows?: boolean }) {
   const routes = network.routes.filter(route => route.origin === origin)
   if (!routes.length) return null
   const city = (code: string) => network.airports.find(airport => airport.code === code)?.city || code
-  return <ul className="af-dest-grid">
+  return <ul className="af-dest-grid" data-rows={rows ? 'true' : undefined}>
     {routes.map(route => {
       const key = routeDatesKey(route.origin, route.destination)
       const fare = network.fares?.[key]

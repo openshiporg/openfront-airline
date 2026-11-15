@@ -14,6 +14,8 @@ import { storefrontBrandPalette } from '@/features/storefront/lib/theme'
 import { storefrontPageMetadata } from '@/features/storefront/lib/metadata'
 import { getStorefrontNetwork } from '@/features/storefront/lib/network'
 
+const COUNT_WORDS = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'] as const
+
 // The root layout is static, so each storefront page renders per request and sets its own carrier title.
 export const dynamic = 'force-dynamic'
 
@@ -37,13 +39,17 @@ export default async function Home() {
   const network = carrier ? await getStorefrontNetwork(carrier.id) : null
   const selling = Boolean(configured && carrier!.salesEnabled)
   const hub = networkHub(network)
-  const title = configured ? carrier!.storefrontHomepageTitle! : carrier ? carrier.name : 'Flights'
+  // The home headline counts the cities on the network ("Four Iconic Cities. One *Elevated* Way to Fly."); without a
+  // network it falls back to the carrier's own homepage title from the storefront settings.
+  const cityWord = hub ? COUNT_WORDS[hub.destinations.length] : null
+  const settingsTitle = configured ? carrier!.storefrontHomepageTitle! : carrier ? carrier.name : 'Flights'
+  const title = cityWord ? `${cityWord} Iconic ${hub!.destinations.length === 1 ? 'City' : 'Cities'}. One *Elevated* Way to Fly.` : settingsTitle
   const kicker = hub ? `Nonstop from ${hub.city}` : null
 
   const lead = <>
     {kicker && kicker.toLowerCase() !== title.replaceAll('*', '').trim().toLowerCase() && <p className="af-kicker text-white/90">{kicker}</p>}
     <h1 className="af-display af-hero-title mt-4 "><Headline text={title} /></h1>
-    {configured && <p className="mt-4 max-w-[34rem] text-lg leading-[1.4] text-[var(--af-board-ink-2)] sm:text-xl">{carrier!.storefrontHomepageDescription}</p>}
+    {configured && <p className="af-lead-text mt-4 max-w-[34rem] text-lg leading-[1.4] text-[var(--af-board-ink-2)] sm:text-xl">{carrier!.storefrontHomepageDescription}</p>}
     {hub && <a href="#routes" className="af-pill af-pill-ghost mt-6 px-7">Explore our routes<ArrowRight aria-hidden="true" /></a>}
   </>
   const windowImage = hub ? destinationArt(hub.code) : null
