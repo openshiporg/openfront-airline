@@ -85,7 +85,8 @@
 .af-hero-title { font-size: clamp(2.125rem, 3.65vw, 3.5rem); text-shadow: 0 1px 14px rgb(3 8 22 / 0.55); }
 .af-hero-title > span { display: inline; }
 @media (min-width: 640px) { .af-hero-title > span { display: block; } }
-@media (max-width: 639px) { .af-hero-title { font-size: 1.875rem; } .af-hero-title > span { display: block; } .af-hero-inner .af-lead-text { max-width: 62%; font-size: 1rem; } }
+@media (max-width: 639px) { .af-hero-title { font-size: 1.875rem; } .af-hero-title > span { display: block; } .af-lead { max-width: 60%; } .af-hero-title { font-size: 1.625rem; } .af-hero-inner .af-lead-text { font-size: 0.9375rem; } }
+@media (max-width: 379px) { .af-window { width: 7.5rem; } .af-lead { max-width: 58%; } }
 .af-window { position: absolute; z-index: -1; top: 5.25rem; right: 0.75rem; width: 9.5rem; aspect-ratio: 0.8; border-radius: 40% / 32%; overflow: hidden; background-color: #20324f; background-size: cover; background-position: center; box-shadow: 0 0 0 0.5rem #c9c2b6, 0 0 0 0.75rem #8f8a82, 0 0 0 1.75rem color-mix(in oklab, var(--af-deep-2) 70%, #6b7890), 0 0 5rem 1.5rem rgb(255 188 120 / 0.3); }
 .af-window::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 2.5rem rgb(3 8 22 / 0.55); }
 @media (min-width: 640px) { .af-window { right: 2%; width: 15rem; opacity: 1; } }

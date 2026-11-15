@@ -10,7 +10,7 @@ export function HomeHero({ lead, windowImage, children }: { lead: ReactNode; win
     <div aria-hidden="true" className="af-window" style={windowImage ? { backgroundImage: `url(${windowImage})` } : undefined} />
     <div aria-hidden="true" className="af-seat-edge"><WingMark className="af-seat-wing" /></div>
     <div className="af-container af-hero-inner">
-      <div className="lg:pl-12">{lead}</div>
+      <div className="af-lead lg:pl-12">{lead}</div>
       <div className="af-widget">{children}</div>
     </div>
   </section>
