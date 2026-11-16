@@ -40,7 +40,13 @@ const NEUTRAL_IDENTITY = { name: 'Flights', code: '', legalName: '' }
 
 // Trips live under the traveler mark on the right; everything else sits in the centre of the header.
 const TRIPS_ROUTE = '/manage-booking'
-const centreNavigation = publicNavigation.filter(item => item.href !== TRIPS_ROUTE)
+// The header carries the four main services; the full list stays in the phone menu and the footer.
+const centreNavigation = (carrierName: string) => [
+  { href: '/', label: 'Book' },
+  { href: TRIPS_ROUTE, label: 'Manage' },
+  { href: '/status', label: 'Flight Status' },
+  { href: '/#experience', label: `The ${carrierName.split(' ')[0]} Experience` },
+] as const
 
 export function StorefrontLogo({ carrier }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'logoIcon' | 'logoColor'> }) {
   return <Link href="/" className="inline-flex min-h-11 min-w-0 items-center gap-2 text-white">
@@ -60,7 +66,7 @@ function StorefrontHeader({ carrier, current, overlay }: { carrier: Pick<PublicC
       </details>
       <StorefrontLogo carrier={carrier} />
       <nav aria-label="Passenger services" className="mx-auto hidden h-full xl:block">
-        <ul className="flex h-full items-stretch gap-10">{centreNavigation.map(item => <li key={item.href} className="flex"><Link href={item.href} aria-current={item.href === current ? 'page' : undefined} className="af-nav-link">{item.label}</Link></li>)}</ul>
+        <ul className="flex h-full items-stretch gap-10">{centreNavigation(carrier.name).map(item => <li key={item.href} className="flex"><Link href={item.href} aria-current={item.href === current ? 'page' : undefined} className="af-nav-link">{item.label}</Link></li>)}</ul>
       </nav>
       <div className="ml-auto flex items-center gap-4 xl:ml-0 xl:gap-8">
         <span aria-hidden="true" className="h-6 w-px bg-white/50" />
@@ -78,12 +84,12 @@ export function StorefrontFooter({ carrier }: { carrier: Pick<PublicCarrierIdent
         <path d="M0 100C190 96 400 62 560 0v34C440 76 270 100 130 100Z" style={{ fill: 'var(--af-sky)' }} opacity="0.9" />
         <path d="M170 100C330 96 470 74 560 44v22C490 86 400 100 300 100Z" style={{ fill: 'var(--af-accent)' }} opacity="0.85" />
       </svg>
-      <div className="af-container relative flex flex-col gap-5 pb-8 pt-4 lg:flex-row lg:items-center lg:gap-10">
+      <div className="af-container relative flex flex-col gap-3 pb-4 pt-2 lg:flex-row lg:items-center lg:gap-10">
         <div className="flex flex-wrap items-center gap-x-9 gap-y-2 lg:shrink-0">
           <div className="flex items-center gap-2.5"><CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0" wingClassName="block h-7 w-[3.75rem] shrink-0" /><span className="af-wordmark">{carrier.name}</span></div>
           {carrier.legalName && <><span aria-hidden="true" className="hidden h-7 w-px bg-white/60 sm:block" /><p className="af-kicker text-xs text-white/85">{carrier.legalName}{carrier.code ? ` · ${carrier.code}` : ''}</p></>}
         </div>
-        <nav aria-label="Footer" className="af-footer-nav flex flex-wrap gap-x-5 text-[0.9375rem] lg:ml-auto lg:mr-[min(13rem,15vw)] lg:justify-end xl:flex-nowrap xl:whitespace-nowrap">{publicNavigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
+        <nav aria-label="Footer" className="af-footer-nav flex flex-wrap gap-x-5 text-sm lg:ml-auto lg:mr-[min(13rem,15vw)] lg:justify-end xl:flex-nowrap xl:whitespace-nowrap">{publicNavigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
       </div>
     </div>
   </footer>

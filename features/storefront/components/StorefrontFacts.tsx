@@ -9,7 +9,7 @@ const facts = [
 ] as const
 
 export function StorefrontFacts() {
-  return <section aria-label="What to expect" className="af-container pb-10 pt-9 lg:pb-9 lg:pt-8">
+  return <section id="experience" aria-label="What to expect" className="af-container pb-10 pt-9 lg:pb-9 lg:pt-8">
     <ul className="af-facts">{facts.map(fact => <li key={fact.title} className="af-fact"><fact.icon aria-hidden="true" /><div className="min-w-0"><p className="af-fact-title">{fact.title}</p><p className="af-fact-text">{fact.text}</p></div></li>)}</ul>
   </section>
 }

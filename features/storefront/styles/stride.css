@@ -80,8 +80,8 @@
 /* Home hero: the cabin wall, the window with the city in it, and the seat edge. */
 .af-hero { position: relative; isolation: isolate; overflow: hidden; background: linear-gradient(105deg, var(--af-deep) 0%, var(--af-deep-2) 46%, var(--af-deep) 100%); color: #fff; --af-board-ink-2: rgb(255 255 255 / 0.84); }
 .af-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(60% 90% at 62% 40%, rgb(255 190 120 / 0.16), transparent 60%), linear-gradient(90deg, rgb(3 8 22 / 0.5) 0%, transparent 45%); }
-.af-hero-inner { position: relative; padding-top: 5.5rem; padding-bottom: 1.5rem; }
-@media (min-width: 1024px) { .af-hero-inner { padding-top: 6.25rem; padding-bottom: 1.5rem; } }
+.af-hero-inner { position: relative; padding-top: 4.75rem; padding-bottom: 1.25rem; }
+@media (min-width: 1024px) { .af-hero-inner { padding-top: 5.75rem; padding-bottom: 1.5rem; } }
 .af-hero-title { font-size: clamp(2.125rem, 3.65vw, 3.5rem); text-shadow: 0 1px 14px rgb(3 8 22 / 0.55); }
 .af-hero-title > span { display: inline; }
 @media (min-width: 640px) { .af-hero-title > span { display: block; } }
@@ -99,7 +99,7 @@
 }
 
 /* Search widget: two tabs on a white panel, at first paint. */
-.af-widget { position: relative; margin-top: 1.75rem; }
+.af-widget { position: relative; margin-top: 1.25rem; }
 @media (min-width: 1024px) { .af-widget { margin-inline: 5.75rem; } }
 .af-widget-tabs { display: flex; }
 .af-widget-tab { display: inline-flex; align-items: center; gap: 0.625rem; min-height: 2.75rem; padding: 0 1.25rem; border-radius: var(--af-radius-lg) var(--af-radius-lg) 0 0; background: rgb(255 255 255 / 0.82); font-size: 0.9375rem; font-weight: 500; color: var(--af-ink-2); cursor: pointer; }
@@ -108,19 +108,20 @@
 .af-widget-tab[aria-selected="true"] { position: relative; background: #fff; font-weight: 600; color: var(--af-ink); }
 .af-widget-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 1.25rem; right: 1.25rem; bottom: 0; height: 2px; background: var(--af-accent); }
 @media (min-width: 640px) { .af-widget-tab[aria-selected="true"]::after { left: 2rem; right: 2rem; } }
-.af-widget-panel { padding: 1rem; border-radius: 0 var(--af-radius-lg) var(--af-radius-lg) var(--af-radius-lg); background: #fff; box-shadow: 0 12px 40px rgb(3 8 22 / 0.28); }
+.af-widget-panel { padding: 0.75rem; border-radius: 0 var(--af-radius-lg) var(--af-radius-lg) var(--af-radius-lg); background: #fff; box-shadow: 0 12px 40px rgb(3 8 22 / 0.28); }
 @media (min-width: 640px) { .af-widget-panel { padding: 1.25rem 1.5rem 1.375rem; } }
-.af-widget-grid { display: grid; gap: 0.875rem; }
-@media (min-width: 640px) { .af-widget-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.af-widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; }
+@media (min-width: 640px) { .af-widget-grid { gap: 0.875rem; } }
 @media (min-width: 1100px) { .af-widget-grid { grid-template-columns: minmax(0, 1.25fr) auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 0.75rem; } .af-widget-grid[data-return="true"] { grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) auto; } }
 .af-widget-submit { padding-inline: 1.5rem; }
-@media (min-width: 640px) and (max-width: 1099px) { .af-widget-submit { grid-column: span 2; } }
+@media (max-width: 1099px) { .af-widget-submit { grid-column: span 2; } }
 .af-swap { display: none; }
 @media (min-width: 1100px) { .af-swap { display: grid; place-items: center; width: 2.25rem; height: 2.875rem; border-radius: var(--af-radius); color: var(--af-ink); cursor: pointer; } .af-swap:hover { background: var(--af-paper-2); } .af-swap:disabled { opacity: 0.35; cursor: default; } }
 /* A leading icon inside a field. */
 .af-icon-field { position: relative; }
 .af-icon-field > svg { position: absolute; left: 0.875rem; bottom: 0.875rem; z-index: 1; width: 1.125rem; height: 1.125rem; color: var(--af-ink); pointer-events: none; }
-.af-icon-field .af-input { padding-left: 2.75rem; }
+.af-icon-field .af-input { padding-left: 2.5rem; }
+@media (max-width: 639px) { .af-icon-field > svg { left: 0.625rem; } .af-icon-field .af-input { padding-left: 2.125rem; } }
 .af-choice { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; font-size: 0.9375rem; font-weight: 500; color: var(--af-ink-2); cursor: pointer; }
 .af-choice::before { content: ""; width: 1rem; height: 1rem; border-radius: 50%; border: 1.5px solid var(--af-line-2); background: #fff; }
 .af-choice[aria-pressed="true"] { color: var(--af-ink); font-weight: 600; }
@@ -139,13 +140,15 @@
 .af-dest-grid { display: grid; gap: 1rem; }
 @media (min-width: 1024px) { .af-dest-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.125rem; } }
 .af-dest { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow); color: var(--af-ink); }
-.af-dest-photo { position: relative; min-height: 9.5rem; background-color: var(--af-deep-2); background-image: linear-gradient(140deg, var(--af-deep-2), var(--af-deep)); background-size: cover; background-position: center; }
+.af-dest-photo { position: relative; min-height: 7.5rem; background-color: var(--af-deep-2); background-image: linear-gradient(140deg, var(--af-deep-2), var(--af-deep)); background-size: cover; background-position: center; }
 .af-dest-body { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; padding: 0.875rem 1rem; }
 .af-dest-city { font-size: 1.375rem; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; }
 .af-dest-tag { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--af-ink-2); }
 .af-dest-price { margin-top: 0.375rem; font-size: 1.375rem; font-weight: 600; line-height: 1.1; }
 .af-dest-note { font-size: 0.8125rem; line-height: 1.3; color: var(--af-ink-2); }
 .af-dest-cta { margin-top: 0.625rem; }
+/* Home tiles are the link themselves; the Book now button belongs to the inner-page rows. */
+.af-dest-grid:not([data-rows]) .af-dest-cta { display: none; }
 .af-dest-arrow { display: none; }
 @media (min-width: 640px) and (max-width: 1023px) { .af-dest-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 1rem; padding: 1.25rem; } .af-dest-body > :not(.af-dest-cta) { grid-column: 1; } .af-dest-cta { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; } .af-dest-city { font-size: 1.625rem; } .af-dest-price { font-size: 1.625rem; } }
 @media (min-width: 1024px) {
@@ -156,7 +159,7 @@
   .af-dest-body { position: absolute; inset: auto 0 0 0; padding: 0 3.5rem 1rem 1.5rem; gap: 0; }
   .af-dest-city { font-size: 1.75rem; }
   .af-dest-tag { color: rgb(255 255 255 / 0.92); }
-  .af-dest-price { margin-top: 0.125rem; font-size: 0.9375rem; font-weight: 500; }
+  .af-dest-grid:not([data-rows]) .af-dest-price { display: none; }
   .af-dest .af-dest-note, .af-dest .af-dest-cta { display: none; }
   .af-dest-arrow { display: block; position: absolute; right: 1.5rem; bottom: 1.25rem; width: 1.5rem; height: 1.5rem; transition: transform 200ms ease; }
   .af-dest:hover .af-dest-arrow { transform: translateX(3px); }

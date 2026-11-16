@@ -11,6 +11,7 @@ import { PlatformSelect } from '@/features/platform/components/PlatformSelect'
 import { HomeHero } from '@/features/storefront/components/HomeHero'
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import type { StorefrontNetwork } from '@/features/storefront/lib/network'
+import { networkHub } from '@/features/storefront/lib/hub'
 import { parseBookingAccessForm, parseStorefrontPassengers, parseStorefrontSearchForm } from '@/features/storefront/lib/forms'
 import { bookingIntentVariables, CUSTOMER_BOOKING_COMMAND, CUSTOMER_BOOKING_READ, parsePendingBookingIntent, type BookingReceipt, type PendingBookingIntent } from '@/features/storefront/lib/booking-intent'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
@@ -131,20 +132,21 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const [intentUnavailable, setIntentUnavailable] = useState(false)
   // Search console: route pickers fed by the carrier's network, trip type and the party by fare type.
   const routes = network?.routes ?? []
-  const [tripType, setTripType] = useState<TripType>('one-way')
+  const [tripType] = useState<TripType>('one-way')
   // Home widget: the search and the booking lookup share one panel.
   const [widgetTab, setWidgetTab] = useState<'book' | 'manage'>('book')
-  const [origin, setOrigin] = useState(routes[0]?.origin ?? '')
-  const [destination, setDestination] = useState(routes[0]?.destination ?? '')
+  // The search opens on the hub as the origin, with the destination and date left for the traveler to choose.
+  const [origin, setOrigin] = useState(networkHub(network)?.code ?? routes[0]?.origin ?? '')
+  const [destination, setDestination] = useState('')
   // Upcoming dates with a flight for a route (dates are carrier-local service dates).
   const datesFor = (from: string, to: string) => network?.serviceDates?.[`${from}-${to}`] ?? []
-  const [departDate, setDepartDate] = useState(() => datesFor(routes[0]?.origin ?? '', routes[0]?.destination ?? '')[0] ?? initialDate)
+  const [departDate, setDepartDate] = useState('')
   const [nextServiceDate, setNextServiceDate] = useState<string | null>(null)
   // A new route starts on its first date with a flight, unless the chosen date already has one.
   const routeDates = datesFor(origin, destination).join(',')
   useEffect(() => {
     const dates = routeDates ? routeDates.split(',') : []
-    setDepartDate(current => dates.length && !dates.includes(current) ? dates[0] : current)
+    setDepartDate(current => dates.length && current && !dates.includes(current) ? dates[0] : current)
   }, [routeDates])
   const [returnDate, setReturnDate] = useState(() => { const value = new Date(`${initialDate}T00:00:00.000Z`); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10) })
   const [party, setParty] = useState<Party>({ adults: 1, children: 0, infants: 0 })
@@ -454,9 +456,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const partyRows = [['adults', 'Adults', '12 and over', 1, 9], ['children', 'Children', '2 to 11', 0, 8], ['infants', 'Infants', 'Under 2, own seat', 0, party.adults]] as const
   const setPartyCount = (key: keyof Party, value: number) => setParty(current => { const next = { ...current, [key]: value }; return { ...next, infants: Math.min(next.infants, next.adults) } })
   const searchForm = <form onSubmit={search}>
-    <div role="group" aria-label="Trip type" className="-mt-1 mb-1 flex gap-6"><button type="button" aria-pressed={tripType === 'one-way'} onClick={() => setTripType('one-way')} className="af-choice">One way</button><button type="button" aria-pressed={tripType === 'round-trip'} onClick={() => setTripType('round-trip')} className="af-choice">Round trip</button></div>
     <div className="af-widget-grid" data-return={tripType === 'round-trip' ? 'true' : undefined}>
-      <div className="af-field af-icon-field"><span className="af-field-label">From</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination(reachable[0] ?? '') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code" />}</div>
+      <div className="af-field af-icon-field"><span className="af-field-label">From</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination('') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code" />}</div>
       <button type="button" aria-label="Swap origin and destination" disabled={!canSwap} onClick={() => { setOrigin(destination); setDestination(origin) }} className="af-swap"><ArrowLeftRight aria-hidden="true" className="size-5" /></button>
       <div className="af-field af-icon-field"><span className="af-field-label">To</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Destination airport" name="destinationCode" value={destination} onValueChange={setDestination} required placeholder="Select a destination" className="af-input af-trigger" options={destinations.map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code" />}</div>
       <div className="af-field"><span className="af-field-label">Depart</span><PlatformDateInput aria-label="Departure date" name="serviceDate" value={departDate} onChange={setDepartDate} required placeholder="Select date" className="af-input af-trigger" /></div>
@@ -476,7 +477,6 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       </div>
       <button disabled={busy} className="af-pill af-pill-primary af-widget-submit">{busy ? 'Searching…' : <>Find flights<ArrowRight aria-hidden="true" /></>}</button>
     </div>
-    <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem] text-[var(--af-ink-3)] [&>span+span]:before:mr-4 [&>span+span]:before:text-[var(--af-line-2)] [&>span+span]:before:content-['/']">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
   </form>
   const inWidget = Boolean(hero)
   const manageBlock = <>
@@ -532,6 +532,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       </div>
     </section>}
     {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-table space-y-4">
+    <p className="flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem] text-[var(--af-ink-3)] [&>span+span]:before:mr-4 [&>span+span]:before:text-[var(--af-line-2)] [&>span+span]:before:content-['/']">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
       <p className="af-results-head">{returnSearch && <><span className="font-semibold">{leg === 'return' ? 'Return' : 'Outbound'}</span><span aria-hidden="true" className="af-sep" /></>}{airportCity(flights[0].originCode)} {flights[0].originCode} to {airportCity(flights[0].destinationCode)} {flights[0].destinationCode}<span aria-hidden="true" className="af-sep" />{shortDate.format(new Date(`${flights[0].serviceDate}T00:00:00.000Z`))}, <span className="capitalize">{flights[0].passengerCount} passenger{flights[0].passengerCount === 1 ? '' : 's'}</span></p>
       {flights.map(flight => {
         const duration = flightDuration(flight.scheduledDepartureAt, flight.scheduledArrivalAt)
