@@ -228,6 +228,32 @@ export type CreateOfferResult = {
   replayed: boolean
 }
 
+/**
+ * The active fare rule for a fare brand on this flight: a rule for the flight's route wins over a brand-wide one;
+ * among equals the most recently effective wins. Only rules in force for the sale and travel dates count.
+ */
+async function applicableFareRule(prisma: any, carrierId: string, fareBrandId: string, flight: { id: string; scheduledDepartureAt: string }) {
+  const now = new Date()
+  const departure = new Date(flight.scheduledDepartureAt)
+  const route = await prisma.flightInstance.findUnique({ where: { id: flight.id }, select: { routeId: true } })
+  const rules = await prisma.fareRule.findMany({
+    where: {
+      carrierId, fareBrandId, status: 'active',
+      OR: [{ routeId: null }, ...(route?.routeId ? [{ routeId: route.routeId }] : [])],
+      AND: [
+        { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }] },
+        { OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }] },
+        { OR: [{ travelFrom: null }, { travelFrom: { lte: departure } }] },
+        { OR: [{ travelTo: null }, { travelTo: { gte: departure } }] },
+      ],
+    },
+    orderBy: [{ effectiveFrom: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+    take: 20,
+    select: { id: true, routeId: true },
+  })
+  return rules.find((rule: any) => rule.routeId) ?? rules[0] ?? null
+}
+
 export async function createOfferInTransaction(
   args: CreateOfferArgs,
   context: Context,
@@ -323,6 +349,7 @@ export async function createOfferInTransaction(
       },
       query: 'id offerNumber status',
     })
+    const fareRule = bucket.fareBrand ? await applicableFareRule(context.prisma, carrierId, bucket.fareBrand.id, bucket.flightInstance) : null
     const item = await sudo.query.OfferItem.createOne({
       data: {
         carrier: { connect: { id: carrierId } }, offer: { connect: { id: offer.id } },
@@ -335,6 +362,7 @@ export async function createOfferInTransaction(
         flightInstance: { connect: { id: bucket.flightInstance.id } },
         inventoryBucket: { connect: { id: bucket.id } },
         fareBrand: bucket.fareBrand ? { connect: { id: bucket.fareBrand.id } } : undefined,
+        fareRule: fareRule ? { connect: { id: fareRule.id } } : undefined,
         passengerReferences: passengerIds,
         segmentSnapshot: { cabinCode: bucket.cabin.code, bookingClassCode: bucket.bookingClassCode, fareBrandCode: bucket.fareBrand?.code ?? bucket.bookingClassCode, fareBasisCode: bucket.fareBrand?.code ?? bucket.bookingClassCode, includedBaggage: normalizeIncludedBaggageSnapshot(bucket.fareBrand?.includedBaggage) },
         productSnapshot: { code: bucket.fareBrand?.code ?? bucket.bookingClassCode, name: bucket.fareBrand?.name ?? bucket.bookingClassCode },
