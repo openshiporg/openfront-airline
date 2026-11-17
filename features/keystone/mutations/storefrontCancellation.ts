@@ -5,7 +5,7 @@ import { formatMinorUnits } from '../lib/money'
 import { hashStorefrontToken, withStorefrontSession } from '../lib/storefront-session'
 import { runSerializableTransaction } from '../lib/transactions'
 import { quoteCustomerCancellation, type CancellationQuote } from '../../airline/lib/cancellation-policy'
-import { cancelBookingInTransaction, normalizeIdempotencyKey } from './airlineOperations'
+import { cancelBookingInTransaction, cancellationBlockersBeforeRefund, normalizeIdempotencyKey } from './airlineOperations'
 import { processBookingRefundInTransaction } from './airlineWorkflows'
 import { sendBookingNotice } from '../lib/booking-notices'
 import { ownedBooking } from './storefront'
@@ -71,6 +71,9 @@ export async function cancelCustomerBookingWithRefund(
 ) {
   const owned = await ownedBooking(context, args.recordLocator, args.accessToken)
   const key = normalizeIdempotencyKey(args.idempotencyKey)
+  // Checked before the card is refunded: a reason the cancel would refuse must never leave a refund with a live ticket.
+  const reason = args.reason?.trim() || 'Traveler cancelled online.'
+  if (reason.length > 500) throw new DomainError('A cancellation reason of at most 500 characters is required.')
   const storefrontContext = withStorefrontSession(context, owned.carrier, owned.id)
   const outcome = await runSerializableTransaction(storefrontContext, async transactionContext => {
     const { booking, quote, cardOnly } = await cancellationFacts(transactionContext.prisma, owned.id)
@@ -78,13 +81,14 @@ export async function cancelCustomerBookingWithRefund(
     if (booking.status === 'cancelled') return { status: 'cancelled', refundAmount: 0, currencyCode: booking.currencyCode, replayed: true }
     if (!offered.allowed) throw new DomainError(offered.summary)
     if (offered.refundAmount > 0) {
+      if ((await cancellationBlockersBeforeRefund(transactionContext.prisma, booking.id)).length) throw new DomainError('This booking can’t be cancelled online. Contact the airline.')
       await processBookingRefundInTransaction(transactionContext, {
         bookingId: booking.id, amount: offered.refundAmount, reason: 'customer_request',
         providerReference: `self-cancel-${booking.recordLocator}-${key.slice(0, 24)}`, idempotencyKey: `${key}:refund`,
       }, { authorize: false, cardOnly: true })
     }
     await cancelBookingInTransaction(transactionContext, {
-      bookingId: booking.id, idempotencyKey: `${key}:cancel`, reason: args.reason?.trim() || 'Traveler cancelled online.',
+      bookingId: booking.id, idempotencyKey: `${key}:cancel`, reason,
       customerBookingId: booking.id, customerAccessTokenHash: hashStorefrontToken(args.accessToken),
     }, booking.id, { refundSettled: offered.refundAmount > 0 })
     return { status: 'cancelled', refundAmount: offered.refundAmount, currencyCode: booking.currencyCode, replayed: false, email: booking.contactEmail, carrier: booking.carrier, recordLocator: booking.recordLocator }

@@ -298,6 +298,28 @@ export async function cancelBooking(
   return runSerializableTransaction(context, transactionContext => cancelBookingInTransaction(transactionContext, args, storefrontBookingId))
 }
 
+/** Blockers a cancel would refuse with, read before any refund is sent so a refund is never left behind a refused cancel. */
+export async function cancellationBlockersBeforeRefund(prisma: any, bookingId: string): Promise<string[]> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      segments: { select: { id: true, status: true } },
+      payments: { select: { status: true, metadata: true } },
+      tickets: { include: { coupons: { include: { serviceObligation: true } } } },
+      checkIns: { include: { boardingPasses: { select: { id: true, status: true } } } },
+      seatAssignments: { select: { id: true, status: true, amount: true } },
+      bags: { select: { id: true } },
+    },
+  })
+  if (!booking) return ['booking not found']
+  const activeAncillaryCouponCount = await prisma.electronicMiscCoupon.count({
+    where: { document: { bookingId }, OR: [{ status: { in: ['open', 'used'] } }, { status: null }] },
+  })
+  const blockers = cancellationArtifactBlockers({ segments: booking.segments, tickets: booking.tickets, checkIns: booking.checkIns, seatAssignments: booking.seatAssignments, bagCount: booking.bags.length, activeAncillaryCouponCount })
+  if (booking.payments.some((payment: any) => (payment.metadata as any)?.purchaseKind === 'seat' && ['captured', 'partially_refunded'].includes(payment.status))) blockers.push('paid seat')
+  return blockers
+}
+
 // The cancellation inside the caller's transaction. `refundSettled` is set only by the traveler's self-service
 // cancel after it refunded the card in the same transaction under the fare policy, so retained fare (a cancellation
 // fee) does not block the cancel the refund was for.
