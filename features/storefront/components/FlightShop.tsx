@@ -77,7 +77,7 @@ function formatServiceDay(value: string) {
 }
 
 function seatSelectionOpen(booking: { status: string; paymentStatus: string; ticketingStatus: string }) {
-  return ['ticketed', 'in_progress'].includes(booking.status) && booking.paymentStatus === 'paid' && booking.ticketingStatus === 'ticketed'
+  return ['ticketed', 'in_progress'].includes(booking.status) && ['paid', 'partially_refunded'].includes(booking.paymentStatus) && booking.ticketingStatus === 'ticketed'
 }
 
 // Airport-local time with an explicit zone, so travelers outside the carrier timezone read the right date.

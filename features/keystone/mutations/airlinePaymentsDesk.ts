@@ -5,6 +5,7 @@ import { requireFreshCarrierPermission, requireFreshPermission } from '../access
 import { isEvidenceOnlyManualProvider } from '../lib/bounded-payment-policy'
 import { DomainError } from '../lib/domain-error'
 import { expireUnpaidBookings } from '../../integrations/booking-expiry'
+import { settleStoredCheckouts } from './storefrontPayments'
 import { reapExpiredInventoryHolds } from '../../integrations/hold-reaper'
 import { hashStorefrontToken } from '../lib/storefront-session'
 import { normalizeIdempotencyKey } from './airlineOperations'
@@ -81,6 +82,7 @@ export async function refreshAirlineClocks(_root: unknown, _args: Record<string,
   await requireFreshPermission(context, 'canManageBookings')
   const prisma = context.prisma as any
   const holds = await reapExpiredInventoryHolds(prisma, 1_000)
-  const bookings = await expireUnpaidBookings(prisma, 100)
+  const unsettled = await settleStoredCheckouts(context)
+  const bookings = await expireUnpaidBookings(prisma, 100, undefined, [...unsettled])
   return { status: 'refreshed', expiredHolds: holds.expiredHolds, expiredBookings: bookings.expiredBookings, skippedBookings: bookings.skippedBookings }
 }

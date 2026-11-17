@@ -846,7 +846,8 @@ async function createBookingFromOfferInTransaction(
         customer: offer.customer ? { connect: { id: offer.customer.id } } : undefined,
         approvedAgent: offer.approvedAgent ? { connect: { id: offer.approvedAgent.id } } : undefined,
         sourceOffer: { connect: { id: offer.id } }, confirmedAt: isStorefrontContext(context) ? undefined : new Date().toISOString(),
-        metadata: isStorefrontContext(context) ? { paymentDueAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), settlementMode: 'external_evidence' } : {},
+        // An unpaid hold lasts 24 hours, and never past the first departure.
+        metadata: isStorefrontContext(context) ? { paymentDueAt: new Date(Math.min(Date.now() + 24 * 60 * 60_000, ...offer.items.map((item: any) => Date.parse(item.flightInstance?.scheduledDepartureAt ?? '')).filter(Number.isFinite))).toISOString(), settlementMode: 'external_evidence' } : {},
       },
       query: 'id recordLocator orderNumber status',
     })

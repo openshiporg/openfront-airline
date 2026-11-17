@@ -11,6 +11,9 @@ export type DatedFlightEligibilityState = {
 
 const passengerProcessingFlightStatuses = new Set(['scheduled', 'open_for_sale', 'closed_for_sale', 'delayed'])
 
+/** A partial refund (goodwill, a fee returned) leaves the booking paid for travel. */
+export const isPaidForService = (paymentStatus: unknown) => paymentStatus === 'paid' || paymentStatus === 'partially_refunded'
+
 function timestamp(value: Date | string | null | undefined): number | null {
   if (value == null) return null
   const result = value instanceof Date ? value.getTime() : new Date(value).getTime()
@@ -94,7 +97,7 @@ export function assertPassengerServiceTransition(
   now = new Date(),
 ): void {
   const { booking, segment, flight, bookingPassenger, ticket, coupon, obligation, checkIn, boardingPass, seatAssignment } = state
-  if (!['ticketed', 'in_progress'].includes(String(booking.status)) || booking.paymentStatus !== 'paid' || booking.ticketingStatus !== 'ticketed') {
+  if (!['ticketed', 'in_progress'].includes(String(booking.status)) || !isPaidForService(booking.paymentStatus) || booking.ticketingStatus !== 'ticketed') {
     throw new DomainError('Passenger service requires an active, paid, ticketed booking.')
   }
   if (segment.bookingId !== booking.id || segment.flightInstanceId !== flight.id || !['checked_in', 'boarded', ...(action === 'offload' ? ['disrupted'] : [])].includes(String(segment.status))) {

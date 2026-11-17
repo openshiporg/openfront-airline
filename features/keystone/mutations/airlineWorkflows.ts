@@ -22,7 +22,7 @@ import { hasCurrentStorefrontBookingAccess, isStorefrontContext } from '../lib/s
 import { normalizeIncludedBaggageSnapshot } from '../lib/snapshots'
 import { createServiceObligationKey } from '../lib/coupon-lineage'
 import { checkedMinorTotal } from '../lib/money'
-import { assertDatedFlightEligibleForAction, selectCurrentTicketableSegments, ticketIssuanceArtifactBlockers, type DatedFlightEligibilityState, type TicketableSegmentState } from '../lib/service-eligibility'
+import { assertDatedFlightEligibleForAction, isPaidForService, selectCurrentTicketableSegments, ticketIssuanceArtifactBlockers, type DatedFlightEligibilityState, type TicketableSegmentState } from '../lib/service-eligibility'
 import { DomainError } from '../lib/domain-error'
 import { travelDocumentTokenizationKey } from '../lib/travel-document-key'
 import { travelDocumentsRequired } from '../../airline/lib/travel-documents'
@@ -970,7 +970,7 @@ export async function checkInBookingPassenger(
     const request = { bookingPassengerId: args.bookingPassengerId, bookingSegmentId: args.bookingSegmentId, seatId: args.seatId ?? null }
     const inspected = await inspectOperation(sudo, booking.carrier.id, key, 'check-in.create', request)
     if (inspected.replay) return { ...(inspected.replay.result ?? {}), replayed: true } as WorkflowResult
-    if (!['ticketed', 'in_progress'].includes(currentBooking.status) || currentBooking.paymentStatus !== 'paid' || currentBooking.ticketingStatus !== 'ticketed') throw new DomainError('Booking must have a current paid ticket before check-in.')
+    if (!['ticketed', 'in_progress'].includes(currentBooking.status) || !isPaidForService(currentBooking.paymentStatus) || currentBooking.ticketingStatus !== 'ticketed') throw new DomainError('Booking must have a current paid ticket before check-in.')
     if (!['confirmed', 'checked_in', 'offloaded', 'boarded'].includes(currentSegment.status)) throw new DomainError('Segment is not eligible for check-in.')
     assertDatedFlightEligibleForAction(currentSegment.flightInstance, 'Check-in', new Date())
     const previousCheckIn = await (transactionContext.prisma as any).checkIn.findFirst({
@@ -1131,7 +1131,7 @@ export async function acceptCheckedBag(
     const request = { bookingPassengerId: args.bookingPassengerId, flightInstanceId: args.flightInstanceId, weightGrams: args.weightGrams }
     const inspected = await inspectOperation(sudo, flight.carrierId, key, 'bag.accept', request)
     if (inspected.replay) return { ...(inspected.replay.result ?? {}), replayed: true } as WorkflowResult
-    if (bookingPassenger.booking.paymentStatus !== 'paid' || bookingPassenger.booking.ticketingStatus !== 'ticketed' || !['ticketed', 'in_progress'].includes(bookingPassenger.booking.status)) throw new DomainError('Booking is not eligible for new bag acceptance.')
+    if (!isPaidForService(bookingPassenger.booking.paymentStatus) || bookingPassenger.booking.ticketingStatus !== 'ticketed' || !['ticketed', 'in_progress'].includes(bookingPassenger.booking.status)) throw new DomainError('Booking is not eligible for new bag acceptance.')
     assertDatedFlightEligibleForAction(flight, 'Checked-bag acceptance', new Date())
     const segment = await (transactionContext.prisma as any).bookingSegment.findFirst({
       where: { bookingId: bookingPassenger.bookingId, flightInstanceId: flight.id, status: { in: ['confirmed', 'checked_in', 'boarded', 'offloaded'] } },

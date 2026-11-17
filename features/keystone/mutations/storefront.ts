@@ -9,13 +9,13 @@ import { runSerializableTransaction, throwIfKeystonePrismaError } from '../lib/t
 import { publicBookingReceipt } from '../lib/booking-acceptance'
 import { beginOperation, cancelBooking, createBookingFromOffer, finishOperation, inspectOperation, normalizeIdempotencyKey, writeAudit } from './airlineOperations'
 import { checkInBookingPassenger, createOfferInTransaction, normalizeSearchDate, searchAirlineFlights, validatePassengerCount, type CreateOfferResult } from './airlineWorkflows'
-import { assertDatedFlightEligibleForAction } from '../lib/service-eligibility'
+import { assertDatedFlightEligibleForAction, isPaidForService } from '../lib/service-eligibility'
 import { hasConfiguredStorefrontBrand, normalizeStorefrontBrandColor } from '../../airline/lib/branding'
 import { DomainError } from '../lib/domain-error'
 import { hasAccompanyingAdult, travelerDateOfBirth } from '../lib/passenger-age'
 import { accessRecoveryEnabled, emailBookingAccess } from './storefrontAccess'
 import { expireUnpaidBookings } from '../../integrations/booking-expiry'
-import { onlinePaymentEnabled } from './storefrontPayments'
+import { onlinePaymentEnabled, settleStoredCheckouts } from './storefrontPayments'
 
 // Creation budgets are charged only for admitted new work (and failed proofs), after the exact accepted command has
 // been looked up: replays and read-only recovery of an ambiguous outcome never consume them.
@@ -447,7 +447,7 @@ export async function assignCustomerSeat(
     if (inspected.replay) return { ...(inspected.replay.result ?? {}), replayed: true }
     // Ticket issuance refuses bookings with seat artifacts, so customers choose seats only once the booking is paid
     // and ticketed, the same state check-in requires.
-    if (!['ticketed', 'in_progress'].includes(currentBooking.status) || currentBooking.paymentStatus !== 'paid' || currentBooking.ticketingStatus !== 'ticketed') {
+    if (!['ticketed', 'in_progress'].includes(currentBooking.status) || !isPaidForService(currentBooking.paymentStatus) || currentBooking.ticketingStatus !== 'ticketed') {
       throw new DomainError('Seat selection is available after your ticket is issued.')
     }
     const segment = await (transactionContext.prisma as any).bookingSegment.findFirst({ where: { id: args.bookingSegmentId, bookingId: booking.id }, include: { flightInstance: true } })
@@ -512,8 +512,10 @@ export async function getCustomerBooking(
   // An unpaid booking past its payment deadline is released on the request that reads it (no background timer).
   const dueAt = Date.parse(booking.metadata?.paymentDueAt ?? '')
   if (booking.status === 'pending' && ['unpaid', 'failed'].includes(booking.paymentStatus) && Number.isFinite(dueAt) && dueAt <= Date.now()) {
-    const { expiredBookings } = await expireUnpaidBookings(context.prisma as any, 1, booking.id)
-    if (expiredBookings) booking = await ownedBooking(context, args.recordLocator, args.accessToken)
+    // A stored Checkout session is settled first: a paid one keeps the booking, a Stripe error leaves it for the next read.
+    const unsettled = await settleStoredCheckouts(context, booking.id)
+    if (!unsettled.size) await expireUnpaidBookings(context.prisma as any, 1, booking.id)
+    booking = await ownedBooking(context, args.recordLocator, args.accessToken)
   }
   const retained = await (context.prisma as any).idempotencyKey.findUnique({ where: { key: booking.idempotencyKey }, select: { scope: true, carrierId: true, status: true, result: true } })
   let bookingReceipt: Record<string, unknown> = { version: 0, state: 'legacy_or_incomplete', message: 'Original acceptance receipt needs operator reconciliation; current booking state remains separately shown.' }

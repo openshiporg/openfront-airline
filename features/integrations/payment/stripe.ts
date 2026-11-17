@@ -53,6 +53,7 @@ export function createStripeCheckoutSession(secretKey: string, input: {
   successUrl: string
   cancelUrl: string
   idempotencyKey: string
+  expiresAt?: number
 }) {
   return stripeRequest<StripeCheckoutSession>(secretKey, '/checkout/sessions', {
     method: 'POST',
@@ -70,8 +71,20 @@ export function createStripeCheckoutSession(secretKey: string, input: {
       customer_email: input.customerEmail || undefined,
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
+      expires_at: input.expiresAt,
     }),
   })
+}
+
+/** Close an open Checkout session so it can no longer be paid. Stripe refuses this for a completed session. */
+export function expireStripeCheckoutSession(secretKey: string, sessionId: string) {
+  if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) throw new Error('Checkout session is invalid.')
+  return stripeRequest<StripeCheckoutSession>(secretKey, `/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, { method: 'POST' })
+}
+
+/** Refund a whole payment that arrived for a booking that can no longer take it. */
+export function refundStripePaymentIntent(secretKey: string, paymentIntentId: string, idempotencyKey: string) {
+  return stripeRequest<{ id: string; status: string }>(secretKey, '/refunds', { method: 'POST', idempotencyKey, body: form({ payment_intent: paymentIntentId, 'metadata[reason]': 'booking_unavailable' }) })
 }
 
 export function retrieveStripeCheckoutSession(secretKey: string, sessionId: string) {
