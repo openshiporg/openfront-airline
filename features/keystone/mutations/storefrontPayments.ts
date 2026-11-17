@@ -48,6 +48,7 @@ const BOOKING_SELECT = {
 } as const
 
 const STRIPE_MIN_EXPIRY_MS = 31 * 60_000
+const STRIPE_MAX_EXPIRY_MS = (24 * 60 - 5) * 60_000
 
 async function payableBooking(context: Context, carrierCode: string, recordLocator: string, accessToken: string) {
   if (!await isConfiguredPublicCarrier((context as any).prisma, carrierCode)) throw new DomainError('Carrier is unavailable on this storefront.')
@@ -94,8 +95,9 @@ export async function startCustomerCheckout(
   const firstDeparture = Math.min(...current.map((segment: any) => Date.parse(segment.flightInstance?.scheduledDepartureAt ?? '')).filter(Number.isFinite))
   // A Checkout session stays open at least 30 minutes, so online payment closes that long before departure.
   if (!(firstDeparture > Date.now() + STRIPE_MIN_EXPIRY_MS)) throw new DomainError('Online payment has closed for this flight. Contact the airline.')
-  const closesAt = Math.min(Number.isFinite(dueAt) ? dueAt : Infinity, firstDeparture, Date.now() + 24 * 60 * 60_000)
-  const expiresAt = Math.ceil(Math.max(closesAt, Date.now() + STRIPE_MIN_EXPIRY_MS) / 60_000) * 60
+  // Stripe takes an expiry between 30 minutes and 24 hours out.
+  const closesAt = Math.min(Number.isFinite(dueAt) ? dueAt : Infinity, firstDeparture, Date.now() + STRIPE_MAX_EXPIRY_MS)
+  const expiresAt = Math.floor(Math.max(closesAt, Date.now() + STRIPE_MIN_EXPIRY_MS) / 60_000) * 60
   await consumeDurableRateLimit(context.prisma as any, 'storefront.checkout.client', durableRequestFingerprint((context as any).req ?? {}), 20, 15 * 60_000)
   const origin = storefrontOrigin(context)
   const locator = encodeURIComponent(booking.recordLocator)
