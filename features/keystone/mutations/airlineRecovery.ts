@@ -43,8 +43,11 @@ export async function publishFlightDisruption(
       : args.type === 'delay'
         ? assertLifecycleTransition('flightInstance', flight.status, 'delayed')
         : null
+    // Only a disruption the passenger cannot fly through takes the segment out of service; a delay, schedule or
+    // equipment change leaves check-in and boarding open on a flight that still operates.
+    const segmentsDisrupted = ['cancellation', 'misconnection', 'diversion'].includes(args.type)
     const affected = (flight.bookingSegments ?? []).filter((segment: any) =>
-      ['confirmed', 'checked_in', 'offloaded'].includes(segment.status)
+      segmentsDisrupted && ['confirmed', 'checked_in', 'offloaded'].includes(segment.status)
       && !(segment.booking?.passengers ?? []).every((passenger: any) =>
         (segment.checkIns ?? []).some((checkIn: any) => checkIn.bookingPassenger?.id === passenger.id && checkIn.status === 'boarded'),
       ),
