@@ -28,12 +28,12 @@ export default async function ContactPage() {
       </section>
       <section className="af-card p-5 sm:p-6">
         <h2 className="text-xl font-semibold">Customer service</h2>
-        {carrier?.storefrontContactPhone || carrier?.storefrontContactEmail ? <dl className="mt-3 space-y-3">
-          {carrier.storefrontContactPhone && <div><dt className="af-field-label">Phone</dt><dd><a href={`tel:${carrier.storefrontContactPhone.replace(/[^+0-9]/g, '')}`} className="af-mono text-xl font-semibold hover:text-[var(--af-accent)]">{carrier.storefrontContactPhone}</a></dd></div>}
-          {carrier.storefrontContactEmail && <div><dt className="af-field-label">Email</dt><dd><a href={`mailto:${carrier.storefrontContactEmail}`} className="break-all font-semibold hover:text-[var(--af-accent)]">{carrier.storefrontContactEmail}</a></dd></div>}
-          {carrier.storefrontServiceHours && <div><dt className="af-field-label">Hours</dt><dd className="text-sm">{carrier.storefrontServiceHours}</dd></div>}
-        </dl> : <p className="mt-3 text-2xl font-medium tracking-[-0.01em]">Airport service desk</p>}
-        <p className="af-mono mt-4 text-xs text-[var(--af-ink-3)]">{carrier?.legalName ?? ''}</p>
+        <dl className="mt-3 space-y-4">
+          <div><dt className="af-field-label">Email</dt><dd><a href="mailto:hello@openship.org" className="break-all font-semibold hover:text-[var(--af-accent)]">hello@openship.org</a></dd></div>
+          <div><dt className="af-field-label">Airport service desk</dt><dd className="text-sm leading-6">Avante Air at New York JFK. Check your flight information for the departure terminal; ask airport information for the airline service desk.</dd></div>
+          <div><dt className="af-field-label">Desk hours</dt><dd className="text-sm leading-6">From 3 hours before each Avante Air departure until that flight departs, in New York local time. For help outside departure hours, email us.</dd></div>
+        </dl>
+        <p className="af-mono mt-4 text-xs text-[var(--af-ink-3)]">Avante Air LLC</p>
         <p className="af-title-line mt-6 text-sm font-medium"><span className="af-dot" data-tone="warn" />We never ask for your card number or password.</p>
       </section>
     </div>
