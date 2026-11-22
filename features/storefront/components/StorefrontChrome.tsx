@@ -11,7 +11,7 @@ import { StorefrontMenu } from './StorefrontMenu'
 import { storefrontBrandPalette } from '@/features/storefront/lib/theme'
 import { DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '@/features/platform/store-settings/lib/store-logo'
 
-export type StorefrontRoute = (typeof publicNavigation)[number]['href']
+export type StorefrontRoute = (typeof publicNavigation)[number]['href'] | '/account'
 
 // The carrier's saved logo icon, shown beside its name with the saved hue.
 type CarrierLogo = { logoIcon?: string | null; logoColor?: string | null }
@@ -39,12 +39,13 @@ export function CarrierMark({ carrier, className, wingClassName }: { carrier: Ca
 // Shown before any carrier exists, so the storefront always has a working header and footer.
 const NEUTRAL_IDENTITY = { name: 'Flights', code: '', legalName: '' }
 
-// Trips live under the traveler mark on the right; everything else sits in the centre of the header.
-const TRIPS_ROUTE = '/manage-booking'
+// The traveler's account (sign in, My trips) lives under the traveler mark on the right; everything else sits in the
+// centre of the header.
+const TRIPS_ROUTE = '/account'
 // The header carries the four main services; the full list stays in the phone menu and the footer.
 const centreNavigation = (carrierName: string) => [
   { href: '/', label: 'Book' },
-  { href: TRIPS_ROUTE, label: 'Manage' },
+  { href: '/manage-booking', label: 'Manage' },
   { href: '/status', label: 'Flight Status' },
   { href: '/#experience', label: `The ${carrierName.split(' ')[0]} Experience` },
 ] as const

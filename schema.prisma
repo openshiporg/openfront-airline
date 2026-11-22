@@ -1794,6 +1794,22 @@ model RateLimitBucket {
   @@index([expiresAt])
 }
 
+model CustomerAccount {
+  id             String   @id @default(cuid())
+  accountKey     String   @unique @default("")
+  carrierCode    String   @default("")
+  email          String   @default("")
+  passwordHash   String   @default("")
+  emailVerified  Boolean  @default(false)
+  sessionVersion Int      @default(1)
+  givenName      String   @default("")
+  familyName     String   @default("")
+  dateOfBirth    String   @default("")
+  phone          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+}
+
 model IdempotencyKey {
   id              String                    @id @default(cuid())
   carrier         Carrier?                  @relation("IdempotencyKey_carrier", fields: [carrierId], references: [id])

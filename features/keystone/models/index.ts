@@ -39,6 +39,7 @@ import { ProviderConnection } from './ProviderConnection'
 import { Reaccommodation } from './Reaccommodation'
 import { Refund } from './Refund'
 import { RateLimitBucket } from './RateLimitBucket'
+import { CustomerAccount } from './CustomerAccount'
 import { Role } from './Role'
 import { Route } from './Route'
 import { Seat } from './Seat'
@@ -113,6 +114,7 @@ const rawModels = {
   MachineCredential,
   OnboardingStep,
   RateLimitBucket,
+  CustomerAccount,
   IdempotencyKey,
   AuditEvent,
 }

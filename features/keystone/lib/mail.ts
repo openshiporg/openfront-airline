@@ -1,6 +1,6 @@
 import { createTransport, getTestMessageUrl } from "nodemailer";
 import { hashStorefrontToken, signBookingPass } from "./storefront-session";
-import { emailButton, emailHeading, emailLayout, emailMuted, emailPanel, emailParagraph, emailTotals } from "./email-layout";
+import { emailButton, emailHeading, emailLayout, emailMuted, emailPanel, emailParagraph, emailTotals, storeNameFromEnv } from "./email-layout";
 
 // Public origin for links in emails: SMTP_STORE_LINK when set, otherwise the Railway-provided public domain.
 function getBaseUrlForEmails(): string {
@@ -118,14 +118,15 @@ export async function sendBookingConfirmationEmail(booking: BookingConfirmation)
     return false
   }
   try {
-    // The access code rides in the fragment, which browsers never send to a server, so the link opens the booking in one tap.
+    // A signed booking pass rides in the fragment, which browsers never send to a server, so the link opens the booking in one tap.
     const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(booking.recordLocator)}#pass=${encodeURIComponent(signBookingPass(hashStorefrontToken(booking.accessToken)))}`
-    await transport.sendMail({
+    const info = await transport.sendMail({
       to: booking.to,
       from: process.env.SMTP_FROM,
       subject: `${safeCarrierName(booking.carrierName)} reservation ${booking.recordLocator}`,
       html: bookingConfirmationEmail(booking, manageUrl),
     })
+    console.log(`Booking confirmation for ${booking.recordLocator} accepted by mail server: ${info.messageId} ${String(info.response ?? '').slice(0, 80)}`)
     return true
   } catch (error) {
     console.error(`Booking confirmation for ${booking.recordLocator} could not be emailed:`, error instanceof Error ? error.message : 'unknown error')
@@ -158,6 +159,37 @@ export async function sendBookingNoticeEmail(notice: BookingNotice): Promise<boo
     return true
   } catch (error) {
     console.error(`Booking notice for ${notice.recordLocator} could not be emailed:`, error instanceof Error ? error.message : 'unknown error')
+    return false
+  }
+}
+
+// Storefront traveler account emails: confirm the address (which shows the account's trips) or reset the password.
+export async function sendCustomerAccountEmail(input: { to: string; kind: 'verify' | 'reset'; token: string; carrierName?: string | null }): Promise<boolean> {
+  if (!emailConfigured()) {
+    console.warn('Account email not sent: SMTP is not configured.')
+    return false
+  }
+  const name = safeCarrierName(input.carrierName ?? storeNameFromEnv())
+  const verify = input.kind === 'verify'
+  const url = `${getBaseUrlForEmails()}/account?${verify ? 'confirm' : 'reset'}=${encodeURIComponent(input.token)}`
+  try {
+    const info = await transport.sendMail({
+      to: input.to,
+      from: process.env.SMTP_FROM,
+      subject: verify ? `Confirm your ${name} account` : `Reset your ${name} password`,
+      html: emailLayout({
+        storeName: name,
+        preheader: verify ? 'Confirm your email to see your trips' : 'Choose a new password',
+        title: verify ? 'Confirm your email' : 'Reset your password',
+        body: `${emailParagraph(verify ? 'Confirm this email address to see every trip booked with it under My trips.' : 'Use the button below to choose a new password. If you didn’t ask for this, ignore this email.')}
+${emailButton(verify ? 'Confirm email' : 'Choose a new password', url)}
+${emailParagraph('This link works for one hour.')}`,
+      }),
+    })
+    console.log(`Account ${input.kind} email accepted by mail server: ${info.messageId}`)
+    return true
+  } catch (error) {
+    console.error(`Account ${input.kind} email could not be sent:`, error instanceof Error ? error.message : 'unknown error')
     return false
   }
 }

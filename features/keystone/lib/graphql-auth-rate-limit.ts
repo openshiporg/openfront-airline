@@ -4,6 +4,8 @@ const sensitiveAuthenticationFields = new Set([
   'authenticateUserWithPassword',
   'sendUserPasswordResetLink',
   'redeemUserPasswordResetToken',
+  'signInCustomer',
+  'sendCustomerAccountLink',
 ])
 
 export function invokesSensitiveAuthentication(document: DocumentNode) {

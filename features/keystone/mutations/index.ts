@@ -21,6 +21,7 @@ import { cancelCustomerBookingWithRefund, customerCancellationQuote } from './st
 import { recordBagEvent, registerAirport, updateFlightOperations } from './airlineOperationsControl'
 import { recordReceivedPayment, refreshAirlineClocks, reissueBookingAccessCode } from './airlinePaymentsDesk'
 import { completeCustomerCheckout, settleBookingCheckout, startBookingCheckout, startCustomerCheckout } from './storefrontPayments'
+import { confirmCustomerEmail, customerAccount, customerTrips, resetCustomerPassword, sendCustomerAccountLink, signInCustomer, signOutCustomer, signUpCustomer, updateCustomerTraveler } from './customerAccounts'
 import { openCustomerBooking, assignCustomerSeat, cancelCustomerBooking, checkInCustomerBooking, createCustomerBooking, createCustomerOffer, getCustomerBooking, getPublicCarrierIdentity, publicAirlineFlightOptions, publicFlightStatuses, rotateCustomerBookingAccessToken } from './storefront'
 import { publishFlightDisruption, reaccommodateBooking } from './airlineRecovery'
 import { boardBookingPassenger, departureManifest, offloadBookingPassenger } from './airlineDepartures'
@@ -153,6 +154,34 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         disruption: PublicFlightDisruption
       }
 
+      type CustomerAccountProfile {
+        email: String!
+        emailVerified: Boolean!
+        givenName: String!
+        familyName: String!
+        dateOfBirth: String!
+        phone: String!
+      }
+
+      type CustomerTripSegment {
+        originCode: String!
+        destinationCode: String!
+        flightNumber: String!
+        departureAt: String
+        departureLabel: String
+      }
+
+      type CustomerTrip {
+        recordLocator: String!
+        status: String!
+        paymentStatus: String!
+        ticketingStatus: String!
+        totalAmount: Int!
+        currencyCode: String!
+        pass: String!
+        segments: [CustomerTripSegment!]!
+      }
+
       type CustomerCheckoutSession {
         url: String!
         checkoutSessionId: String!
@@ -251,6 +280,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): [AirlineFlightOption!]!
         customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
         openCustomerBooking(carrierCode: String!, recordLocator: String!, lastName: String!): String!
+        customerAccount: CustomerAccountProfile
+        customerTrips: [CustomerTrip!]!
         customerCancellationQuote(recordLocator: String!, accessToken: String!): CustomerCancellationQuote!
         operatorBookingReceipt(bookingId: ID!): JSON!
         publicCarrierIdentity(carrierCode: String!): PublicCarrierIdentity
@@ -320,6 +351,13 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         startCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!): CustomerCheckoutSession!
         startBookingCheckout(bookingId: ID!): CustomerCheckoutSession!
         settleBookingCheckout(bookingId: ID!): Boolean!
+        signUpCustomer(carrierCode: String!, email: String!, password: String!, givenName: String!, familyName: String!): CustomerAccountProfile!
+        signInCustomer(carrierCode: String!, email: String!, password: String!): CustomerAccountProfile!
+        signOutCustomer: Boolean!
+        updateCustomerTraveler(givenName: String!, familyName: String!, dateOfBirth: String!, phone: String!): CustomerAccountProfile!
+        sendCustomerAccountLink(carrierCode: String!, email: String!, purpose: String!): Boolean!
+        confirmCustomerEmail(token: String!): CustomerAccountProfile!
+        resetCustomerPassword(token: String!, password: String!): CustomerAccountProfile!
         completeCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!, checkoutSessionId: String): CustomerCheckoutResult!
         recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
         refreshAirlineClocks: AirlineClockRefresh!
@@ -466,6 +504,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         redirectToInit,
         customerBooking: getCustomerBooking,
         openCustomerBooking,
+        customerAccount,
+        customerTrips,
         customerCancellationQuote,
         operatorBookingReceipt,
         publicCarrierIdentity: getPublicCarrierIdentity,
@@ -509,6 +549,13 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         startCustomerCheckout,
         startBookingCheckout,
         settleBookingCheckout,
+        signUpCustomer,
+        signInCustomer,
+        signOutCustomer,
+        updateCustomerTraveler,
+        sendCustomerAccountLink,
+        confirmCustomerEmail,
+        resetCustomerPassword,
         completeCustomerCheckout,
         refreshAirlineClocks,
         reissueBookingAccessCode,

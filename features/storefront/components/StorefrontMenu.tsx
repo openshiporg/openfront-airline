@@ -22,7 +22,7 @@ export function StorefrontMenu({ items, current, tripsHref }: { items: ReadonlyA
         </Dialog.Close>)}
       </nav>
       <div className="af-drawer-foot">
-        <Dialog.Close asChild><Link href={tripsHref} className="af-pill af-pill-primary w-full"><UserRound aria-hidden="true" />My trips</Link></Dialog.Close>
+        <Dialog.Close asChild><Link href={tripsHref} aria-current={current === tripsHref ? 'page' : undefined} className="af-pill af-pill-primary w-full"><UserRound aria-hidden="true" />My trips · Sign in</Link></Dialog.Close>
       </div>
     </Dialog.Content>
   </Dialog.Root>

@@ -157,6 +157,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const [editingSearch, setEditingSearch] = useState(false)
   const [earlierConfirmations, setEarlierConfirmations] = useState<Array<{ recordLocator: string; carrierCode: string; token: string }>>([])
   const [travelerValues, setTravelerValues] = useState<TravelerValues[]>([])
+  // A signed-in traveler's saved details fill the lead traveler.
+  useEffect(() => {
+    if (mode !== 'book') return
+    graphql<{ customerAccount: { email: string; givenName: string; familyName: string; dateOfBirth: string; phone: string } | null }>('{customerAccount{email givenName familyName dateOfBirth phone}}', {})
+      .then(data => { const a = data.customerAccount; if (a) setTravelerValues(values => values.length ? values : [{ givenName: a.givenName, familyName: a.familyName, dateOfBirth: a.dateOfBirth, email: a.email, phone: a.phone }]) })
+      .catch(() => {})
+  }, [mode])
   const [recovering, setRecovering] = useState(false)
   const partySize = party.adults + party.children + party.infants
   const destinations = useMemo(() => routes.filter(route => route.origin === origin).map(route => route.destination), [routes, origin])
@@ -507,11 +514,11 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       <h2 className="af-title-line font-semibold"><span className="af-dot" data-tone="warn" />We’re checking your reservation</h2>
       <p>Your request is saved in this tab. Checking never creates a booking, and a retry sends the same request.</p>
       <div className="af-track w-fit"><button disabled={busy} onClick={() => void confirmBooking(true)} className="af-pill af-pill-raised">Check status</button><button disabled={busy} onClick={() => void confirmBooking(false)} className="af-pill">Retry original request</button></div>
-      <p>Don’t book again. If your access code changed, contact the airline.</p>
+      <p>Don’t book again. If this doesn’t clear, contact the airline.</p>
     </section>}
     {earlierConfirmations.map(earlier => <section key={earlier.recordLocator} aria-label={`Outbound reservation ${earlier.recordLocator}`} className="af-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div><p className="af-field-label">Outbound · reservation</p><p className="af-mono mt-1 text-2xl font-semibold tracking-[0.16em]">{earlier.recordLocator}</p></div>
-      <div className="flex min-w-0 items-center gap-2"><code className="af-mono af-well block max-w-[16rem] truncate px-3 py-2 text-xs">{earlier.token}</code><div className="af-track"><button onClick={() => navigator.clipboard.writeText(earlier.token).then(() => setStatus('Access code copied.'), () => setStatus('Copy failed. Select the access code and copy it manually.'))} className="af-pill af-pill-raised af-pill-sm">Copy</button></div></div>
+      <p className="text-sm text-[var(--af-ink-2)]">Open it from Manage booking with this reference and your last name.</p>
     </section>)}
     {confirmation && <section className="af-pass" aria-label={`${carrier.name} reservation confirmation`}>
       <div className="min-w-0">

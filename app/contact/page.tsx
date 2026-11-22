@@ -34,7 +34,7 @@ export default async function ContactPage() {
           {carrier.storefrontServiceHours && <div><dt className="af-field-label">Hours</dt><dd className="text-sm">{carrier.storefrontServiceHours}</dd></div>}
         </dl> : <p className="mt-3 text-2xl font-medium tracking-[-0.01em]">Airport service desk</p>}
         <p className="af-mono mt-4 text-xs text-[var(--af-ink-3)]">{carrier?.legalName ?? ''}</p>
-        <p className="af-title-line mt-6 text-sm font-medium"><span className="af-dot" data-tone="warn" />We never ask for your access code.</p>
+        <p className="af-title-line mt-6 text-sm font-medium"><span className="af-dot" data-tone="warn" />We never ask for your card number or password.</p>
       </section>
     </div>
   </PublicPageShell>

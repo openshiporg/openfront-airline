@@ -7,8 +7,8 @@ import { storefrontPageMetadata } from '@/features/storefront/lib/metadata'
 
 const services = [
   { href: '/status', code: 'STS', title: 'Flight status', needs: 'Flight number · date' },
-  { href: '/manage-booking', code: 'MNG', title: 'Manage booking', needs: 'Booking reference · access code' },
-  { href: '/check-in', code: 'CHK', title: 'Check in', needs: 'Booking reference · access code' },
+  { href: '/manage-booking', code: 'MNG', title: 'Manage booking', needs: 'Booking reference · last name' },
+  { href: '/check-in', code: 'CHK', title: 'Check in', needs: 'Booking reference · last name' },
   { href: '/contact', code: 'CNT', title: 'Contact', needs: 'Airport service desk' },
 ] as const
 
