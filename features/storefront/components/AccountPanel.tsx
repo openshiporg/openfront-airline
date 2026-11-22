@@ -73,7 +73,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
 
   if (!profile) {
     const titles: Record<View, string> = { signin: 'Sign in', signup: 'Create an account', forgot: 'Reset your password', reset: 'Choose a new password' }
-    return <div className="mx-auto grid max-w-md gap-5">
+    return <div className="mx-auto grid w-full max-w-md grid-cols-[minmax(0,1fr)] gap-5">
       {notice}
       <form onSubmit={submit} className="af-card grid gap-4 p-5 sm:p-6">
         <h2 className="text-2xl font-medium tracking-[-0.01em]">{titles[view]}</h2>
@@ -95,7 +95,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
     </div>
   }
 
-  return <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+  return <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
     <section aria-labelledby="trips-title" className="grid min-w-0 gap-4">
       {notice}
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -107,13 +107,13 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
         <p className="text-sm text-[var(--af-ink-2)]">We sent a link to {profile.email}. Trips booked with this email show here once it’s confirmed.</p>
         <div className="af-track w-fit"><button disabled={busy} onClick={() => run(() => graphql(`mutation($c:String!,$e:String!){sendCustomerAccountLink(carrierCode:$c,email:$e,purpose:"verify")}`, { c: carrierCode, e: profile.email }), 'Link sent. Check your inbox.')} className="af-pill af-pill-raised af-pill-sm">Send the link again</button></div>
       </div> : trips.length === 0 ? <div className="af-card p-5 text-sm text-[var(--af-ink-2)]">No trips booked with {profile.email} yet.</div>
-        : <ul className="grid gap-3">{trips.map(trip => {
+        : <ul className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">{trips.map(trip => {
           const state = tripState(trip)
           const first = trip.segments[0]
-          return <li key={trip.recordLocator}><Link href={`/manage-booking?ref=${trip.recordLocator}#pass=${encodeURIComponent(trip.pass)}`} className="af-card group flex min-w-0 items-center gap-4 p-4 transition-colors hover:bg-[var(--af-paper)] sm:p-5">
+          return <li key={trip.recordLocator} className="min-w-0"><Link href={`/manage-booking?ref=${trip.recordLocator}#pass=${encodeURIComponent(trip.pass)}`} className="af-card group flex min-w-0 items-center gap-4 p-4 transition-colors hover:bg-[var(--af-paper)] sm:p-5">
             <div className="min-w-0 flex-1">
               <p className="af-display flex items-center gap-2 text-2xl uppercase">{first?.originCode ?? '—'}<span className="af-path text-[var(--af-ink-3)]" />{trip.segments.at(-1)?.destinationCode ?? '—'}</p>
-              <p className="mt-1 truncate text-sm text-[var(--af-ink-2)]">{first ? `${first.flightNumber} · ${first.departureLabel ?? ''}` : 'No flights'} · <span className="af-mono">{trip.recordLocator}</span></p>
+              <p className="mt-1 text-sm leading-snug text-[var(--af-ink-2)]">{first ? `${first.flightNumber} · ${first.departureLabel ?? ''}` : 'No flights'} · <span className="af-mono">{trip.recordLocator}</span></p>
             </div>
             <div className="shrink-0 text-right">
               <p className="af-title-line justify-end text-sm font-medium"><span className="af-dot" data-tone={state.tone} />{state.label}</p>
@@ -123,7 +123,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
           </Link></li>
         })}</ul>}
     </section>
-    <aside className="grid gap-4">
+    <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
       <form onSubmit={event => { event.preventDefault(); const f = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>; void run(async () => setProfile((await graphql<{ updateCustomerTraveler: Profile }>(`mutation($g:String!,$f:String!,$d:String!,$p:String!){updateCustomerTraveler(givenName:$g,familyName:$f,dateOfBirth:$d,phone:$p){${PROFILE}}}`, { g: f.givenName, f: f.familyName, d: f.dateOfBirth, p: f.phone })).updateCustomerTraveler), 'Saved. We’ll fill these in when you book.') }} className="af-card grid gap-3 p-5">
         <h2 className="text-lg font-semibold">Traveler details</h2>
         <p className="-mt-1 text-sm text-[var(--af-ink-2)]">Filled in for you when you book.</p>
