@@ -75,3 +75,19 @@ export function visiblePlatformItems<T extends { href: string }>(
     return !slug || (!hiddenPaths.has(slug) && canUsePlatformPage(slug, user))
   })
 }
+
+/**
+ * Where a staff member lands on /dashboard: the one desk their role works at. Admins (role managers), onboarding
+ * owners and roles that span more than one desk stay on the operations overview (null).
+ */
+export function staffLandingPath(user: SidebarUser): string | null {
+  const role = user?.role
+  if (!role || role.canManageRoles || role.canManageOnboarding) return null
+  const desks = [
+    role.canManageBookings ? '/dashboard/platform/bookings' : null,
+    role.canManageAirportService ? '/dashboard/platform/departures' : null,
+    role.canManagePayments ? '/dashboard/platform/payments' : null,
+    role.canManageNetwork ? '/dashboard/platform/flight-ops' : null,
+  ].filter((desk): desk is string => !!desk)
+  return desks.length === 1 ? desks[0] : null
+}

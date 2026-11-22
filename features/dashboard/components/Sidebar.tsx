@@ -141,10 +141,10 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isLinkActive('/dashboard')}>
-                <Link href="/dashboard" onClick={() => setOpenMobile(false)}>
+              <SidebarMenuButton asChild isActive={isLinkActive('/dashboard') || pathname === '/dashboard/operations'}>
+                <Link href="/dashboard/operations" onClick={() => setOpenMobile(false)}>
                   <Home className="h-4 w-4" />
-                  <span>Dashboard</span>
+                  <span>Overview</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
