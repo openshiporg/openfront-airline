@@ -19,4 +19,5 @@ export function startCheckoutReconcile() {
   state.__airlineCheckoutReconcile = setInterval(run, EVERY_MS)
   state.__airlineCheckoutReconcile.unref?.()
   setTimeout(run, 15_000).unref?.()
+  console.log('Checkout reconcile started: every 60s')
 }

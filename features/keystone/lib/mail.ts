@@ -1,4 +1,5 @@
 import { createTransport, getTestMessageUrl } from "nodemailer";
+import { hashStorefrontToken, signBookingPass } from "./storefront-session";
 import { emailButton, emailHeading, emailLayout, emailMuted, emailPanel, emailParagraph, emailTotals } from "./email-layout";
 
 // Public origin for links in emails: SMTP_STORE_LINK when set, otherwise the Railway-provided public domain.
@@ -118,7 +119,7 @@ export async function sendBookingConfirmationEmail(booking: BookingConfirmation)
   }
   try {
     // The access code rides in the fragment, which browsers never send to a server, so the link opens the booking in one tap.
-    const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(booking.recordLocator)}#code=${encodeURIComponent(booking.accessToken)}`
+    const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(booking.recordLocator)}#pass=${encodeURIComponent(signBookingPass(hashStorefrontToken(booking.accessToken)))}`
     await transport.sendMail({
       to: booking.to,
       from: process.env.SMTP_FROM,
