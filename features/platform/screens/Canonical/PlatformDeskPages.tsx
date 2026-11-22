@@ -24,6 +24,7 @@ import {
 import {
   BOOKING_WORKLIST_QUERY,
   bookingWorklistNextHref,
+  bookingWorklistWhere,
   bookingWorklistPage,
   normalizeBookingWorklistCursor,
 } from '@/features/platform/lib/booking-worklist'
@@ -169,31 +170,32 @@ export async function PlatformDeparturesPage({ searchParams }: { searchParams?: 
 
 export async function PlatformBookingsPage({ searchParams }: { searchParams?: SearchParams }) {
   const params = searchParams ? await searchParams : {}
-  const locator = typeof params.locator === 'string' ? params.locator.trim().toUpperCase() : ''
-  const locatorFilter = locator ? /^[A-Z0-9]{5,8}$/.test(locator) ? { equals: locator } : { contains: locator } : null
-  const locatorWhere = locatorFilter ? { recordLocator: locatorFilter } : {}
+  // ?q= searches locator, name or email; ?locator= (links from payments and the paid-card return) still works.
+  const query = (typeof params.q === 'string' ? params.q : typeof params.locator === 'string' ? params.locator : '').trim()
+  const locator = query
+  const { where: searchWhere, locatorOnly } = bookingWorklistWhere(query)
   const cleanupWhere = {
     AND: [
       { OR: [{ paymentStatus: { equals: 'refunded' } }, { ticketingStatus: { equals: 'voided' } }] },
-      ...(locatorFilter ? [locatorWhere] : []),
+      ...(query ? [searchWhere] : []),
     ],
   }
   const bookingCursor = normalizeBookingWorklistCursor(params.bookingCursor)
   const response = await readBookingWorkspace({
-    where: locatorWhere,
+    where: searchWhere,
     cleanupWhere,
     bookingCursor: bookingCursor ? { id: bookingCursor } : null,
     bookingSkip: bookingCursor ? 1 : 0,
     // Only evidence awaiting the checker, narrowed by the locator, so the Payments queue's maker-checker link
     // reaches evidence older than the newest 100 rows.
-    evidenceWhere: { status: { equals: 'submitted' }, ...(locatorFilter ? { booking: { recordLocator: locatorFilter } } : {}) },
+    evidenceWhere: { status: { equals: 'submitted' }, ...(locatorOnly ? { booking: locatorOnly } : {}) },
   })
   const bookingPage = response.success ? bookingWorklistPage(response.data.bookings, response.data.bookingsCount) : null
   const bookingNextHref = bookingPage?.nextCursor
     ? bookingWorklistNextHref('/dashboard/platform/bookings', locator, bookingPage.nextCursor)
     : null
   return <Shell title="Bookings" eyebrow="Reservations" meta={bookingPage ? <span className="tabular-nums ">{plural(bookingPage.totalCount, 'booking')}</span> : undefined}>
-    <FilterBar action="/dashboard/platform/bookings"><Field label="Record locator" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input name="locator" defaultValue={locator} placeholder="ABC123" className={`${deskInput} pl-9 tabular-nums uppercase tracking-wider`} /></span></Field><Track><Pill type="submit">Find booking</Pill>{locator && <Pill asChild><Link href="/dashboard/platform/bookings">Clear</Link></Pill>}</Track></FilterBar>
+    <FilterBar action="/dashboard/platform/bookings"><Field label="Booking, name or email" className="sm:flex-1"><span className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input name="q" type="search" defaultValue={locator} placeholder="628A33, Castellanos or name@email.com" className={`${deskInput} pl-9`} /></span></Field><Track><Pill type="submit">Find</Pill>{(locator || bookingCursor) && <Pill asChild><Link href="/dashboard/platform/bookings">{locator ? 'Clear' : 'First page'}</Link></Pill>}</Track></FilterBar>
     {response.success ? <BookingDesk offers={response.data.offers} bookings={bookingPage?.items ?? []} bookingCount={bookingPage?.totalCount ?? 0} bookingHasNextPage={bookingPage?.hasNextPage ?? false} bookingNextHref={bookingNextHref} refundCleanupBookings={response.data.refundCleanupBookings.slice(0, 100)} refundCleanupTruncated={response.data.refundCleanupBookingsCount > 100} evidences={response.data.manualPaymentEvidences} sectionErrors={response.sectionErrors} detailBase="/dashboard/platform/bookings" /> : <Failure error="Bookings could not be loaded" />}
   </Shell>
 }

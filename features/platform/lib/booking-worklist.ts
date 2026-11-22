@@ -60,7 +60,24 @@ export function bookingWorklistPage<T extends { id: string }>(rows: T[], totalCo
 
 export function bookingWorklistNextHref(basePath: string, locator: string, cursor: string): string {
   const params = new URLSearchParams()
-  if (locator) params.set('locator', locator)
+  if (locator) params.set('q', locator)
   params.set('bookingCursor', cursor)
   return `${basePath}?${params.toString()}`
+}
+
+// One search box for the desk: a record locator, a traveler's name (first, last or "first last") or the contact email.
+export function bookingWorklistWhere(query: string): { where: Record<string, unknown>; locatorOnly: Record<string, unknown> | null } {
+  const q = query.trim().replace(/\s+/g, ' ').slice(0, 120)
+  if (!q) return { where: {}, locatorOnly: null }
+  const upper = q.toUpperCase()
+  const locatorFilter = /^[A-Z0-9]{5,8}$/.test(upper) ? { equals: upper } : { contains: upper }
+  const text = (value: string) => ({ contains: value, mode: 'insensitive' })
+  const words = q.split(' ')
+  const nameClauses = words.length >= 2
+    ? [{ passengers: { some: { passenger: { AND: [{ givenName: text(words[0]) }, { familyName: text(words.slice(1).join(' ')) }] } } } }]
+    : [{ passengers: { some: { passenger: { OR: [{ givenName: text(q) }, { familyName: text(q) }] } } } }]
+  return {
+    where: { OR: [{ recordLocator: locatorFilter }, { contactEmail: text(q) }, ...nameClauses] },
+    locatorOnly: /^[A-Z0-9]{3,8}$/.test(upper) ? { recordLocator: locatorFilter } : null,
+  }
 }

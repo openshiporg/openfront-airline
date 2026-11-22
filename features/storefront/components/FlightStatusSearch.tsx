@@ -32,17 +32,18 @@ type FlightStatus = {
   disruption?: { type: string; status: string; publicSummary?: string | null; publishedAt?: string | null } | null
 }
 
-function statusTone(value: string) {
-  if (['scheduled', 'open_for_sale', 'closed_for_sale', 'departed', 'arrived'].includes(value)) return 'ok'
-  if (['cancelled'].includes(value)) return 'bad'
-  return 'warn'
+// Travelers see five states only: Scheduled, Boarding, Delayed, Departed, Cancelled. Sales states are the airline's
+// business; boarding is the 40 minutes before the (estimated) departure; a flight that has arrived has departed.
+type PublicStatus = 'Scheduled' | 'Boarding' | 'Delayed' | 'Departed' | 'Cancelled'
+function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureAt' | 'estimatedDepartureAt'>, now = Date.now()): PublicStatus {
+  if (flight.status === 'cancelled') return 'Cancelled'
+  if (['departed', 'arrived'].includes(flight.status)) return 'Departed'
+  const departure = Date.parse(flight.estimatedDepartureAt || flight.scheduledDepartureAt)
+  const late = flight.status === 'delayed' || (!!flight.estimatedDepartureAt && departure - Date.parse(flight.scheduledDepartureAt) >= 15 * 60_000)
+  if (Number.isFinite(departure) && now >= departure - 40 * 60_000 && now < departure) return 'Boarding'
+  return late ? 'Delayed' : 'Scheduled'
 }
-
-// Sales states are the airline's business, not the traveler's: a flight that is on sale or closed for sale is simply scheduled.
-function displayStatus(value: string) {
-  if (['open_for_sale', 'closed_for_sale', 'scheduled'].includes(value)) return 'Scheduled'
-  return value.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase())
-}
+const statusTone = (status: PublicStatus) => status === 'Cancelled' ? 'bad' : status === 'Delayed' ? 'warn' : 'ok'
 
 // Each time is shown in its own airport's zone and says whether it is actual, estimated, or scheduled.
 function airportTime(flight: FlightStatus, leg: 'Departure' | 'Arrival', fallbackZone: string) {
@@ -85,7 +86,7 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
     </form>
     {message && <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />{message}</p>}
     {results.map(flight => <article key={flight.id} className="af-board overflow-hidden rounded-xl">
-      <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pt-5 sm:px-6"><p className="af-board-cell af-signal text-sm font-semibold">{carrier.code} {flight.flightNumber} · {flight.serviceDate}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={statusTone(flight.status)} />{displayStatus(flight.status)}</p></div>
+      <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pt-5 sm:px-6"><p className="af-board-cell af-signal text-sm font-semibold">{carrier.code} {flight.flightNumber} · {flight.serviceDate}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={statusTone(publicStatus(flight))} />{publicStatus(flight)}</p></div>
       <h2 className="flex items-center gap-3 px-5 pt-3 text-5xl font-semibold tracking-[-0.01em] sm:px-6 sm:text-6xl">{flight.originCode}<span className="af-path" />{flight.destinationCode}</h2>
       <p className="px-5 pt-1 text-sm text-[var(--af-board-ink-2)] sm:px-6">{flight.originCity} to {flight.destinationCity}</p>
       <dl className="af-board-row mt-5 grid sm:grid-cols-2">
@@ -95,7 +96,7 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
           <dd className="mt-3 grid grid-cols-2 gap-3"><span><span className="af-eyebrow block">Terminal</span><span className="af-board-cell text-2xl font-semibold">{(leg === 'Departure' ? flight.departureTerminal : flight.arrivalTerminal) ?? 'TBD'}</span></span><span><span className="af-eyebrow block">Gate</span><span className="af-board-cell af-signal text-2xl font-semibold">{(leg === 'Departure' ? flight.departureGate : flight.arrivalGate) ?? 'TBD'}</span></span></dd>
         </div>)}
       </dl>
-      {flight.disruption?.publicSummary && <div className="af-board-row px-5 py-4 sm:px-6"><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone="warn" />{displayStatus(flight.disruption.type)}</p><p className="mt-1 pl-4 text-sm text-[var(--af-board-ink-2)]">{flight.disruption.publicSummary}</p></div>}
+      {flight.disruption?.publicSummary && <div className="af-board-row px-5 py-4 sm:px-6"><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone="warn" />{flight.disruption.type.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase())}</p><p className="mt-1 pl-4 text-sm text-[var(--af-board-ink-2)]">{flight.disruption.publicSummary}</p></div>}
     </article>)}
   </div>
 }
