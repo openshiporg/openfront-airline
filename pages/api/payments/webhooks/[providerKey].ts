@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import type { NextApiRequest, NextApiResponse } from 'next'
 
 import { keystoneContext } from '../../../../features/keystone/context'
-import { processPaymentWebhookEvent } from '../../../../features/integrations/payment/process-webhook'
+import { foreignPaymentEventReason, processPaymentWebhookEvent } from '../../../../features/integrations/payment/process-webhook'
 import { verifyTimestampedWebhook, webhookSecretFromEnvironment } from '../../../../features/integrations/webhook-security'
 
 export const config = { api: { bodyParser: false } }
@@ -21,11 +21,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const configuration = (provider.configuration ?? {}) as Record<string, unknown>; const credentials = (provider.credentials ?? {}) as Record<string, unknown>
     const envName = String(configuration.webhookSecretEnv ?? '')
     const secret = envName ? webhookSecretFromEnvironment(envName) : process.env.NODE_ENV === 'production' ? undefined : String(credentials.webhookSecret ?? '')
-    if (!secret) throw new Error('Webhook secret is not configured.')
     const body = await readBody(req)
+    // No signing secret: payments settle from the server-side checkout sweep, so the delivery is acknowledged and ignored.
+    if (!secret) return res.status(200).json({ accepted: false, ignored: 'webhook signing is not set up; payments reconcile on the server' })
     if (!verifyTimestampedWebhook(body, String(req.headers['stripe-signature'] ?? ''), secret)) return res.status(401).json({ error: 'Invalid signature.' })
     const event = JSON.parse(body.toString('utf8')) as any
     if (!event.id || !event.type) throw new Error('Malformed event.')
+    const foreign = await foreignPaymentEventReason(event, sessionKey => (keystoneContext.prisma as any).paymentSession.findUnique({ where: { sessionKey }, select: { providerSessionId: true } }))
+    if (foreign) return res.status(200).json({ accepted: false, ignored: foreign })
     const dedupeKey = crypto.createHash('sha256').update(`${provider.id}\u0000${event.id}`).digest('hex')
     const bodyDigest = crypto.createHash('sha256').update(body).digest('hex')
     const result = await (keystoneContext.prisma as any).$transaction(async (tx: any) => {

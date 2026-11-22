@@ -48,8 +48,14 @@ export function canUseDashboardNav(user: SidebarUser) {
   return user?.role?.canAccessDashboard !== false
 }
 
+// The raw Models list (every table) is a developer/admin tool: only a role that manages roles sees it. Front-line staff
+// work from the Sales / Operations / Finance / Settings pages.
+export function canSeeModels(user: SidebarUser) {
+  return user?.role?.canManageRoles === true
+}
+
 export function visibleSidebarLists<T extends SidebarList>(lists: T[], user: SidebarUser): T[] {
-  if (!canUseDashboardNav(user)) return []
+  if (!canUseDashboardNav(user) || !canSeeModels(user)) return []
   return lists.filter((list) => !list.isHidden)
 }
 

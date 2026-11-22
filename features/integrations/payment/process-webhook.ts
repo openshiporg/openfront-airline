@@ -7,6 +7,19 @@ export function assertAuthoritativeCheckoutSettlement(object: any) {
   return paymentIntent
 }
 
+// The Stripe account is shared with other sites, so a webhook endpoint sees their events too. Only a completed checkout
+// for one of this airline's own payment sessions is ours; anything else is answered 200 and not stored, so Stripe neither
+// retries it nor disables the endpoint.
+export async function foreignPaymentEventReason(event: any, findSession: (sessionKey: string) => Promise<{ providerSessionId: string | null } | null>) {
+  if (event?.type !== 'checkout.session.completed') return `event type ${String(event?.type ?? 'unknown')} is not used here`
+  const object = event.data?.object
+  const sessionKey = String(object?.metadata?.payment_session_key ?? '')
+  if (!sessionKey) return 'checkout belongs to another site'
+  const session = await findSession(sessionKey)
+  if (!session || session.providerSessionId !== object?.id) return 'checkout belongs to another site'
+  return null
+}
+
 // signingProviderId is the provider whose secret verified the delivery (set at ingress); body metadata alone is
 // never authority for which session or carrier the money belongs to.
 export async function processPaymentWebhookEvent(prisma: PrismaClient, webhookEventId: string, signingProviderId: string | null) {
