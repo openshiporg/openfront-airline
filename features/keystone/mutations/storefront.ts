@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import type { Context } from '.keystone/types'
 
-import { hasCurrentStorefrontBookingAccess, hashStorefrontToken, withStorefrontSession } from '../lib/storefront-session'
+import { hasCurrentStorefrontBookingAccess, hashStorefrontToken, signBookingPass, withStorefrontSession } from '../lib/storefront-session'
 import { consumeDurableRateLimit, isDurableRateLimitExhausted } from '../lib/rate-limit'
 import { durableRequestFingerprint } from '../lib/request-identity'
 import { runSerializableTransaction, throwIfKeystonePrismaError } from '../lib/transactions'
@@ -295,6 +295,27 @@ export async function createCustomerBooking(
 }
 
 const BOOKING_ACCESS_MISMATCH = 'That booking reference and access code don’t match.'
+
+const comparableName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/gi, '').toLowerCase()
+
+// Manage booking the way every airline does it: booking reference plus a traveler's last name. Returns a booking pass
+// that works wherever the access code does. Failed matches count against the same budget as wrong access codes.
+export async function openCustomerBooking(_root: unknown, args: { carrierCode: string; recordLocator: string; lastName: string }, context: Context) {
+  const recordLocator = String(args.recordLocator ?? '').trim().toUpperCase()
+  const lastName = comparableName(String(args.lastName ?? ''))
+  const booking = /^[A-Z0-9]{5,8}$/.test(recordLocator) && lastName ? await (context.prisma as any).booking.findFirst({
+    where: { recordLocator, carrier: { code: String(args.carrierCode ?? '').trim().toUpperCase() }, accessTokenExpiresAt: { gt: new Date() } },
+    select: { accessTokenHash: true, passengers: { select: { passenger: { select: { familyName: true } } } } },
+  }) : null
+  const matches = booking?.accessTokenHash && booking.passengers.some((entry: any) => comparableName(entry.passenger?.familyName ?? '') === lastName)
+  if (!matches) {
+    const request = (context as any).req ?? {}
+    if (await isDurableRateLimitExhausted(context.prisma as any, 'storefront.manage-booking.client', durableRequestFingerprint(request), 30)) throw new DomainError('This request cannot be completed right now.')
+    await consumeRateLimit(context, 'storefront.manage-booking', 30, 15 * 60_000)
+    throw new DomainError('We couldn’t find a booking with that reference and last name.')
+  }
+  return signBookingPass(booking.accessTokenHash)
+}
 
 export async function ownedBooking(context: Context, recordLocator: string, accessToken: string) {
   // Prove possession with a bounded indexed lookup first; the expanded itinerary is read only for a proven holder.

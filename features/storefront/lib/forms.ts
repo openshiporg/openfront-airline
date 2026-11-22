@@ -54,6 +54,7 @@ export function parseStorefrontPassengers(formData: FormData, passengerCount: nu
 export function parseBookingAccessForm(formData: FormData) {
   const recordLocator = formText(formData, 'recordLocator').toUpperCase()
   const accessToken = formText(formData, 'accessToken')
-  if (!/^[A-Z0-9]{5,10}$/.test(recordLocator)) throw new Error('Enter the reservation record locator.')
-  return { recordLocator, accessToken }
+  const lastName = formText(formData, 'lastName')
+  if (!/^[A-Z0-9]{5,10}$/.test(recordLocator)) throw new Error('Enter the 6-character booking reference from your confirmation.')
+  return { recordLocator, accessToken, lastName }
 }

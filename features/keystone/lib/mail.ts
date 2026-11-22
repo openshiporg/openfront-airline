@@ -98,16 +98,15 @@ export function bookingConfirmationEmail(booking: BookingConfirmation, manageUrl
     storeName: safeCarrierName(booking.carrierName),
     preheader: `Reservation ${booking.recordLocator}`,
     title: 'Your reservation',
-    body: `${emailMuted('Record locator')}
+    body: `${emailMuted('Booking reference')}
 ${emailPanel(`<span style="font-family:Menlo,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:.16em;">${escapeHtml(booking.recordLocator)}</span>`, 'center')}
 ${emailHeading('Flights')}
 ${emailPanel(flights)}
 ${emailHeading('Travelers')}
 ${emailParagraph(booking.travelers.map(escapeHtml).join(', '))}
 ${emailTotals([{ label: 'Total', value: booking.totalLabel }])}
-${emailHeading('Access code')}
-${emailPanel(`<span style="font-family:Menlo,Consolas,monospace;font-size:13px;word-break:break-all;">${escapeHtml(booking.accessToken)}</span>`)}
-${emailButton('Manage booking', manageUrl)}`,
+${emailButton('Manage booking', manageUrl)}
+${emailParagraph('Or open Manage booking on our site with this reference and a traveler’s last name.')}`,
   })
 }
 

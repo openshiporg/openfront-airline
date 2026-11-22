@@ -101,7 +101,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
       await mutate(`mutation($booking:ID!,$purpose:String!,$method:String!,$reference:String!,$amount:Int!,$at:String!,$key:String!){recordReceivedPayment(bookingId:$booking,purpose:$purpose,method:$method,externalReference:$reference,amount:$amount,receivedAt:$at,idempotencyKey:$key){status}}`, { booking: booking.id, purpose, method, reference, amount, at: when, key: `received-${crypto.randomUUID()}` })
       if (purpose === 'capture') setCaptureReferences(values => ({ ...values, [booking.id]: reference }))
       else setRefundReferences(values => ({ ...values, [booking.id]: reference }))
-      setMessage(`${purpose === 'capture' ? 'Payment' : 'Refund'} recorded for ${booking.recordLocator}. Another payment operator approves it under Settlement approval.`); router.refresh()
+      setMessage(`${purpose === 'capture' ? 'Payment' : 'Refund'} recorded for ${booking.recordLocator}. Another payment operator approves it under Payment approvals.`); router.refresh()
     } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Payment could not be recorded.') }
     endTask(aggregate)
   }
@@ -161,6 +161,30 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
     } catch (error) { setMessageFailed(true); setMessage(`${error instanceof Error ? error.message : 'Booking acknowledgement unavailable.'} Preserve the original command/key; a lost response or expired offer is not proof of rollback.`) }
     setWorking(null)
   }
+  // Phone sale: the caller's card goes into Stripe Checkout from here; back on this page the payment is recorded and
+  // the tickets issued (the one-minute reconcile does the same if the page is closed).
+  async function payByCard(booking: Booking) {
+    if (!beginTask(booking.id)) return
+    setWorking(booking.id); setMessageFailed(false); setMessage('')
+    try {
+      const response = await fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ query: 'mutation($id: ID!) { startBookingCheckout(bookingId: $id) { url } }', variables: { id: booking.id } }) })
+      const body = await response.json() as { data?: { startBookingCheckout?: { url: string } }; errors?: Array<{ message: string }> }
+      const url = body.data?.startBookingCheckout?.url
+      if (!url) throw new Error(body.errors?.[0]?.message ?? 'Card payment couldn’t start.')
+      window.location.assign(url); return
+    } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Card payment couldn’t start.') }
+    endTask(booking.id)
+  }
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const target = params.get('paid') ? bookings.find(booking => booking.recordLocator === params.get('locator')) : null
+    if (!target || !['unpaid', 'failed'].includes(target.paymentStatus)) return
+    void fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ query: 'mutation($id: ID!) { settleBookingCheckout(bookingId: $id) }', variables: { id: target.id } }) })
+      .then(response => response.json()).then((body: { data?: { settleBookingCheckout?: boolean } }) => {
+        if (body.data?.settleBookingCheckout) { setMessage(`${target.recordLocator} is paid and ticketed.`); router.refresh() }
+        else setMessage(`Waiting for Stripe to confirm ${target.recordLocator}. It updates within a minute.`)
+      }).catch(() => {})
+  }, [bookings, router])
   async function capture(booking: Booking) {
     const aggregate = booking.id
     if (!beginTask(aggregate)) return
@@ -225,7 +249,19 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
       <Track><Pill disabled={Boolean(working)} onClick={() => accept(undefined, true)}>Recover receipt</Pill><Pill variant="primary" disabled={Boolean(working)} onClick={() => accept()}>Retry same command</Pill></Track>
     </section>}
 
-    {!sectionErrors.evidence && <DeskSection title="Settlement approval" count={awaitingEvidence.length}>
+    {!sectionErrors.offers && <DeskSection title="Held offers" count={heldOffers.length} actions={<Pill size="sm" disabled={Boolean(working)} onClick={refreshClocks}>Refresh</Pill>}>
+      {heldOffers.length ? <Panel className="divide-y">{heldOffers.map(offer => <article key={offer.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <TitleLine as="h3" tone={statusTone(offer.status)} status={offer.status}><Code className="text-base font-semibold text-foreground">{offer.offerNumber}</Code></TitleLine>
+            <span className="tabular-nums text-sm font-medium  text-foreground">{formatMinorUnits(offer.totalAmount, offer.currencyCode)}</span>
+          </div>
+          <p className="break-words text-sm text-muted-foreground">{offer.passengers.map(passenger => `${passenger.givenName} ${passenger.familyName}`).join(', ')}</p>
+        </div>
+        <Track className="self-start sm:self-auto"><Pill variant="primary" disabled={Boolean(working) || originalCommandUnavailable || Boolean(originalBookingCommand && originalBookingCommand.offer !== offer.id)} onClick={() => accept(offer)}>{working === offer.id ? 'Working…' : 'Accept & book'}</Pill></Track>
+      </article>)}</Panel> : <Well>No held offers. <Link href="/dashboard/platform/offers" className="font-medium text-foreground underline underline-offset-2">Offers</Link></Well>}
+    </DeskSection>}
+    {!sectionErrors.evidence && <DeskSection title="Payment approvals" count={awaitingEvidence.length}>
       {awaitingEvidence.length ? <Panel className="divide-y">{awaitingEvidence.map(evidence => <article key={evidence.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -233,7 +269,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             <span className="text-xs font-medium capitalize text-muted-foreground">{evidence.purpose}</span>
             <Code>{evidence.externalReference}</Code>
           </div>
-          <p className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground"><span className="tabular-nums text-sm font-medium  text-foreground">{formatMinorUnits(evidence.amount, evidence.currencyCode)}</span><span>Received by {evidence.ledgerSource.replace(/^operator:/, 'operator · ').replaceAll('_', ' ')}</span><span>Maker {evidence.submittedBy?.name ?? 'restricted'}</span></p>
+          <p className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground"><span className="tabular-nums text-sm font-medium  text-foreground">{formatMinorUnits(evidence.amount, evidence.currencyCode)}</span><span>{evidence.ledgerSource.replace(/^operator:/, '').replaceAll('_', ' ')}</span><span>Recorded by {evidence.submittedBy?.name ?? 'another agent'}</span></p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <input aria-label={`Rejection reason for evidence ${evidence.externalReference}`} value={evidenceRejectionReasons[evidence.id] ?? ''} onChange={event => setEvidenceRejectionReasons(values => ({ ...values, [evidence.id]: event.target.value }))} placeholder="Rejection reason" className={cn(deskInput, 'sm:w-48')} />
@@ -284,6 +320,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
             {(evidencePurposes[booking.id] ?? (['paid', 'partially_refunded'].includes(booking.paymentStatus) ? 'refund' : 'capture')) === 'capture' && <span className="tabular-nums text-sm ">{formatMinorUnits(booking.totalAmount, booking.currencyCode)}</span>}
             <Track><Pill disabled={pending.includes(booking.id)} onClick={() => recordReceived(booking)}>Record</Pill></Track>
           </CommandRow>}
+          {['unpaid', 'failed'].includes(booking.paymentStatus) && !['cancelled', 'completed'].includes(booking.status) && <CommandRow label="Card"><Track><Pill variant="primary" disabled={pending.includes(booking.id)} onClick={() => payByCard(booking)}>Pay by card · {formatMinorUnits(booking.totalAmount, booking.currencyCode)}</Pill></Track></CommandRow>}
           {['unpaid', 'failed'].includes(booking.paymentStatus) && <CommandRow label="Payment">
             {booking.approvedEvidence?.some(evidence => evidence.purpose === 'capture')
               ? <span className="text-xs text-muted-foreground">Approved <Code className="text-foreground">{booking.approvedEvidence.find(evidence => evidence.purpose === 'capture')!.externalReference}</Code></span>
@@ -308,18 +345,6 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
       </div> : <Well>No bookings</Well>}
     </DeskSection>}
 
-    {!sectionErrors.offers && <DeskSection title="Held offers" count={heldOffers.length} actions={<Pill size="sm" disabled={Boolean(working)} onClick={refreshClocks}>Refresh</Pill>}>
-      {heldOffers.length ? <Panel className="divide-y">{heldOffers.map(offer => <article key={offer.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-            <TitleLine as="h3" tone={statusTone(offer.status)} status={offer.status}><Code className="text-base font-semibold text-foreground">{offer.offerNumber}</Code></TitleLine>
-            <span className="tabular-nums text-sm font-medium  text-foreground">{formatMinorUnits(offer.totalAmount, offer.currencyCode)}</span>
-          </div>
-          <p className="break-words text-sm text-muted-foreground">{offer.passengers.map(passenger => `${passenger.givenName} ${passenger.familyName}`).join(', ')}</p>
-        </div>
-        <Track className="self-start sm:self-auto"><Pill variant="primary" disabled={Boolean(working) || originalCommandUnavailable || Boolean(originalBookingCommand && originalBookingCommand.offer !== offer.id)} onClick={() => accept(offer)}>{working === offer.id ? 'Working…' : 'Accept & book'}</Pill></Track>
-      </article>)}</Panel> : <Well>No held offers. <Link href="/dashboard/platform/offers" className="font-medium text-foreground underline underline-offset-2">Offers</Link></Well>}
-    </DeskSection>}
 
     {!sectionErrors.cleanup && <DeskSection id="booking-refund-cleanup-heading" title="Refund / void follow-up" count={refundCleanupBookings.length} actions={refundCleanupTruncated ? <span className="tabular-nums text-xs  text-muted-foreground">First 100</span> : undefined}>
       {refundCleanupBookings.length ? <Panel className="divide-y">{refundCleanupBookings.map(booking => <article key={booking.id} className="space-y-2.5 px-4 py-3">

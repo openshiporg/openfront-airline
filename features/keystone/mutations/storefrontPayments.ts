@@ -2,6 +2,7 @@ import type { Context } from '.keystone/types'
 
 import { createStripeCheckoutSession, expireStripeCheckoutSession, refundStripePaymentIntent, retrieveStripeCheckoutSession, stripeSecretKey, type StripeCheckoutSession } from '../../integrations/payment/stripe'
 import { DomainError } from '../lib/domain-error'
+import { requireFreshCarrierPermission, requireFreshPermission } from '../access'
 import { assertDatedFlightEligibleForAction } from '../lib/service-eligibility'
 import { consumeDurableRateLimit } from '../lib/rate-limit'
 import { durableRequestFingerprint } from '../lib/request-identity'
@@ -67,6 +68,40 @@ export async function startCustomerCheckout(
   context: Context,
 ) {
   const { booking, carrier } = await payableBooking(context, args.carrierCode, args.recordLocator, args.accessToken)
+  const locator = encodeURIComponent(booking.recordLocator)
+  return openCheckout(context, booking, carrier, {
+    success: origin => `${origin}/manage-booking?ref=${locator}&checkout={CHECKOUT_SESSION_ID}#code=${encodeURIComponent(args.accessToken)}`,
+    cancel: origin => `${origin}/manage-booking?ref=${locator}&checkout=cancelled`,
+  })
+}
+
+// Back from a desk card payment: record it now rather than wait for the one-minute reconcile.
+export async function settleBookingCheckout(_root: unknown, args: { bookingId: string }, context: Context) {
+  await requireFreshPermission(context, 'canManageBookings')
+  const booking = await (context.prisma as any).booking.findUnique({ where: { id: args.bookingId }, select: { carrierId: true } })
+  if (!booking) throw new DomainError('Resource not found or inaccessible.')
+  await requireFreshCarrierPermission(context, 'canManageBookings', booking.carrierId)
+  return (await recordPaidStoredCheckouts(context.sudo(), args.bookingId)) > 0
+}
+
+// Phone sale: the reservations agent keys the caller's card into the same Stripe Checkout from the Bookings desk.
+// Stripe authorizes the card, so no second approver is needed; the return page or the one-minute reconcile records
+// it and issues the tickets.
+export async function startBookingCheckout(_root: unknown, args: { bookingId: string }, context: Context) {
+  await requireFreshPermission(context, 'canManageBookings')
+  const prisma = context.prisma as any
+  const booking = await prisma.booking.findUnique({ where: { id: args.bookingId }, select: BOOKING_SELECT })
+  if (!booking) throw new DomainError('Resource not found or inaccessible.')
+  await requireFreshCarrierPermission(context, 'canManageBookings', booking.carrierId)
+  const carrier = await prisma.carrier.findUnique({ where: { id: booking.carrierId }, select: { id: true, code: true, name: true } })
+  const locator = encodeURIComponent(booking.recordLocator)
+  return openCheckout(context, booking, carrier, {
+    success: origin => `${origin}/dashboard/platform/bookings?locator=${locator}&paid=1`,
+    cancel: origin => `${origin}/dashboard/platform/bookings?locator=${locator}`,
+  })
+}
+
+async function openCheckout(context: Context, booking: any, carrier: { id: string; code: string; name: string }, urls: { success: (origin: string) => string; cancel: (origin: string) => string }) {
   if (booking.status === 'cancelled') throw new DomainError('Cancelled bookings can’t be paid.')
   if (!['unpaid', 'failed'].includes(booking.paymentStatus)) throw new DomainError('This booking is already paid.')
   const dueAt = Date.parse(booking.metadata?.paymentDueAt ?? '')
@@ -100,7 +135,6 @@ export async function startCustomerCheckout(
   const expiresAt = Math.floor(Math.max(closesAt, Date.now() + STRIPE_MIN_EXPIRY_MS) / 60_000) * 60
   await consumeDurableRateLimit(context.prisma as any, 'storefront.checkout.client', durableRequestFingerprint((context as any).req ?? {}), 20, 15 * 60_000)
   const origin = storefrontOrigin(context)
-  const locator = encodeURIComponent(booking.recordLocator)
   let session: StripeCheckoutSession
   try {
     session = await createStripeCheckoutSession(provider.secretKey, {
@@ -110,8 +144,8 @@ export async function startCustomerCheckout(
       amount: booking.totalAmount,
       currencyCode: booking.currencyCode,
       customerEmail: booking.contactEmail,
-      successUrl: `${origin}/manage-booking?ref=${locator}&checkout={CHECKOUT_SESSION_ID}#code=${encodeURIComponent(args.accessToken)}`,
-      cancelUrl: `${origin}/manage-booking?ref=${locator}&checkout=cancelled`,
+      successUrl: urls.success(origin),
+      cancelUrl: urls.cancel(origin),
       // One Checkout session per booking amount and previous session: double clicks reuse it.
       idempotencyKey: `checkout:${booking.id}:${booking.totalAmount}:${previous || 'first'}:${expiresAt}`,
       // The session stops taking payment when the reservation closes (Stripe needs at least 30 minutes).
@@ -145,6 +179,35 @@ export async function completeCustomerCheckout(
     throw new DomainError('We couldn’t confirm your payment yet. Retrieve your booking again in a moment.')
   }
   return recordCheckoutSession(context, booking, carrier, provider, session)
+}
+
+/**
+ * The shared Stripe test account has no room for a webhook, so a server sweep records Checkout sessions that were paid
+ * while the traveler never came back (tab closed). It reads each unpaid booking's stored session and records the paid
+ * ones through the same path as the return page; idempotent per session.
+ */
+export async function recordPaidStoredCheckouts(context: Context, bookingId?: string): Promise<number> {
+  const prisma = context.prisma as any
+  const bookings = await prisma.booking.findMany({
+    where: { ...(bookingId ? { id: bookingId } : {}), status: { in: ['pending', 'confirmed'] }, paymentStatus: { in: ['unpaid', 'failed'] }, metadata: { path: ['checkoutSessionId'], string_starts_with: 'cs_' }, updatedAt: { gte: new Date(Date.now() - 2 * 86_400_000) } },
+    select: BOOKING_SELECT, orderBy: { updatedAt: 'desc' }, take: 50,
+  })
+  let recorded = 0
+  for (const booking of bookings) {
+    try {
+      const provider = await activeStripeProvider(prisma, booking.carrierId)
+      const carrier = provider ? await prisma.carrier.findUnique({ where: { id: booking.carrierId }, select: { id: true, code: true, name: true } }) : null
+      if (!provider || !carrier) continue
+      const session = await retrieveStripeCheckoutSession(provider.secretKey, booking.metadata.checkoutSessionId)
+      if (session.payment_status !== 'paid') continue
+      await recordCheckoutSession(context, booking, carrier, provider, session)
+      recorded += 1
+      console.log(`Recorded closed-tab checkout payment for booking ${booking.recordLocator}`)
+    } catch (error) {
+      console.error(`Checkout reconcile for booking ${booking.id} failed:`, error instanceof Error ? error.message : 'unknown error')
+    }
+  }
+  return recorded
 }
 
 /** Close an open Checkout session, or record it if it was paid. Returns what the session turned out to be. */

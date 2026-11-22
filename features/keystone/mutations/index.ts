@@ -20,8 +20,8 @@ import { recoverCustomerBookingAccess } from './storefrontAccess'
 import { cancelCustomerBookingWithRefund, customerCancellationQuote } from './storefrontCancellation'
 import { recordBagEvent, registerAirport, updateFlightOperations } from './airlineOperationsControl'
 import { recordReceivedPayment, refreshAirlineClocks, reissueBookingAccessCode } from './airlinePaymentsDesk'
-import { completeCustomerCheckout, startCustomerCheckout } from './storefrontPayments'
-import { assignCustomerSeat, cancelCustomerBooking, checkInCustomerBooking, createCustomerBooking, createCustomerOffer, getCustomerBooking, getPublicCarrierIdentity, publicAirlineFlightOptions, publicFlightStatuses, rotateCustomerBookingAccessToken } from './storefront'
+import { completeCustomerCheckout, settleBookingCheckout, startBookingCheckout, startCustomerCheckout } from './storefrontPayments'
+import { openCustomerBooking, assignCustomerSeat, cancelCustomerBooking, checkInCustomerBooking, createCustomerBooking, createCustomerOffer, getCustomerBooking, getPublicCarrierIdentity, publicAirlineFlightOptions, publicFlightStatuses, rotateCustomerBookingAccessToken } from './storefront'
 import { publishFlightDisruption, reaccommodateBooking } from './airlineRecovery'
 import { boardBookingPassenger, departureManifest, offloadBookingPassenger } from './airlineDepartures'
 import { provisionDatedFlight, setDatedFlightSalesStatus, setInventoryAuthorization } from './airlineProvisioning'
@@ -250,6 +250,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           passengerCount: Int = 1
         ): [AirlineFlightOption!]!
         customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
+        openCustomerBooking(carrierCode: String!, recordLocator: String!, lastName: String!): String!
         customerCancellationQuote(recordLocator: String!, accessToken: String!): CustomerCancellationQuote!
         operatorBookingReceipt(bookingId: ID!): JSON!
         publicCarrierIdentity(carrierCode: String!): PublicCarrierIdentity
@@ -317,6 +318,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): AirlineOperationResult!
         recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
         startCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!): CustomerCheckoutSession!
+        startBookingCheckout(bookingId: ID!): CustomerCheckoutSession!
+        settleBookingCheckout(bookingId: ID!): Boolean!
         completeCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!, checkoutSessionId: String): CustomerCheckoutResult!
         recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
         refreshAirlineClocks: AirlineClockRefresh!
@@ -462,6 +465,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       Query: {
         redirectToInit,
         customerBooking: getCustomerBooking,
+        openCustomerBooking,
         customerCancellationQuote,
         operatorBookingReceipt,
         publicCarrierIdentity: getPublicCarrierIdentity,
@@ -503,6 +507,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         recordBagEvent,
         recordReceivedPayment,
         startCustomerCheckout,
+        startBookingCheckout,
+        settleBookingCheckout,
         completeCustomerCheckout,
         refreshAirlineClocks,
         reissueBookingAccessCode,

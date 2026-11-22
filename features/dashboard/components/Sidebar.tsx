@@ -41,7 +41,7 @@ import { Logo, LogoIcon } from '@/features/dashboard/components/Logo'
 import { UserProfileClient } from './UserProfileClient'
 import { OnboardingCards } from '@/features/platform/onboarding/components/OnboardingCards'
 import { dismissOnboarding } from '@/features/platform/onboarding/actions/onboarding'
-import { platformNavGroups, platformStandaloneItems, getPlatformNavItemsWithBasePath } from '@/features/platform/lib/navigation'
+import { platformNavGroups, platformNavSections, platformStandaloneItems, getPlatformNavItemsWithBasePath } from '@/features/platform/lib/navigation'
 import { useDashboard } from '../context/DashboardProvider'
 import { visiblePlatformItems, visibleSidebarLists } from '../lib/sidebarAccess'
 
@@ -150,12 +150,12 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
           </SidebarMenu>
         </SidebarGroup>
 
-        {/* Platform Routes */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Platform</SidebarGroupLabel>
-          <SidebarMenu className="group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden gap-0">
-            {/* Standalone Items in Expanded Mode */}
-            {standaloneItemsWithBasePath.map((item) => (
+        {/* Desks in four sections (expanded mode) */}
+        {platformNavSections.map(section => {
+          const items = standaloneItemsWithBasePath.filter(item => item.section === section.id)
+          return items.length ? <SidebarGroup key={section.id} className="group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden">
+            <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
+            <SidebarMenu className="gap-0">{items.map(item => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={isLinkActive(item.href)}>
                   <Link href={item.href} onClick={() => setOpenMobile(false)}>
@@ -164,8 +164,13 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            ))}
+            ))}</SidebarMenu>
+          </SidebarGroup> : null
+        })}
 
+        {/* Platform Routes */}
+        <SidebarGroup>
+          <SidebarMenu className="group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden gap-0">
             {/* Platform Groups */}
             {platformItems.map((platformItem) => (
               <Collapsible

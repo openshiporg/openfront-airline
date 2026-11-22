@@ -333,7 +333,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       try {
         const current = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: created.recordLocator, token: created.bookingAccessToken })
         setManagedBooking(current.customerBooking)
-      } catch { setStatus(`Reservation ${created.recordLocator} is confirmed, but we couldn’t load it yet. Use Retrieve with your access code; don’t book again.`) }
+      } catch { setStatus(`Reservation ${created.recordLocator} is confirmed, but we couldn’t load it yet. Use Manage booking with the reference and your last name; don’t book again.`) }
     } catch (error) {
       setStatus(`${error instanceof Error ? error.message : 'We couldn’t confirm your reservation.'} We may still have received it, even if the fare hold has expired. Check its status below before booking again.`)
     } finally { setBusy(false) }
@@ -345,9 +345,14 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     event?.preventDefault(); setBusy(true)
     if (!refreshAfterChange) setStatus('')
     try {
-      const submitted = event ? parseBookingAccessForm(new FormData(event.currentTarget)) : { recordLocator, accessToken }
-      const saved = submitted.accessToken || localStorage.getItem(bookingKey(submitted.recordLocator)) || ''
-      if (!saved) throw new Error('Enter the access code from your confirmation.')
+      const submitted = event ? parseBookingAccessForm(new FormData(event.currentTarget)) : { recordLocator, accessToken, lastName: '' }
+      let saved = submitted.accessToken || (submitted.lastName ? '' : localStorage.getItem(bookingKey(submitted.recordLocator))) || ''
+      if (!saved && submitted.lastName) {
+        // Booking reference and last name, like every airline: the server answers with a pass that works like the access code.
+        saved = (await graphql<{ openCustomerBooking: string }>(`query($carrier:String!,$record:String!,$name:String!){openCustomerBooking(carrierCode:$carrier,recordLocator:$record,lastName:$name)}`, { carrier: carrier.code, record: submitted.recordLocator, name: submitted.lastName })).openCustomerBooking
+        try { localStorage.setItem(bookingKey(submitted.recordLocator), saved) } catch { /* private mode: the pass lives for this page */ }
+      }
+      if (!saved) throw new Error('Enter the last name of a traveler on the booking.')
       const data = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: submitted.recordLocator, token: saved })
       if (confirmation && confirmation.recordLocator !== data.customerBooking.recordLocator) setConfirmation(null)
       setBookingCredentials(submitted.recordLocator, saved); setManagedBooking(data.customerBooking)
@@ -381,17 +386,6 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     setBusy(false)
   }
 
-  async function rotateAccess() {
-    if (!window.confirm('Replace your booking access code? The current code stops working immediately, so save the new one before leaving this page.')) return
-    setBusy(true)
-    try {
-      const data = await graphql<{ rotateCustomerBookingAccessToken: { recordLocator: string; accessToken: string } }>(`mutation($record:String!,$token:String!){rotateCustomerBookingAccessToken(recordLocator:$record,accessToken:$token){recordLocator accessToken}}`, { record: recordLocator, token: accessToken })
-      const next = data.rotateCustomerBookingAccessToken.accessToken
-      localStorage.setItem(bookingKey(recordLocator), next); setBookingCredentials(recordLocator, next); setConfirmation({ recordLocator, carrierCode: carrier.code, token: next }); setStatus('New access code created. Save it now; the old code no longer works.')
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Credential rotation failed.') }
-    setBusy(false)
-  }
-
   // Cancel shows exactly what comes back (DOT 24-hour rule, refundable fare less fee) before anything changes.
   const [cancelQuote, setCancelQuote] = useState<{ allowed: boolean; summary: string; refundAmount: number } | null>(null)
   async function reviewCancellation() {
@@ -419,7 +413,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     const form = new FormData(event.currentTarget)
     try {
       await graphql(`mutation($carrier:String!,$record:String!,$email:String!){recoverCustomerBookingAccess(carrierCode:$carrier,recordLocator:$record,email:$email)}`, { carrier: carrier.code, record: String(form.get('recordLocator') ?? ''), email: String(form.get('email') ?? '') })
-      setStatus('If those details match a booking, a new access code is on its way to that email.'); setRecovering(false)
+      setStatus('If those details match a booking, a link to it is on its way to that email.'); setRecovering(false)
     } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t send an access code.') }
     setBusy(false)
   }
@@ -488,7 +482,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       <h2 className={inWidget ? 'sr-only' : 'text-xl font-semibold'}>{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
       <div className={`grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end ${inWidget ? '' : 'mt-4'}`}>
         <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
-        <label className="af-field"><span className="af-field-label">Access code</span><input ref={accessTokenInput} aria-label="Access code" name="accessToken" type="password" defaultValue="" autoComplete="off" className="af-input" /></label>
+        <label className="af-field"><span className="af-field-label">Last name</span><input aria-label="Last name" name="lastName" autoComplete="family-name" autoCapitalize="words" placeholder="As on the booking" className="af-input" /></label><input ref={accessTokenInput} type="hidden" name="accessToken" defaultValue="" />
         <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
       </div>
     </form>
@@ -500,8 +494,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
         <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
         <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
-      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Lost your access code?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a new one</button></div></div>}
-    </div> : <p className={`text-sm ${inWidget ? 'mt-4' : ''}`}>Lost your access code? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
+      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Can’t open your booking?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a link</button></div></div>}
+    </div> : <p className={`text-sm ${inWidget ? 'mt-4' : ''}`}>Can’t open your booking? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
   </>
   const flow = <>
     {shoppingEnabled && !hero && <div className="af-card af-widget-panel !rounded-xl">{searchForm}</div>}
@@ -527,11 +521,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         </div>
       </div>
       <div className="af-pass-stub p-5 sm:p-6">
-        <p className="af-field-label">Access code</p>
-        <code className="af-mono af-well mt-2 block break-all px-3 py-2.5 text-xs">{confirmation.token}</code>
-        <p className="mt-2 text-xs text-[var(--af-ink-3)]">{carrier.accessRecoveryEnabled ? 'Also emailed to the lead traveler.' : 'Save it now. It can’t be emailed.'}</p>
-        <div className="af-track mt-3" data-block="true"><button onClick={() => navigator.clipboard.writeText(confirmation.token).then(() => setStatus('Access code copied.'), () => setStatus('Copy failed. Select the access code and copy it manually.'))} className="af-pill af-pill-raised">Copy access code</button></div>
-        {carrier.onlinePaymentEnabled && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void payOnline(confirmation.recordLocator, confirmation.token)} className="af-pill af-pill-primary">Pay now</button></div>}
+        <p className="text-sm text-[var(--af-ink-2)]">Find this booking any time with the reference and your last name.{carrier.accessRecoveryEnabled ? ' We also emailed it to the lead traveler.' : ''}</p>
+        {carrier.onlinePaymentEnabled && <div className="af-track mt-4" data-block="true"><button disabled={busy} onClick={() => void payOnline(confirmation.recordLocator, confirmation.token)} className="af-pill af-pill-primary">Pay now</button></div>}
         {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className="af-pill af-pill-primary">Book return flight</button></div>}
       </div>
     </section>}
@@ -593,7 +584,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
             <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-mono text-3xl font-semibold tracking-[0.16em]">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
             <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
-          {mode !== 'check-in' && <div className="af-track w-fit flex-wrap">{carrier.onlinePaymentEnabled && confirmation?.recordLocator !== managedBooking.recordLocator && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
+          {mode !== 'check-in' && <div className="af-track w-fit flex-wrap">{carrier.onlinePaymentEnabled && confirmation?.recordLocator !== managedBooking.recordLocator && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
           {mode !== 'check-in' && cancelQuote && managedBooking.status !== 'cancelled' && <div role="region" aria-label="Cancel booking" className="af-notice mt-3 w-full max-w-xl flex-col !items-stretch" data-tone={cancelQuote.allowed ? 'warn' : 'bad'}>
             <p className="text-sm font-medium"><span className="af-dot" data-tone={cancelQuote.allowed ? 'warn' : 'bad'} />{cancelQuote.summary}</p>
             <div className="af-track mt-3 flex-wrap">{cancelQuote.allowed && <button disabled={busy} onClick={() => void cancelBooking()} className="af-pill af-pill-danger af-pill-sm">{cancelQuote.refundAmount > 0 ? 'Cancel and refund' : 'Cancel booking'}</button>}<button type="button" onClick={() => setCancelQuote(null)} className="af-pill af-pill-raised af-pill-sm">{cancelQuote.allowed ? 'Keep booking' : 'Close'}</button>{!cancelQuote.allowed && <a href="/contact" className="af-pill af-pill-sm">Contact the airline</a>}</div>
