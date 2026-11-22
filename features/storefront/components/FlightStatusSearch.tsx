@@ -33,14 +33,16 @@ type FlightStatus = {
 }
 
 // Sales states are not public flight states. A schedule alone is not evidence of boarding or departure.
-type PublicStatus = 'Scheduled' | 'Boarding' | 'Delayed' | 'Departed' | 'Cancelled'
-function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureAt' | 'estimatedDepartureAt' | 'actualDepartureAt'>, now = Date.now()): PublicStatus {
+type PublicStatus = 'Scheduled' | 'Boarding' | 'Closed' | 'Delayed' | 'Departed' | 'Cancelled'
+function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureAt' | 'estimatedDepartureAt' | 'actualDepartureAt'>): PublicStatus {
   if (flight.status === 'cancelled') return 'Cancelled'
   if (['departed', 'arrived'].includes(flight.status) || flight.actualDepartureAt) return 'Departed'
+  if (flight.status === 'boarding') return 'Boarding'
+  if (flight.status === 'boarding_closed') return 'Closed'
   const departure = Date.parse(flight.estimatedDepartureAt || flight.scheduledDepartureAt)
-  const late = flight.status === 'delayed' || (!!flight.estimatedDepartureAt && departure - Date.parse(flight.scheduledDepartureAt) >= 15 * 60_000)
-  // Without an operational departure, an overdue flight is delayed, not presumed airborne.
-  return late || (Number.isFinite(departure) && now >= departure) ? 'Delayed' : 'Scheduled'
+  // Do not advertise a delay without a revised time to show next to the original schedule.
+  const revised = !!flight.estimatedDepartureAt && departure > Date.parse(flight.scheduledDepartureAt)
+  return revised && (flight.status === 'delayed' || departure - Date.parse(flight.scheduledDepartureAt) >= 15 * 60_000) ? 'Delayed' : 'Scheduled'
 }
 const statusTone = (status: PublicStatus) => status === 'Cancelled' ? 'bad' : status === 'Delayed' ? 'warn' : 'ok'
 

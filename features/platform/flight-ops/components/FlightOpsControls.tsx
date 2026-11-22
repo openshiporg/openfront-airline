@@ -30,12 +30,14 @@ export type FlightOpsFlight = {
   arrivalGate: string | null
 }
 
-type StatusAction = { status: 'delayed' | 'departed' | 'arrived'; label: string; from: readonly string[] }
+type StatusAction = { status: 'boarding' | 'boarding_closed' | 'delayed' | 'departed' | 'arrived'; label: string; from: readonly string[] }
 
 // Mirrors the flightInstance lifecycle: only transitions the command will accept are offered.
 const STATUS_ACTIONS: readonly StatusAction[] = [
-  { status: 'delayed', label: 'Mark delayed', from: ['scheduled', 'open_for_sale', 'closed_for_sale'] },
-  { status: 'departed', label: 'Departed', from: ['closed_for_sale', 'delayed'] },
+  { status: 'boarding', label: 'Boarding', from: ['scheduled', 'open_for_sale', 'closed_for_sale', 'delayed'] },
+  { status: 'boarding_closed', label: 'Close boarding', from: ['boarding'] },
+  { status: 'delayed', label: 'Mark delayed', from: ['scheduled', 'open_for_sale', 'closed_for_sale', 'boarding'] },
+  { status: 'departed', label: 'Departed', from: ['boarding_closed'] },
   { status: 'arrived', label: 'Arrived', from: ['departed'] },
 ]
 

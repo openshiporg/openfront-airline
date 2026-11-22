@@ -47,6 +47,8 @@ export const FlightInstance = list({
         { label: 'Scheduled', value: 'scheduled' },
         { label: 'Open for sale', value: 'open_for_sale' },
         { label: 'Closed for sale', value: 'closed_for_sale' },
+        { label: 'Boarding', value: 'boarding' },
+        { label: 'Boarding closed', value: 'boarding_closed' },
         { label: 'Delayed', value: 'delayed' },
         { label: 'Departed', value: 'departed' },
         { label: 'Arrived', value: 'arrived' },

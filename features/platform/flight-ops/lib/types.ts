@@ -8,7 +8,7 @@ export type FlightOperationsInput = {
   estimatedArrivalAt?: string | null
   actualDepartureAt?: string | null
   actualArrivalAt?: string | null
-  status?: 'delayed' | 'departed' | 'arrived' | null
+  status?: 'boarding' | 'boarding_closed' | 'delayed' | 'departed' | 'arrived' | null
   idempotencyKey: string
 }
 

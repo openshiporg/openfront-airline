@@ -78,7 +78,7 @@ export async function departureManifest(
     where: {
       carrierId: actor.carrierId,
       serviceDate: { gte: start, lt: end },
-      status: { in: ['scheduled', 'open_for_sale', 'closed_for_sale', 'delayed'] },
+      status: { in: ['scheduled', 'open_for_sale', 'closed_for_sale', 'delayed', 'boarding', 'boarding_closed'] },
       bookingSegments: { some: { status: { notIn: ['cancelled', 'refunded', 'reaccommodated'] }, booking: { ticketingStatus: 'ticketed', status: { in: ['ticketed', 'in_progress'] } } } },
       ...(actor.canManageCarriers
         ? originCode ? { origin: { iataCode: originCode } } : {}

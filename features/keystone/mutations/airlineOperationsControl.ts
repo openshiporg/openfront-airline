@@ -74,7 +74,7 @@ export async function registerAirport(
   })
 }
 
-const OPERATIONAL_STATUSES = ['delayed', 'departed', 'arrived'] as const
+const OPERATIONAL_STATUSES = ['boarding', 'boarding_closed', 'delayed', 'departed', 'arrived'] as const
 
 // Day-of-operation control for one dated flight: terminals, gates, estimated and actual times, and the delayed,
 // departed and arrived states. Customers see these on flight status and their boarding pass snapshots.
@@ -107,7 +107,7 @@ export async function updateFlightOperations(
       if (value !== undefined) data[field] = value
     }
     const status = args.status?.trim() || null
-    if (status && !(OPERATIONAL_STATUSES as readonly string[]).includes(status)) throw new DomainError('Status must be delayed, departed or arrived.')
+    if (status && !(OPERATIONAL_STATUSES as readonly string[]).includes(status)) throw new DomainError('Choose Boarding, Closed, Departed, Delayed or Arrived.')
     const nextActualDeparture = (data.actualDepartureAt as Date | null | undefined) ?? flight.actualDepartureAt
     const nextActualArrival = (data.actualArrivalAt as Date | null | undefined) ?? flight.actualArrivalAt
     if (status === 'departed' && !nextActualDeparture) data.actualDepartureAt = new Date()
@@ -129,7 +129,7 @@ export async function updateFlightOperations(
     if (claim.replay) return { ...(claim.replay.result ?? {}), replayed: true } as ControlResult
     await prisma.flightInstance.update({ where: { id: flight.id }, data })
     // A departed flight stops selling; its buckets close with it.
-    if (data.status === 'departed') await prisma.inventoryBucket.updateMany({ where: { flightInstanceId: flight.id, status: 'open' }, data: { status: 'closed' } })
+    if (['boarding', 'boarding_closed', 'departed'].includes(String(data.status))) await prisma.inventoryBucket.updateMany({ where: { flightInstanceId: flight.id, status: 'open' }, data: { status: 'closed' } })
     await writeAudit(sudo, transactionContext, {
       carrierId: flight.carrierId, key: claim.storageKey, action: 'dated-flight.operations', aggregateType: 'FlightInstance', aggregateId: flight.id,
       before: { status: flight.status, departureGate: flight.departureGate, departureTerminal: flight.departureTerminal }, after: request,

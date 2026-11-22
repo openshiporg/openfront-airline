@@ -9,7 +9,7 @@ export type DatedFlightEligibilityState = {
   actualArrivalAt?: Date | string | null
 }
 
-const passengerProcessingFlightStatuses = new Set(['scheduled', 'open_for_sale', 'closed_for_sale', 'delayed'])
+const passengerProcessingFlightStatuses = new Set(['scheduled', 'open_for_sale', 'closed_for_sale', 'delayed', 'boarding'])
 
 /** A partial refund (goodwill, a fee returned) leaves the booking paid for travel. */
 export const isPaidForService = (paymentStatus: unknown) => paymentStatus === 'paid' || paymentStatus === 'partially_refunded'

@@ -1915,6 +1915,8 @@ enum FlightInstanceStatusType {
   scheduled
   open_for_sale
   closed_for_sale
+  boarding
+  boarding_closed
   delayed
   departed
   arrived
