@@ -32,18 +32,15 @@ type FlightStatus = {
   disruption?: { type: string; status: string; publicSummary?: string | null; publishedAt?: string | null } | null
 }
 
-// Travelers see five states only: Scheduled, Boarding, Delayed, Departed, Cancelled. Sales states are the airline's
-// business; boarding is the 40 minutes before the (estimated) departure; a flight that has arrived has departed.
+// Sales states are not public flight states. A schedule alone is not evidence of boarding or departure.
 type PublicStatus = 'Scheduled' | 'Boarding' | 'Delayed' | 'Departed' | 'Cancelled'
-function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureAt' | 'estimatedDepartureAt'>, now = Date.now()): PublicStatus {
+function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureAt' | 'estimatedDepartureAt' | 'actualDepartureAt'>, now = Date.now()): PublicStatus {
   if (flight.status === 'cancelled') return 'Cancelled'
-  if (['departed', 'arrived'].includes(flight.status)) return 'Departed'
+  if (['departed', 'arrived'].includes(flight.status) || flight.actualDepartureAt) return 'Departed'
   const departure = Date.parse(flight.estimatedDepartureAt || flight.scheduledDepartureAt)
   const late = flight.status === 'delayed' || (!!flight.estimatedDepartureAt && departure - Date.parse(flight.scheduledDepartureAt) >= 15 * 60_000)
-  if (Number.isFinite(departure) && now >= departure - 40 * 60_000 && now < departure) return 'Boarding'
-  // Operations may not record the push-back; once the (estimated) departure time has passed the flight has left.
-  if (Number.isFinite(departure) && now >= departure) return 'Departed'
-  return late ? 'Delayed' : 'Scheduled'
+  // Without an operational departure, an overdue flight is delayed, not presumed airborne.
+  return late || (Number.isFinite(departure) && now >= departure) ? 'Delayed' : 'Scheduled'
 }
 const statusTone = (status: PublicStatus) => status === 'Cancelled' ? 'bad' : status === 'Delayed' ? 'warn' : 'ok'
 
