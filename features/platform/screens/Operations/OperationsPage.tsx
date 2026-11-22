@@ -11,12 +11,12 @@ import { formatAirportClock } from '@/features/airline/lib/time'
 const workspaceGroups = [
   { title: 'Plan', items: [
     { href: '/dashboard/platform/network', title: 'Network' },
-    { href: '/dashboard/platform/schedules', title: 'Schedules & flights' },
-    { href: '/dashboard/platform/fares', title: 'Fares & products' },
+    { href: '/dashboard/platform/schedules', title: 'Schedules' },
+    { href: '/dashboard/platform/fares', title: 'Fares' },
   ] },
   { title: 'Sell', items: [
-    { href: '/dashboard/platform/inventory', title: 'Inventory & fares' },
-    { href: '/dashboard/platform/offers', title: 'Offers' },
+    { href: '/dashboard/platform/inventory', title: 'Seat inventory' },
+    { href: '/dashboard/platform/offers', title: 'Sell a flight' },
     { href: '/dashboard/platform/bookings', title: 'Bookings' },
     { href: '/dashboard/platform/tickets', title: 'Tickets' },
     { href: '/dashboard/platform/passengers', title: 'Passengers' },
@@ -33,10 +33,10 @@ const workspaceGroups = [
     { href: '/dashboard/platform/payment-providers', title: 'Payment providers' },
   ] },
   { title: 'Administer', items: [
-    { href: '/dashboard/platform/manifests', title: 'Manifest entry & audit' },
-    { href: '/dashboard/platform/stations', title: 'Stations & access' },
+    { href: '/dashboard/platform/manifests', title: 'Manifests' },
+    { href: '/dashboard/platform/stations', title: 'Stations' },
     { href: '/dashboard/platform/store-settings', title: 'Storefront settings' },
-    { href: '/dashboard/platform/settings', title: 'Readiness & settings' },
+    { href: '/dashboard/platform/settings', title: 'Settings' },
   ] },
 ] as const
 
@@ -102,7 +102,7 @@ export default async function OperationsPage() {
   }).filter(queue => queue.count !== null && canOpen(queue.href))
   return <PageContainer
     title="Carrier operations"
-    breadcrumbs={[{ type: 'link' as const, label: 'Dashboard', href: '/dashboard' }, { type: 'page' as const, label: 'Platform' }, { type: 'page' as const, label: 'Carrier operations' }]}
+    breadcrumbs={[{ type: 'page' as const, label: 'Dashboard' }]}
     header={<DeskHeader
       title={carrier?.name ?? 'Carrier unavailable'}
       tone={carrier ? launchTone : 'idle'}

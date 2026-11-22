@@ -154,6 +154,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   // Round trips are two reservations: the outbound, then the return for the same travelers.
   const [leg, setLeg] = useState<'outbound' | 'return'>('outbound')
   const [returnSearch, setReturnSearch] = useState<SearchInput | null>(null)
+  const [editingSearch, setEditingSearch] = useState(false)
   const [earlierConfirmations, setEarlierConfirmations] = useState<Array<{ recordLocator: string; carrierCode: string; token: string }>>([])
   const [travelerValues, setTravelerValues] = useState<TravelerValues[]>([])
   const [recovering, setRecovering] = useState(false)
@@ -202,14 +203,14 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   useEffect(() => {
     const reference = new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase()
     if (reference && /^[A-Z0-9]{5,8}$/.test(reference) && recordLocatorInput.current && !recordLocatorInput.current.value) recordLocatorInput.current.value = reference
-    // Back from Stripe: retrieve the booking with the code saved in this browser, which finishes the payment.
-    if (reference && new URLSearchParams(window.location.search).get('checkout')) {
+    // Back from Stripe, or in from the emailed link: retrieve the booking with the code in the link or saved in this browser.
+    if (reference) {
       try {
         // The return link carries the access code in its fragment (never sent to a server) for browsers that don't have it saved.
         const returned = new URLSearchParams(window.location.hash.slice(1)).get('code')
         if (returned) { localStorage.setItem(`${storagePrefix}:booking:${reference}`, returned); history.replaceState(null, '', window.location.pathname + window.location.search) }
         const saved = localStorage.getItem(`${storagePrefix}:booking:${reference}`)
-        if (saved) { setBookingCredentials(reference, saved); requestAnimationFrame(() => manageForm.current?.requestSubmit()) }
+        if (saved && (returned || new URLSearchParams(window.location.search).get('checkout'))) { setBookingCredentials(reference, saved); requestAnimationFrame(() => manageForm.current?.requestSubmit()) }
       } catch { /* the customer enters the code */ }
     }
   }, [])
@@ -269,7 +270,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   }
 
   async function runSearch(input: SearchInput) {
-    lastSearch.current = input
+    lastSearch.current = input; setEditingSearch(false)
     if (pendingBooking || intentUnavailable) { setStatus('Check your previous reservation request first. It may have gone through even if the page didn’t confirm it.'); return }
     setBusy(true); setStatus(''); setFlights([]); setSelected(null); setHeldOffer(null); bookingAttempt.current = null
     try {
@@ -327,7 +328,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       localStorage.setItem(bookingKey(created.recordLocator), created.bookingAccessToken)
       setBookingCredentials(created.recordLocator, created.bookingAccessToken); setConfirmation({ recordLocator: created.recordLocator, carrierCode: carrier.code, token: created.bookingAccessToken })
       sessionStorage.removeItem(intentStorageKey); setPendingBooking(null)
-      bookingAttempt.current = null; setHeldOffer(null); setSelected(null)
+      bookingAttempt.current = null; setHeldOffer(null); setSelected(null); setFlights([])
       setStatus(`Reservation ${created.recordLocator} is confirmed and awaiting payment.`)
       try {
         const current = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: created.recordLocator, token: created.bookingAccessToken })
@@ -457,9 +458,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const setPartyCount = (key: keyof Party, value: number) => setParty(current => { const next = { ...current, [key]: value }; return { ...next, infants: Math.min(next.infants, next.adults) } })
   const searchForm = <form onSubmit={search}>
     <div className="af-widget-grid" data-return={tripType === 'round-trip' ? 'true' : undefined}>
-      <div className="af-field af-icon-field"><span className="af-field-label">From</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination('') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code" />}</div>
+      <div className="af-field af-icon-field af-field-wide"><span className="af-field-label">From</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination('') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code" />}</div>
       <button type="button" aria-label="Swap origin and destination" disabled={!canSwap} onClick={() => { setOrigin(destination); setDestination(origin) }} className="af-swap"><ArrowLeftRight aria-hidden="true" className="size-5" /></button>
-      <div className="af-field af-icon-field"><span className="af-field-label">To</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Destination airport" name="destinationCode" value={destination} onValueChange={setDestination} required placeholder="Select a destination" className="af-input af-trigger" options={destinations.map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code" />}</div>
+      <div className="af-field af-icon-field af-field-wide"><span className="af-field-label">To</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Destination airport" name="destinationCode" value={destination} onValueChange={setDestination} required placeholder="Select a destination" className="af-input af-trigger" options={destinations.map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code" />}</div>
       <div className="af-field"><span className="af-field-label">Depart</span><PlatformDateInput aria-label="Departure date" name="serviceDate" value={departDate} onChange={setDepartDate} required placeholder="Select date" className="af-input af-trigger" /></div>
       {tripType === 'round-trip' && <div className="af-field"><span className="af-field-label">Return</span><PlatformDateInput aria-label="Return date" value={returnDate} min={departDate} onChange={setReturnDate} required placeholder="Select date" className="af-input af-trigger" /></div>}
       <div className="af-field af-icon-field"><span className="af-field-label">Passengers</span><UserRound aria-hidden="true" />
@@ -479,6 +480,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     </div>
   </form>
   const inWidget = Boolean(hero)
+  // On a phone the hero folds to one line once the traveler is past the search, so the results are the page.
+  const inFlow = flights.length > 0 || Boolean(confirmation) || Boolean(managedBooking) || Boolean(pendingBooking)
+  const tripSummary = confirmation || managedBooking ? `Booking ${(confirmation ?? managedBooking)!.recordLocator}` : flights[0] ? `${flights[0].originCode} to ${flights[0].destinationCode} · ${shortDate.format(new Date(`${flights[0].serviceDate}T00:00:00.000Z`))} · ${flights[0].passengerCount} traveler${flights[0].passengerCount === 1 ? '' : 's'}` : 'Your trip'
   const manageBlock = <>
     <form ref={manageForm} onSubmit={manage} className={inWidget ? '' : 'af-card p-4 sm:p-6'}>
       <h2 className={inWidget ? 'sr-only' : 'text-xl font-semibold'}>{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
@@ -515,7 +519,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     </section>)}
     {confirmation && <section className="af-pass" aria-label={`${carrier.name} reservation confirmation`}>
       <div className="min-w-0">
-        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">{carrier.name} · {leg === 'return' ? 'Return reservation' : returnSearch ? 'Outbound reservation' : 'Reservation'}</span><span className="af-mono text-xs font-semibold">{confirmation.carrierCode}</span></div>
+        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow min-w-0 truncate !text-white/80">{carrier.name} · {leg === 'return' ? 'Return reservation' : returnSearch ? 'Outbound reservation' : 'Reservation'}</span><span className="af-mono shrink-0 text-xs font-semibold">{confirmation.carrierCode}</span></div>
         <div className="p-5 sm:p-6">
           <p className="af-field-label">Booking reference</p>
           <h2 className="af-mono mt-1 text-4xl font-semibold tracking-[0.18em] sm:text-5xl">{confirmation.recordLocator}</h2>
@@ -524,7 +528,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       </div>
       <div className="af-pass-stub p-5 sm:p-6">
         <p className="af-field-label">Access code</p>
-        <code className="af-mono af-well mt-2 block overflow-x-auto px-3 py-2.5 text-xs">{confirmation.token}</code>
+        <code className="af-mono af-well mt-2 block break-all px-3 py-2.5 text-xs">{confirmation.token}</code>
         <p className="mt-2 text-xs text-[var(--af-ink-3)]">{carrier.accessRecoveryEnabled ? 'Also emailed to the lead traveler.' : 'Save it now. It can’t be emailed.'}</p>
         <div className="af-track mt-3" data-block="true"><button onClick={() => navigator.clipboard.writeText(confirmation.token).then(() => setStatus('Access code copied.'), () => setStatus('Copy failed. Select the access code and copy it manually.'))} className="af-pill af-pill-raised">Copy access code</button></div>
         {carrier.onlinePaymentEnabled && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void payOnline(confirmation.recordLocator, confirmation.token)} className="af-pill af-pill-primary">Pay now</button></div>}
@@ -589,7 +593,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
             <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-mono text-3xl font-semibold tracking-[0.16em]">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
             <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
-          {mode !== 'check-in' && <div className="af-track w-fit">{carrier.onlinePaymentEnabled && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
+          {mode !== 'check-in' && <div className="af-track w-fit flex-wrap">{carrier.onlinePaymentEnabled && confirmation?.recordLocator !== managedBooking.recordLocator && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}<button onClick={rotateAccess} className="af-pill af-pill-raised af-pill-sm">Replace access code</button>{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
           {mode !== 'check-in' && cancelQuote && managedBooking.status !== 'cancelled' && <div role="region" aria-label="Cancel booking" className="af-notice mt-3 w-full max-w-xl flex-col !items-stretch" data-tone={cancelQuote.allowed ? 'warn' : 'bad'}>
             <p className="text-sm font-medium"><span className="af-dot" data-tone={cancelQuote.allowed ? 'warn' : 'bad'} />{cancelQuote.summary}</p>
             <div className="af-track mt-3 flex-wrap">{cancelQuote.allowed && <button disabled={busy} onClick={() => void cancelBooking()} className="af-pill af-pill-danger af-pill-sm">{cancelQuote.refundAmount > 0 ? 'Cancel and refund' : 'Cancel booking'}</button>}<button type="button" onClick={() => setCancelQuote(null)} className="af-pill af-pill-raised af-pill-sm">{cancelQuote.allowed ? 'Keep booking' : 'Close'}</button>{!cancelQuote.allowed && <a href="/contact" className="af-pill af-pill-sm">Contact the airline</a>}</div>
@@ -627,10 +631,10 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
               </div>
               {seatSelectionOpen(managedBooking) ? <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="af-field-label">Choose a seat</p><p className="af-mono flex gap-3 text-[0.6875rem] text-[var(--af-ink-3)]"><span className="inline-flex items-center gap-1"><span className="af-seat !min-h-0 size-3 !rounded-sm" data-state="selected" />Yours</span><span className="inline-flex items-center gap-1"><span className="af-seat !min-h-0 size-3 !rounded-sm" data-state="taken" />Taken</span><span className="inline-flex items-center gap-1"><span className="af-seat !min-h-0 size-3 !rounded-sm" data-state="paid" />Paid</span></p></div>
-                {(() => { const map = seatRows(segment.seats); const lockedByCheckIn = Boolean(checkIn && checkIn.status !== 'offloaded'); return <div aria-label={`Seats for ${segment.originCode} to ${segment.destinationCode}`} className="af-well max-h-96 overflow-auto p-3">
+                {(() => { const map = seatRows(segment.seats); const lockedByCheckIn = Boolean(checkIn && checkIn.status !== 'offloaded'); return <div aria-label={`Seats for ${segment.originCode} to ${segment.destinationCode}`} className="af-well -mx-2 max-h-96 overflow-auto px-2 py-3 sm:mx-0 sm:px-3">
                   <div className="mx-auto w-fit space-y-1.5">
-                    <div aria-hidden="true" className="flex items-center gap-1.5"><span className="w-7" />{map.columns.map((column, index) => <span key={column} className={`af-mono w-10 text-center text-[0.6875rem] font-semibold text-[var(--af-ink-3)] sm:w-11 ${index === map.aisleAfter ? 'mr-5' : ''}`}>{column}</span>)}</div>
-                    {map.rows.map(([row, seatsByColumn]) => <div key={row} className="flex items-center gap-1.5"><span className="af-mono w-7 text-right text-[0.6875rem] font-semibold text-[var(--af-ink-3)]">{row || ''}</span>{map.columns.map((column, index) => { const seat = seatsByColumn.get(column); const spacing = index === map.aisleAfter ? 'mr-5' : ''; if (!seat) return <span key={column} aria-hidden="true" className={`w-10 sm:w-11 ${spacing}`} />; const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || lockedByCheckIn} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className={`af-seat w-10 text-xs sm:w-11 ${spacing}`}>{column}</button> })}</div>)}
+                    <div aria-hidden="true" className="flex items-center gap-1.5"><span className="w-7" />{map.columns.map((column, index) => <span key={column} className={`af-mono w-10 max-[389px]:w-9 text-center text-[0.6875rem] font-semibold text-[var(--af-ink-3)] sm:w-11 ${index === map.aisleAfter ? 'mr-5' : ''}`}>{column}</span>)}</div>
+                    {map.rows.map(([row, seatsByColumn]) => <div key={row} className="flex items-center gap-1.5"><span className="af-mono w-7 text-right text-[0.6875rem] font-semibold text-[var(--af-ink-3)]">{row || ''}</span>{map.columns.map((column, index) => { const seat = seatsByColumn.get(column); const spacing = index === map.aisleAfter ? 'mr-5' : ''; if (!seat) return <span key={column} aria-hidden="true" className={`w-10 max-[389px]:w-9 sm:w-11 ${spacing}`} />; const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || lockedByCheckIn} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className={`af-seat w-10 max-[389px]:w-9 text-xs sm:w-11 ${spacing}`}>{column}</button> })}</div>)}
                   </div>
                 </div> })()}
               </div> : managedBooking.status === 'cancelled' || segment.status === 'cancelled' ? null : <p className="af-mono text-xs text-[var(--af-ink-3)]">Seats open once your ticket is issued</p>}
@@ -652,7 +656,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
 
   if (!hero) return <div className="space-y-6">{flow}</div>
   return <>
-    <HomeHero lead={hero.lead} windowImage={hero.windowImage}>
+    <HomeHero lead={hero.lead} windowImage={hero.windowImage} compact={inFlow && !editingSearch} summary={inFlow && !editingSearch ? <button type="button" onClick={() => setEditingSearch(true)} className="af-trip-summary"><span className="min-w-0 truncate">{tripSummary}</span><span className="shrink-0 font-semibold underline underline-offset-4">Change</span></button> : null}>
       <div role="tablist" aria-label="Book or manage" className="af-widget-tabs">
         <button type="button" role="tab" id="af-tab-book" aria-selected={widgetTab === 'book'} aria-controls="af-panel-book" onClick={() => setWidgetTab('book')} className="af-widget-tab"><Plane aria-hidden="true" />Book a flight</button>
         <button type="button" role="tab" id="af-tab-manage" aria-selected={widgetTab === 'manage'} aria-controls="af-panel-manage" onClick={() => setWidgetTab('manage')} className="af-widget-tab"><CalendarDays aria-hidden="true" />Manage booking</button>

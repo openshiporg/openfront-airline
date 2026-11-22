@@ -38,7 +38,9 @@ function statusTone(value: string) {
   return 'warn'
 }
 
+// Sales states are the airline's business, not the traveler's: a flight that is on sale or closed for sale is simply scheduled.
 function displayStatus(value: string) {
+  if (['open_for_sale', 'closed_for_sale', 'scheduled'].includes(value)) return 'Scheduled'
   return value.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase())
 }
 

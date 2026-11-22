@@ -2,11 +2,12 @@ import '@/features/storefront/styles/stride.css'
 
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
-import { Menu, UserRound } from 'lucide-react'
+import { UserRound } from 'lucide-react'
 
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { storefrontFontVariables } from '@/features/storefront/lib/fonts'
 import { publicNavigation } from '@/features/storefront/lib/public-navigation'
+import { StorefrontMenu } from './StorefrontMenu'
 import { storefrontBrandPalette } from '@/features/storefront/lib/theme'
 import { DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '@/features/platform/store-settings/lib/store-logo'
 
@@ -58,12 +59,7 @@ export function StorefrontLogo({ carrier }: { carrier: Pick<PublicCarrierIdentit
 function StorefrontHeader({ carrier, current, overlay }: { carrier: Pick<PublicCarrierIdentity, 'name' | 'code' | 'logoIcon' | 'logoColor'>; current?: StorefrontRoute; overlay?: boolean }) {
   return <header className="af-header" data-overlay={overlay ? 'true' : undefined}>
     <div className="af-container flex h-16 items-center gap-3 xl:gap-6">
-      <details className="group relative xl:hidden">
-        <summary aria-label="Menu" className="af-menu-toggle list-none [&::-webkit-details-marker]:hidden"><Menu aria-hidden="true" className="size-6" /></summary>
-        <nav aria-label="Passenger services" className="af-menu absolute left-0 top-[calc(100%+0.25rem)] z-40 grid w-[min(18rem,calc(100vw-2rem))] divide-y divide-[var(--af-line)]">
-          {publicNavigation.map(item => <Link key={item.href} href={item.href} aria-current={item.href === current ? 'page' : undefined} className="flex min-h-12 items-center px-4 font-medium hover:bg-[var(--af-paper)] aria-[current=page]:font-semibold aria-[current=page]:shadow-[inset_3px_0_0_var(--af-accent)]">{item.label}</Link>)}
-        </nav>
-      </details>
+      <StorefrontMenu items={publicNavigation} current={current} tripsHref={TRIPS_ROUTE} />
       <StorefrontLogo carrier={carrier} />
       <nav aria-label="Passenger services" className="mx-auto hidden h-full xl:block">
         <ul className="flex h-full items-stretch gap-10">{centreNavigation(carrier.name).map(item => <li key={item.href} className="flex"><Link href={item.href} aria-current={item.href === current ? 'page' : undefined} className="af-nav-link">{item.label}</Link></li>)}</ul>

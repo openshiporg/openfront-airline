@@ -118,7 +118,8 @@ export async function sendBookingConfirmationEmail(booking: BookingConfirmation)
     return false
   }
   try {
-    const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(booking.recordLocator)}`
+    // The access code rides in the fragment, which browsers never send to a server, so the link opens the booking in one tap.
+    const manageUrl = `${getBaseUrlForEmails()}/manage-booking?ref=${encodeURIComponent(booking.recordLocator)}#code=${encodeURIComponent(booking.accessToken)}`
     await transport.sendMail({
       to: booking.to,
       from: process.env.SMTP_FROM,

@@ -212,7 +212,7 @@ export async function PlatformPassengersPage({ searchParams }: { searchParams?: 
   const nextPageHref = page?.state === 'ready' && page.nextCursor
     ? withWorklistSearch(passengerServiceHref('/dashboard/platform/passengers', page.nextCursor), filters)
     : null
-  return <Shell title="Passengers & service" eyebrow="Customers" meta={page?.state === 'ready' ? <span className="tabular-nums ">{plural(page.totalCount ?? 0, 'passenger')}</span> : undefined}>
+  return <Shell title="Passengers" eyebrow="Customers" meta={page?.state === 'ready' ? <span className="tabular-nums ">{plural(page.totalCount ?? 0, 'passenger')}</span> : undefined}>
     <SearchFilters action="/dashboard/platform/passengers" filters={filters} label="Passenger name or reference" statuses={['active','merged','restricted','archived']} />
     {!response.success ? <><Failure error={response.error} />{firstPageHref && <PageLink href={firstPageHref}>Retry from first page</PageLink>}</>
       : page?.state === 'unavailable' ? <StateNotice role="alert" href={firstPageHref} label="Retry from first page">Passenger records are unavailable under your current access.</StateNotice>
@@ -345,7 +345,7 @@ export async function PlatformInventoryPage({ searchParams }: { searchParams?: S
   const flightRetryHref = requestedFlightCursor
     ? flightWorklistHref('/dashboard/platform/inventory', null, flightFrom)
     : null
-  return <Shell title="Inventory & fares" eyebrow="Revenue">
+  return <Shell title="Seat inventory" eyebrow="Revenue">
     {response.success ? <NetworkDesk schedules={[]} flights={flightQueue?.flights ?? []} defaultCurrencyCode={response.data.authenticatedItem?.carrier?.defaultCurrencyCode ?? 'USD'} defaultTimezone={response.data.authenticatedItem?.carrier?.defaultTimezone ?? 'UTC'} inventoryActorCarrierId={response.data.authenticatedItem?.carrier?.id ?? ''} mode="inventory" detailBase="/dashboard/platform/inventory" flightWorklist={flightQueue ? { state: flightQueue.page.state, totalCount: flightQueue.page.totalCount, pageItemCount: flightQueue.page.items.length, nextCursor: flightQueue.page.state === 'ready' ? flightQueue.page.nextCursor : null, cursor: flightCursor, from: flightFrom } : undefined} /> : <><Failure error={response.error} />{flightRetryHref && <PageLink href={flightRetryHref}>First page</PageLink>}</>}
   </Shell>
 }
@@ -439,7 +439,7 @@ export async function PlatformPaymentsPage({ searchParams }: { searchParams?: Se
   const latestEvidencePageHref = paymentDeskWorklistHref('/dashboard/platform/payments', { paymentCursor })
 
   const evidenceCount = evidencePage?.state === 'ready' ? evidencePage.totalCount : null
-  return <Shell title="Payments & refunds" eyebrow="Settlement" tone={evidenceCount ? 'warn' : undefined} meta={evidenceCount ? <span className="tabular-nums ">{evidenceCount} awaiting approval</span> : undefined}>
+  return <Shell title="Payments" eyebrow="Settlement" tone={evidenceCount ? 'warn' : undefined} meta={evidenceCount ? <span className="tabular-nums ">{evidenceCount} awaiting approval</span> : undefined}>
     {!response.success ? <><Failure error={response.error} /><Track>{firstPaymentPageHref && <Pill asChild size="sm"><Link href={firstPaymentPageHref}>Retry payments</Link></Pill>}{firstEvidencePageHref && <Pill asChild size="sm"><Link href={firstEvidencePageHref}>Retry approvals</Link></Pill>}</Track></> : <div className="space-y-8">
       <DeskSection title="Awaiting approval" count={evidencePage?.state === 'ready' ? evidencePage.totalCount ?? undefined : undefined} actions={evidencePage?.state === 'ready' && evidencePage.hasNextPage && nextEvidencePageHref ? <PageLink href={nextEvidencePageHref}>Next 100</PageLink> : undefined}>
         {evidencePage?.state === 'unavailable' ? <StateNotice role="alert" href={firstEvidencePageHref} label="Retry from first page">Approval queue is unavailable under your current access.</StateNotice>
@@ -552,7 +552,7 @@ export async function PlatformSettingsPage({ searchParams }: { searchParams?: Se
     : null
 
   const carrier = actor?.carrier
-  return <Shell title="Settings & readiness" eyebrow="Carrier" tone={carrier ? carrier.directSalesEnabled === true ? 'ok' : 'idle' : undefined} status={carrier ? carrier.directSalesEnabled === true ? 'Direct sales on' : 'Direct sales off' : undefined} meta={carrier ? <span><span className="tabular-nums">{carrier.code ?? '—'}</span> · {carrier.name ?? 'Carrier'}</span> : undefined}>
+  return <Shell title="Settings" eyebrow="Carrier" tone={carrier ? carrier.directSalesEnabled === true ? 'ok' : 'idle' : undefined} status={carrier ? carrier.directSalesEnabled === true ? 'Direct sales on' : 'Direct sales off' : undefined} meta={carrier ? <span><span className="tabular-nums">{carrier.code ?? '—'}</span> · {carrier.name ?? 'Carrier'}</span> : undefined}>
     {!actorResponse.success ? <Failure error={actorResponse.error} /> : <div className="space-y-8">
       {carrier ? <ReadoutStrip><Readout label="Carrier" value={<span className="tabular-nums">{carrier.code ?? '—'}</span>} sub={carrier.name ?? undefined} /><Readout label="Currency" value={<span className="tabular-nums">{carrier.defaultCurrencyCode ?? '—'}</span>} /><Readout label="Timezone" value={<span className="text-base">{carrier.defaultTimezone ?? '—'}</span>} /><Readout label="Direct sales" tone={carrier.directSalesEnabled === true ? 'ok' : 'idle'} value={carrier.directSalesEnabled === true ? 'On' : carrier.directSalesEnabled === false ? 'Off' : '—'} /></ReadoutStrip> : <StateNotice>No carrier identity returned.</StateNotice>}
       <SearchFilters action="/dashboard/platform/settings" filters={filters} label="Connection name or reference" statuses={['pending', 'active', 'paused', 'failed', 'revoked']} />
