@@ -160,8 +160,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   // A signed-in traveler's saved details fill the lead traveler.
   useEffect(() => {
     if (mode !== 'book') return
-    graphql<{ customerAccount: { email: string; givenName: string; familyName: string; dateOfBirth: string; phone: string } | null }>('{customerAccount{email givenName familyName dateOfBirth phone}}', {})
-      .then(data => { const a = data.customerAccount; if (a) setTravelerValues(values => values.length ? values : [{ givenName: a.givenName, familyName: a.familyName, dateOfBirth: a.dateOfBirth, email: a.email, phone: a.phone }]) })
+    graphql<{ travelerAccount: { email: string; givenName: string; familyName: string; dateOfBirth: string; phone: string } | null }>('{travelerAccount{email givenName familyName dateOfBirth phone}}', {})
+      .then(data => { const a = data.travelerAccount; if (a) setTravelerValues(values => values.length ? values : [{ givenName: a.givenName, familyName: a.familyName, dateOfBirth: a.dateOfBirth, email: a.email, phone: a.phone }]) })
       .catch(() => {})
   }, [mode])
   const [recovering, setRecovering] = useState(false)

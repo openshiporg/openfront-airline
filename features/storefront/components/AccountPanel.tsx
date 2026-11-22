@@ -30,9 +30,9 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
   const [resetToken, setResetToken] = useState('')
 
   async function load() {
-    const data = await graphql<{ customerAccount: Profile | null }>(`{customerAccount{${PROFILE}}}`, {})
-    setProfile(data.customerAccount)
-    if (data.customerAccount) setTrips((await graphql<{ customerTrips: Trip[] }>('{customerTrips{recordLocator status paymentStatus ticketingStatus totalAmount currencyCode pass segments{originCode destinationCode flightNumber departureAt departureLabel}}}', {})).customerTrips)
+    const data = await graphql<{ travelerAccount: Profile | null }>(`{travelerAccount{${PROFILE}}}`, {})
+    setProfile(data.travelerAccount)
+    if (data.travelerAccount) setTrips((await graphql<{ customerTrips: Trip[] }>('{customerTrips{recordLocator status paymentStatus ticketingStatus totalAmount currencyCode pass segments{originCode destinationCode flightNumber departureAt departureLabel}}}', {})).customerTrips)
   }
 
   useEffect(() => {

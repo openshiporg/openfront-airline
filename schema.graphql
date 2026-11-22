@@ -7026,6 +7026,15 @@ type Mutation {
   updateFlightOperations(flightInstanceId: ID!, departureTerminal: String, departureGate: String, arrivalTerminal: String, arrivalGate: String, estimatedDepartureAt: String, estimatedArrivalAt: String, actualDepartureAt: String, actualArrivalAt: String, status: String, idempotencyKey: String!): AirlineOperationResult!
   recordBagEvent(bagId: ID!, action: String!, airportCode: String, note: String, idempotencyKey: String!): AirlineOperationResult!
   startCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!): CustomerCheckoutSession!
+  startBookingCheckout(bookingId: ID!): CustomerCheckoutSession!
+  settleBookingCheckout(bookingId: ID!): Boolean!
+  signUpCustomer(carrierCode: String!, email: String!, password: String!, givenName: String!, familyName: String!): CustomerAccountProfile!
+  signInCustomer(carrierCode: String!, email: String!, password: String!): CustomerAccountProfile!
+  signOutCustomer: Boolean!
+  updateCustomerTraveler(givenName: String!, familyName: String!, dateOfBirth: String!, phone: String!): CustomerAccountProfile!
+  sendCustomerAccountLink(carrierCode: String!, email: String!, purpose: String!): Boolean!
+  confirmCustomerEmail(token: String!): CustomerAccountProfile!
+  resetCustomerPassword(token: String!, password: String!): CustomerAccountProfile!
   completeCustomerCheckout(carrierCode: String!, recordLocator: String!, accessToken: String!, checkoutSessionId: String): CustomerCheckoutResult!
   recordReceivedPayment(bookingId: ID!, purpose: String!, method: String!, externalReference: String!, amount: Int!, receivedAt: String!, idempotencyKey: String!): AirlineOperationResult!
   refreshAirlineClocks: AirlineClockRefresh!
@@ -7263,6 +7272,9 @@ type Query {
   redirectToInit: Boolean
   airlineFlightOptions(originCode: String!, destinationCode: String!, serviceDate: String!, passengerCount: Int = 1): [AirlineFlightOption!]!
   customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
+  openCustomerBooking(carrierCode: String!, recordLocator: String!, lastName: String!): String!
+  travelerAccount: CustomerAccountProfile
+  customerTrips: [CustomerTrip!]!
   customerCancellationQuote(recordLocator: String!, accessToken: String!): CustomerCancellationQuote!
   operatorBookingReceipt(bookingId: ID!): JSON!
   publicCarrierIdentity(carrierCode: String!): PublicCarrierIdentity
@@ -7526,6 +7538,34 @@ type PublicFlightStatus {
   destinationCity: String!
   destinationTimezone: String!
   disruption: PublicFlightDisruption
+}
+
+type CustomerAccountProfile {
+  email: String!
+  emailVerified: Boolean!
+  givenName: String!
+  familyName: String!
+  dateOfBirth: String!
+  phone: String!
+}
+
+type CustomerTripSegment {
+  originCode: String!
+  destinationCode: String!
+  flightNumber: String!
+  departureAt: String
+  departureLabel: String
+}
+
+type CustomerTrip {
+  recordLocator: String!
+  status: String!
+  paymentStatus: String!
+  ticketingStatus: String!
+  totalAmount: Int!
+  currencyCode: String!
+  pass: String!
+  segments: [CustomerTripSegment!]!
 }
 
 type CustomerCheckoutSession {

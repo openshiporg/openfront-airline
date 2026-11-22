@@ -280,7 +280,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): [AirlineFlightOption!]!
         customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
         openCustomerBooking(carrierCode: String!, recordLocator: String!, lastName: String!): String!
-        customerAccount: CustomerAccountProfile
+        travelerAccount: CustomerAccountProfile
         customerTrips: [CustomerTrip!]!
         customerCancellationQuote(recordLocator: String!, accessToken: String!): CustomerCancellationQuote!
         operatorBookingReceipt(bookingId: ID!): JSON!
@@ -504,7 +504,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         redirectToInit,
         customerBooking: getCustomerBooking,
         openCustomerBooking,
-        customerAccount,
+        travelerAccount: customerAccount,
         customerTrips,
         customerCancellationQuote,
         operatorBookingReceipt,
