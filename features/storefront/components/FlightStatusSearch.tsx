@@ -41,6 +41,8 @@ function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureA
   const departure = Date.parse(flight.estimatedDepartureAt || flight.scheduledDepartureAt)
   const late = flight.status === 'delayed' || (!!flight.estimatedDepartureAt && departure - Date.parse(flight.scheduledDepartureAt) >= 15 * 60_000)
   if (Number.isFinite(departure) && now >= departure - 40 * 60_000 && now < departure) return 'Boarding'
+  // Operations may not record the push-back; once the (estimated) departure time has passed the flight has left.
+  if (Number.isFinite(departure) && now >= departure) return 'Departed'
   return late ? 'Delayed' : 'Scheduled'
 }
 const statusTone = (status: PublicStatus) => status === 'Cancelled' ? 'bad' : status === 'Delayed' ? 'warn' : 'ok'

@@ -157,7 +157,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
       const accepted = await mutate(`mutation($offer: ID!, $passengers: [ID!]!, $key: String!, $recover: Boolean) { createBookingFromOffer(offerId: $offer, passengerIds: $passengers, idempotencyKey: $key, recoverOnly: $recover) { bookingId recordLocator status bookingReceipt } }`, { ...command, recover: recoverOnly })
       const result = accepted.createBookingFromOffer
       sessionStorage.removeItem(commandStorageKey); setOriginalBookingCommand(null)
-      setMessage(`Reservation ${result.recordLocator} acknowledged. Current status ${result.status}; payment ${result.bookingReceipt.current.paymentStatus}, internal documents ${result.bookingReceipt.current.ticketingStatus}. Open the booking detail for accepted terms and current controlled commands.`); router.refresh()
+      setMessage(result.bookingReceipt.current.paymentStatus === 'paid' ? `Booking ${result.recordLocator} is confirmed and paid.` : `Booking ${result.recordLocator} is confirmed. Take payment below to issue the ticket.`); router.refresh()
     } catch (error) { setMessageFailed(true); setMessage(`${error instanceof Error ? error.message : 'Booking acknowledgement unavailable.'} Preserve the original command/key; a lost response or expired offer is not proof of rollback.`) }
     setWorking(null)
   }
