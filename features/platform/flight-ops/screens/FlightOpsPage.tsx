@@ -15,7 +15,7 @@ const BASE = '/dashboard/platform/flight-ops'
 
 type Actor = {
   carrier?: { id: string; defaultTimezone: string | null } | null
-  role?: { canReadNetwork: boolean | null; canManageNetwork: boolean | null; canManageAirportService: boolean | null; canManageCarriers: boolean | null } | null
+  role?: { canReadNetwork: boolean | null; canManageNetwork: boolean | null; canManageAirportService: boolean | null; canManageCarriers: boolean | null; canReadDisruptions?: boolean | null; canManageDisruptions?: boolean | null } | null
 } | null
 
 type AirportRef = { iataCode: string | null; timezone: string | null } | null
@@ -42,7 +42,7 @@ type FlightRow = {
 }
 
 const ACTOR_QUERY = `query FlightOpsActor {
-  authenticatedItem { ... on User { carrier { id defaultTimezone } role { canReadNetwork canManageNetwork canManageAirportService canManageCarriers } } }
+  authenticatedItem { ... on User { carrier { id defaultTimezone } role { canReadNetwork canManageNetwork canManageAirportService canManageCarriers canReadDisruptions canManageDisruptions } } }
 }`
 
 const FLIGHTS_QUERY = `query FlightOpsBoard($where: FlightInstanceWhereInput!, $delayedWhere: FlightInstanceWhereInput!, $departedWhere: FlightInstanceWhereInput!, $arrivedWhere: FlightInstanceWhereInput!) {
@@ -159,7 +159,8 @@ export async function FlightOpsPage({ searchParams }: { searchParams?: SearchPar
   const station = /^[A-Z]{3}$/.test(rawStation) ? rawStation : ''
   const stationInvalid = Boolean(rawStation) && !station
 
-  const disruptionsLink = <Track><Pill asChild size="sm"><Link href="/dashboard/platform/disruptions">Disruptions</Link></Pill></Track>
+  // Only roles that can open Disruptions get the link.
+  const disruptionsLink = actor?.role?.canReadDisruptions || actor?.role?.canManageDisruptions ? <Track><Pill asChild size="sm"><Link href="/dashboard/platform/disruptions">Disruptions</Link></Pill></Track> : undefined
   const meta = <span className="tabular-nums ">{serviceDate}{station ? ` / ${station}` : ' / All stations'}</span>
   const filters = (
     <FilterBar action={BASE}>

@@ -100,7 +100,7 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
   }
 
   // Manifests are station-scoped: an operator with no active station assignment sees none, whatever is flying.
-  if (manifest.noStationScope) return <Well>No departures to show: manifests list the stations you are assigned to, and you have no active station assignment. Assign stations in <Link href="/dashboard/platform/stations" className="font-medium text-foreground underline underline-offset-4">Stations &amp; access</Link>.</Well>
+  if (manifest.noStationScope) return <Well>No departures to show: manifests list the stations you are assigned to, and you have no active station assignment. Ask an administrator to assign your stations under Stations &amp; access.</Well>
   if (!manifest.flights.length && !manifest.refundCleanup.items.length && manifest.refundCleanup.totalCount === 0) return <Well>No flights or refund/void segments for <span className="tabular-nums  text-foreground">{manifest.serviceDate}</span></Well>
   const allTravelers = manifest.flights.flatMap(flight => flight.travelers)
   const checkedInCount = allTravelers.filter(traveler => traveler.checkIn?.status === 'checked_in' || traveler.checkIn?.boardingPass?.status === 'boarded').length
