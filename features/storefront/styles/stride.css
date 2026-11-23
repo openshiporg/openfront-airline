@@ -81,7 +81,14 @@
 .af-hero { position: relative; isolation: isolate; overflow: hidden; background: linear-gradient(105deg, var(--af-deep) 0%, var(--af-deep-2) 46%, var(--af-deep) 100%); color: #fff; --af-board-ink-2: rgb(255 255 255 / 0.84); }
 .af-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgb(8 12 32 / 0.78) 0%, rgb(8 12 32 / 0.5) 38%, rgb(8 12 32 / 0.08) 68%, transparent 100%), linear-gradient(180deg, rgb(8 12 32 / 0.35) 0%, transparent 22%, transparent 62%, rgb(8 12 32 / 0.55) 100%); }
 .af-hero-photo { position: absolute; inset: 0; z-index: -2; background: #1d2442 url(/storefront/hero-jet.webp) 64% 42% / cover no-repeat; }
-@media (max-width: 639px) { .af-hero-photo { bottom: auto; height: 17rem; background-size: cover; background-position: 72% 40%; } .af-hero { background: #262646; } .af-hero::before { background: linear-gradient(180deg, rgb(8 12 32 / 0.5) 0, rgb(8 12 32 / 0.2) 7rem, rgb(8 12 32 / 0.45) 12rem, #262646 17rem); } }
+/* Phones: the jet sits in its own band above the headline, never behind it; "Elevated" takes a lighter tint and a shadow. */
+@media (max-width: 639px) {
+  .af-hero-photo { bottom: auto; height: 15rem; background-size: auto 15rem; background-position: 72% 0; }
+  .af-hero { background: #262646; }
+  .af-hero::before { background: linear-gradient(180deg, rgb(8 12 32 / 0.45) 0, rgb(8 12 32 / 0.1) 5rem, rgb(8 12 32 / 0.4) 10rem, #262646 15rem); }
+  .af-hero:not([data-compact="true"]) .af-hero-inner { padding-top: 8.75rem; }
+  .af-hero-title em { color: #cfe4ff; text-shadow: 0 1px 2px rgb(3 8 22 / 0.5), 0 1px 14px rgb(3 8 22 / 0.6); }
+}
 .af-hero-inner { position: relative; padding-top: 4.75rem; padding-bottom: 1.25rem; }
 @media (min-width: 1024px) { .af-hero-inner { padding-top: 5.75rem; padding-bottom: 1.5rem; } }
 .af-hero-title { font-size: clamp(2.125rem, 3.65vw, 3.5rem); text-shadow: 0 1px 14px rgb(3 8 22 / 0.55); }
