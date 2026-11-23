@@ -16,7 +16,7 @@ export function StorefrontMenu({ items, current, tripsHref }: { items: ReadonlyA
         <Dialog.Title className="af-drawer-title">Menu</Dialog.Title>
         <Dialog.Close aria-label="Close menu" className="af-drawer-close"><X aria-hidden="true" /></Dialog.Close>
       </div>
-      <nav aria-label="Passenger services" className="af-drawer-nav">
+      <nav aria-label="Main" className="af-drawer-nav">
         {items.map(item => <Dialog.Close asChild key={item.href}>
           <Link href={item.href} aria-current={item.href === current ? 'page' : undefined} className="af-drawer-link">{item.href === '/' ? 'Home' : item.label}</Link>
         </Dialog.Close>)}

@@ -17,3 +17,5 @@ const hits = (pattern: RegExp) => files("features/storefront").flatMap((file) =>
 
 test("storefront has no native <select>", () => assert.deepEqual(hits(/<select\b/), []));
 test("storefront has no native date/time inputs", () => assert.deepEqual(hits(/type=["'](?:date|time|datetime-local)["']/), []));
+// A computed type (type={cond ? 'date' : 'text'}) is still a native date input.
+test("storefront has no computed native date/time inputs", () => assert.deepEqual(hits(/type=\{[^}]*["'](?:date|time|datetime-local)["']/), []));

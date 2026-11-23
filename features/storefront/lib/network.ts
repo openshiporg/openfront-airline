@@ -4,7 +4,8 @@ import { cache } from 'react'
 
 import { keystoneContext } from '@/features/keystone/context'
 
-export type StorefrontAirport = { code: string; city: string; name: string }
+// `timezone` (IANA) puts each flight time in its own airport's clock.
+export type StorefrontAirport = { code: string; city: string; name: string; timezone: string | null }
 // One timetable line per route: the first upcoming flight's number and local clock times. Public schedule data only.
 export type StorefrontTimetableLine = { flightNumber: string; departsAt: string; arrivesAt: string; originTimezone: string; destinationTimezone: string }
 // The lowest fare on sale per route (base plus taxes, per traveler) and whether that fare includes a checked bag.
@@ -34,7 +35,7 @@ export const getStorefrontNetwork = cache(async (carrierId: string): Promise<Sto
   try {
     const routes = await networkDb().route.findMany({
       where: { carrierId, status: 'active', origin: { isActive: true }, destination: { isActive: true } },
-      select: { origin: { select: { iataCode: true, city: true, name: true } }, destination: { select: { iataCode: true, city: true, name: true } } },
+      select: { origin: { select: { iataCode: true, city: true, name: true, timezone: true } }, destination: { select: { iataCode: true, city: true, name: true, timezone: true } } },
       orderBy: [{ origin: { iataCode: 'asc' } }, { destination: { iataCode: 'asc' } }],
       take: 500,
     })
@@ -42,8 +43,8 @@ export const getStorefrontNetwork = cache(async (carrierId: string): Promise<Sto
     const pairs: StorefrontNetwork['routes'] = []
     for (const route of routes) {
       if (!route.origin?.iataCode || !route.destination?.iataCode) continue
-      airports.set(route.origin.iataCode, { code: route.origin.iataCode, city: route.origin.city, name: route.origin.name })
-      airports.set(route.destination.iataCode, { code: route.destination.iataCode, city: route.destination.city, name: route.destination.name })
+      airports.set(route.origin.iataCode, { code: route.origin.iataCode, city: route.origin.city, name: route.origin.name, timezone: route.origin.timezone ?? null })
+      airports.set(route.destination.iataCode, { code: route.destination.iataCode, city: route.destination.city, name: route.destination.name, timezone: route.destination.timezone ?? null })
       pairs.push({ origin: route.origin.iataCode, destination: route.destination.iataCode })
     }
     // Upcoming dates with a flight on sale, per route, so search can start on (and point to) a date that flies.

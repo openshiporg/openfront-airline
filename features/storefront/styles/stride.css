@@ -365,6 +365,8 @@
 .af-footer-sweep { position: absolute; right: 0; bottom: 0; width: min(var(--af-sweep-w), 42%); height: 100%; pointer-events: none; }
 .af-footer-legal { font-size: var(--af-text-xs); font-weight: 500; letter-spacing: var(--af-track-wide); text-transform: uppercase; color: var(--af-on-deep-2); }
 .af-footer-nav { font-size: var(--af-text-sm); }
+/* Phones: the policy links sit above the legal name, so neither runs into the sweep in the corner. */
+@media (max-width: 639px) { .af-footer-legal-row { flex-direction: column; align-items: flex-start; } .af-footer-legal-row .af-footer-policies { order: -1; } }
 .af-footer-nav a { display: inline-flex; align-items: center; min-height: var(--af-control-sm); color: var(--af-on-deep-2); }
 .af-footer-nav a:hover { color: var(--af-on-deep); text-decoration: underline; text-underline-offset: 4px; }
 /* The links stay clear of the sweep in the corner. */
@@ -374,7 +376,11 @@
 .af-table { background: transparent; color: var(--af-ink); }
 .af-results-head { padding: var(--af-space-4) var(--af-space-5); border-radius: var(--af-radius-lg); background: var(--af-deep); color: var(--af-on-deep); font-size: var(--af-text-lg); line-height: var(--af-leading-snug); }
 @media (min-width: 640px) { .af-results-head { padding: var(--af-space-5) var(--af-space-6); font-size: var(--af-text-xl); } }
-.af-sep { display: inline-block; width: 1px; height: 1.1em; margin-inline: var(--af-space-3); vertical-align: -0.15em; background: var(--af-on-deep-edge); }
+/* A row of facts split by hairlines (route · date · travelers). The row sits one separator to the left inside a
+   clipping box, so a fact that wraps to a new line never starts with a separator. */
+.af-meta { overflow: hidden; }
+.af-meta-row { display: flex; flex-wrap: wrap; align-items: baseline; row-gap: var(--af-space-1); margin-left: calc(-1px - 2 * var(--af-space-3)); }
+.af-meta-row > *::before { content: ""; display: inline-block; width: 1px; height: 0.9em; margin-inline: var(--af-space-3); vertical-align: -0.05em; background: currentColor; opacity: 0.5; }
 .af-flight { display: grid; gap: var(--af-space-5); padding: var(--af-space-5); border: 1px solid var(--af-line-2); border-radius: var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow); }
 .af-flight-fare { border-top: 1px solid var(--af-line); padding-top: var(--af-space-5); }
 @media (min-width: 900px) { .af-flight { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--af-space-8); padding: var(--af-space-6); } .af-flight-fare { border-top: 0; border-left: 1px solid var(--af-line); padding-top: 0; padding-left: var(--af-space-8); } }
@@ -382,6 +388,10 @@
 .af-time { font-size: var(--af-text-2xl); font-weight: 700; line-height: var(--af-leading-tight); letter-spacing: var(--af-track-tight); }
 @media (min-width: 640px) { .af-time { font-size: var(--af-text-3xl); } }
 .af-price { font-size: var(--af-text-4xl); font-weight: 700; line-height: var(--af-leading-tight); letter-spacing: var(--af-track-tight); }
+/* "+1" after an arrival time that lands on a later day at the destination. */
+.af-day-shift { margin-left: var(--af-space-1); font-size: var(--af-text-sm); font-weight: 600; line-height: var(--af-leading-none); color: var(--af-ink-2); vertical-align: top; }
+/* Traveler number beside a form section. */
+.af-num { display: inline-grid; place-items: center; width: var(--af-space-6); height: var(--af-space-6); flex-shrink: 0; border-radius: var(--af-radius-sm); background: var(--af-accent); color: var(--af-white); font-size: var(--af-text-xs); font-variant-numeric: tabular-nums; }
 
 /* ── Surfaces ──────────────────────────────────────────────────────────────────────────────────────────────── */
 .af-card { background: var(--af-card); border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); box-shadow: var(--af-shadow); }
@@ -396,7 +406,7 @@
 .af-track[role="group"]:has(> [aria-pressed]), .af-track:has(> [aria-current]) { gap: 0; border-bottom: 1px solid var(--af-line); }
 
 /* Variants. .af-pill is the secondary (outline) button; -primary is the one main action of a view; -ghost is the
-   outline button on the deep ground; -danger cancels. Sizes: 46px, or -sm at 44px. */
+   outline button on the deep ground; -danger cancels. Sizes: 46px, -sm at 44px, -lg at 52px. */
 .af-pill {
   display: inline-flex;
   flex-shrink: 0;
@@ -419,6 +429,7 @@
 .af-pill:disabled, .af-pill[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
 .af-pill svg { width: var(--af-icon); height: var(--af-icon); flex-shrink: 0; }
 .af-pill-sm { min-height: var(--af-control-sm); padding: 0 var(--af-space-4); font-size: var(--af-text-sm); }
+.af-pill-lg { min-height: var(--af-control-lg); padding: 0 var(--af-space-6); font-size: var(--af-text-lg); }
 /* Tabs: aria-pressed / aria-current pills become underline tabs. */
 [role="group"] > .af-pill[aria-pressed], .af-pill[aria-current] { margin-bottom: -1px; padding: 0 var(--af-space-4); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--af-ink-3); }
 [role="group"] > .af-pill[aria-pressed]:hover, .af-pill[aria-current]:hover { color: var(--af-ink); }

@@ -63,7 +63,7 @@ function StorefrontHeader({ carrier, current, overlay }: { carrier: Pick<PublicC
     <div className="af-container flex h-16 items-center gap-3 xl:gap-6">
       <StorefrontMenu items={publicNavigation} current={current} tripsHref={TRIPS_ROUTE} />
       <StorefrontLogo carrier={carrier} />
-      <nav aria-label="Passenger services" className="mx-auto hidden h-full xl:block">
+      <nav aria-label="Main" className="mx-auto hidden h-full xl:block">
         <ul className="flex h-full items-stretch gap-10">{centreNavigation(carrier.name).map(item => <li key={item.href} className="flex"><Link href={item.href} aria-current={item.href === current ? 'page' : undefined} className="af-nav-link">{item.label}</Link></li>)}</ul>
       </nav>
       <div className="ml-auto flex items-center gap-4 xl:ml-0 xl:gap-8">
@@ -92,7 +92,7 @@ export function StorefrontFooter({ carrier }: { carrier: Pick<PublicCarrierIdent
         <div className="flex items-center gap-2 lg:shrink-0"><CarrierMark carrier={carrier} className="block h-8 w-7 shrink-0" wingClassName="af-wing" /><span className="af-wordmark">{carrier.name}</span></div>
         <nav aria-label="Footer" className="af-footer-nav flex flex-wrap gap-x-5 xl:flex-nowrap xl:whitespace-nowrap">{publicNavigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
       </div>
-      <div className="af-container relative flex flex-wrap items-center gap-x-5 pb-4">
+      <div className="af-container af-footer-legal-row relative flex flex-wrap items-center gap-x-5 pb-4">
         {carrier.legalName && <p className="af-footer-legal">{carrier.legalName}</p>}
         <nav aria-label="Policies" className="af-footer-nav af-footer-policies flex flex-wrap gap-x-5">{footerPolicies.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
       </div>

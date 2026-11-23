@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { CalendarDays } from "lucide-react";
+import type { DropdownProps } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -27,9 +28,25 @@ function FormValue({ name, value, required, triggerId }: { name?: string; value:
   );
 }
 
+/** The calendar's month and year pickers as platform selects; DayPicker reads the choice from `target.value`. */
+function CalendarDropdown({ options, value, onChange, disabled, "aria-label": label }: DropdownProps) {
+  return (
+    <PlatformSelect
+      size="sm"
+      aria-label={label}
+      disabled={disabled}
+      value={String(value ?? "")}
+      options={(options ?? []).map((option) => ({ value: String(option.value), label: option.label, disabled: option.disabled }))}
+      onValueChange={(next) => onChange?.({ target: { value: next } } as unknown as React.ChangeEvent<HTMLSelectElement>)}
+      className="w-auto"
+    />
+  );
+}
+
 /**
  * Date field ("yyyy-MM-dd" string, like <input type="date">) that opens the Calendar in a popover.
  * `name` submits it with a GET/POST form; `required`, `min` and `max` behave like the native input.
+ * `yearPicker` puts month and year selects in the calendar header, for dates years away (a date of birth).
  */
 export function PlatformDateInput({
   id,
@@ -43,6 +60,7 @@ export function PlatformDateInput({
   max,
   placeholder = "Pick a date",
   clearable = !required,
+  yearPicker = false,
   className,
   ...aria
 }: {
@@ -57,6 +75,7 @@ export function PlatformDateInput({
   max?: string;
   placeholder?: string;
   clearable?: boolean;
+  yearPicker?: boolean;
   className?: string;
 } & Aria) {
   const [inner, setInner] = React.useState(defaultValue);
@@ -68,6 +87,12 @@ export function PlatformDateInput({
   const minDate = parseDateKey(min ?? "");
   const maxDate = parseDateKey(max ?? "");
   const outOfRange = [minDate ? { before: minDate } : null, maxDate ? { after: maxDate } : null].filter((m): m is NonNullable<typeof m> => m !== null);
+  // Years run from `min` (or 120 years before the end) to `max` (or ten years ahead), newest first.
+  const yearRange = React.useMemo(() => {
+    if (!yearPicker) return null;
+    const endMonth = parseDateKey(max ?? "") ?? new Date(new Date().getFullYear() + 10, 11, 1);
+    return { endMonth, startMonth: parseDateKey(min ?? "") ?? new Date(endMonth.getFullYear() - 120, 0, 1) };
+  }, [yearPicker, min, max]);
   function set(next: string) {
     if (value === undefined) setInner(next);
     onChange?.(next);
@@ -103,6 +128,7 @@ export function PlatformDateInput({
             disabled={outOfRange.length ? outOfRange : undefined}
             onSelect={(day) => { set(day ? dateKey(day) : ""); setOpen(false); }}
             autoFocus
+            {...(yearRange ? { captionLayout: "dropdown" as const, reverseYears: true, ...yearRange, components: { Dropdown: CalendarDropdown }, formatters: { formatMonthDropdown: (month: Date) => month.toLocaleString("en-US", { month: "short" }) } } : {})}
           />
           {clearable && current ? (
             <div className="flex justify-end border-t px-1 pt-2">

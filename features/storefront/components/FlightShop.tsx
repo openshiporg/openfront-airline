@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeftRight, ArrowRight, ChevronDown, Luggage, MapPin, Minus, Plane, Plus, Ticket, UserRound } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, Check, ChevronDown, Luggage, MapPin, Minus, Plane, Plus, Ticket, UserRound } from 'lucide-react'
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
@@ -63,19 +63,35 @@ const segmentStatusLabels: Record<string, string> = { confirmed: 'Confirmed', ch
 const checkInStatusLabels: Record<string, string> = { checked_in: 'Checked in', boarded: 'Boarded', offloaded: 'Offloaded', cancelled: 'Check-in cancelled' }
 const label = (labels: Record<string, string>, value: string) => labels[value] ?? value.replaceAll('_', ' ')
 type Tone = 'ok' | 'warn' | 'bad' | undefined
+// A notice says its tone outright: green done, orange needs the traveler, red failed, accent for information.
+type NoticeTone = 'ok' | 'warn' | 'bad' | 'info'
 const tripTone = (status: string): Tone => ['confirmed', 'ticketed', 'in_progress', 'completed'].includes(status) ? 'ok' : status === 'cancelled' ? 'bad' : 'warn'
 const segmentTone = (status: string): Tone => ['confirmed', 'checked_in', 'boarded', 'flown'].includes(status) ? 'ok' : ['cancelled', 'offloaded', 'refunded'].includes(status) ? 'bad' : 'warn'
 const checkInTone = (status: string): Tone => ['checked_in', 'boarded'].includes(status) ? 'ok' : 'bad'
-const passengerFieldLabels = { givenName: 'Given name', familyName: 'Family name', dateOfBirth: 'Date of birth', email: 'Email', phone: 'Phone (optional)' } as const
+const passengerFieldLabels = { givenName: 'First name', familyName: 'Last name', dateOfBirth: 'Date of birth', email: 'Email', phone: 'Phone (optional)' } as const
 const fieldLabel = (field: keyof typeof passengerFieldLabels, index: number) => field === 'email' && index > 0 ? 'Email (optional)' : passengerFieldLabels[field]
 
-// Mirrors the server gate in assignCustomerSeat: ticket issuance refuses bookings that already hold seat artifacts.
-function formatServiceDay(value: string) {
+// One day format across the flow: "Tue, Nov 24" while shopping, "Tue, Nov 24, 2026" on a booking.
+function formatServiceDay(value: string, withYear = true) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
   if (!match) return value
-  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' })
 }
 
+// Flight times read in each airport's own clock, as on every airline's results; an unknown zone falls back to UTC.
+function knownZone(timeZone: string | null | undefined) {
+  try { new Intl.DateTimeFormat('en-US', { timeZone: timeZone || 'UTC' }); return timeZone || 'UTC' } catch { return 'UTC' }
+}
+function airportClock(value: string, timeZone: string | null | undefined) {
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: knownZone(timeZone) }).format(new Date(value))
+}
+// Whole days between departure (origin clock) and arrival (destination clock): 1 for an overnight arrival.
+function dayShift(departure: string, departureZone: string | null | undefined, arrival: string, arrivalZone: string | null | undefined) {
+  const day = (value: string, zone: string | null | undefined) => Date.parse(`${new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: knownZone(zone) }).format(new Date(value))}T00:00:00Z`)
+  return Math.round((day(arrival, arrivalZone) - day(departure, departureZone)) / 86_400_000)
+}
+
+// Mirrors the server gate in assignCustomerSeat: ticket issuance refuses bookings that already hold seat artifacts.
 function seatSelectionOpen(booking: { status: string; paymentStatus: string; ticketingStatus: string }) {
   return ['ticketed', 'in_progress'].includes(booking.status) && ['paid', 'partially_refunded'].includes(booking.paymentStatus) && booking.ticketingStatus === 'ticketed'
 }
@@ -118,7 +134,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const [flights, setFlights] = useState<Flight[]>([])
   const [selected, setSelected] = useState<Flight | null>(null)
   const [heldOffer, setHeldOffer] = useState<HeldOffer | null>(null)
-  const [status, setStatus] = useState('')
+  const [status, setStatusText] = useState('')
+  const [statusTone, setStatusTone] = useState<NoticeTone>('info')
+  function setStatus(next: string | ((current: string) => string), tone: NoticeTone = 'info') { setStatusText(next); setStatusTone(tone) }
   const [busy, setBusy] = useState(false)
   const [recordLocator, setRecordLocator] = useState('')
   const [accessToken, setAccessToken] = useState('')
@@ -174,7 +192,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const intentStorageKey = `${storagePrefix}:original-booking-intent`
   useEffect(() => {
     try { setPendingBooking(parsePendingBookingIntent(sessionStorage.getItem(intentStorageKey))) }
-    catch (error) { setIntentUnavailable(true); setStatus(error instanceof Error ? error.message : 'Original booking intent is unavailable; do not create a replacement.') }
+    catch (error) { setIntentUnavailable(true); setStatus(error instanceof Error ? error.message : 'Original booking intent is unavailable; do not create a replacement.', 'warn') }
   }, [intentStorageKey])
   const recordLocatorInput = useRef<HTMLInputElement>(null)
   // Destination links (/?from=JFK&to=BOS&date=…) open the search on that route and date.
@@ -225,10 +243,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   }, [storagePrefix])
   const accessTokenInput = useRef<HTMLInputElement>(null)
   const money = useMemo(() => (amount: number) => formatMinorUnits(amount, selected?.currencyCode ?? carrier.defaultCurrencyCode), [selected?.currencyCode, carrier.defaultCurrencyCode])
-  const departureDateTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium', timeStyle: 'short' }), [carrier.defaultTimezone])
-  const shortDate = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }), [])
-  const arrivalTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, timeStyle: 'short' }), [carrier.defaultTimezone])
-  const departureDate = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium' }), [carrier.defaultTimezone])
+  const airportZone = (code: string) => network?.airports.find(entry => entry.code === code)?.timezone || carrier.defaultTimezone
   const flightDuration = (departure: string, arrival: string) => {
     const minutes = Math.round((Date.parse(arrival) - Date.parse(departure)) / 60_000)
     return Number.isFinite(minutes) && minutes > 0 ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m` : null
@@ -254,13 +269,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (party.adults < 1) { setStatus('Each booking needs at least one adult.'); return }
-    if (party.infants > party.adults) { setStatus('Each infant travels with an adult.'); return }
-    if (partySize > 9) { setStatus('Book up to 9 travelers at a time.'); return }
+    if (party.adults < 1) { setStatus('Each booking needs at least one adult.', 'warn'); return }
+    if (party.infants > party.adults) { setStatus('Each infant travels with an adult.', 'warn'); return }
+    if (partySize > 9) { setStatus('Book up to 9 travelers at a time.', 'warn'); return }
     let input: SearchInput
     try { input = parseStorefrontSearchForm(new FormData(event.currentTarget)) }
-    catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.'); return }
-    if (tripType === 'round-trip' && (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate) || returnDate < input.serviceDate)) { setStatus('Choose a return date on or after the departure date.'); return }
+    catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.', 'warn'); return }
+    if (tripType === 'round-trip' && (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate) || returnDate < input.serviceDate)) { setStatus('Choose a return date on or after the departure date.', 'warn'); return }
     setSearchParty(party); setLeg('outbound'); setEarlierConfirmations([])
     setReturnSearch(tripType === 'round-trip' ? { originCode: input.destinationCode, destinationCode: input.originCode, serviceDate: returnDate, passengerCount: input.passengerCount } : null)
     await runSearch(input)
@@ -280,7 +295,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
 
   async function runSearch(input: SearchInput) {
     lastSearch.current = input; setEditingSearch(false)
-    if (pendingBooking || intentUnavailable) { setStatus('Check your previous reservation request first. It may have gone through even if the page didn’t confirm it.'); return }
+    if (pendingBooking || intentUnavailable) { setStatus('Check your previous reservation request first. It may have gone through even if the page didn’t confirm it.', 'warn'); return }
     setBusy(true); setStatus(''); setFlights([]); setSelected(null); setHeldOffer(null); bookingAttempt.current = null
     try {
       const data = await graphql<{ publicAirlineFlightOptions: Flight[] }>(`query($carrier:String!,$origin:String!,$destination:String!,$date:String!,$passengers:Int!){publicAirlineFlightOptions(carrierCode:$carrier,originCode:$origin,destinationCode:$destination,serviceDate:$date,passengerCount:$passengers){id inventoryBucketId flightNumber serviceDate scheduledDepartureAt scheduledArrivalAt originCode destinationCode fareBrand{name description baggagePieces baggageWeightGrams} cabinName totalAmount perTravelerBaseAmount perTravelerTaxAmount perTravelerTotalAmount partyTotalAmount passengerCount currencyCode availability{available}}}`, { carrier: carrier.code, origin: input.originCode, destination: input.destinationCode, date: input.serviceDate, passengers: input.passengerCount })
@@ -290,7 +305,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         setNextServiceDate(next)
         setStatus(`No ${carrier.name} flights are available for this route, date, and party size.`)
       } else setNextServiceDate(null)
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.') }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Search failed.', 'bad') }
     setBusy(false); revealFlow()
   }
 
@@ -313,8 +328,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       bookingAttempt.current = attempt
       const data = await graphql<{ createCustomerOffer: HeldOffer }>(`mutation($carrier:String!,$flight:ID!,$bucket:ID!,$token:String!,$key:String!,$passengers:[CustomerPassengerInput!]!){createCustomerOffer(carrierCode:$carrier,flightInstanceId:$flight,inventoryBucketId:$bucket,shoppingSessionToken:$token,idempotencyKey:$key,passengers:$passengers){offerId offerNumber passengerIds totalAmount currencyCode expiresAt}}`, { carrier: carrier.code, flight: selected.id, bucket: selected.inventoryBucketId, token, key: attempt.offerKey, passengers })
       setHeldOffer(data.createCustomerOffer)
-      setStatus(`Your fare is held (${data.createCustomerOffer.offerNumber}). Review the total below and confirm by ${formatAirportClock(data.createCustomerOffer.expiresAt, carrier.defaultTimezone)}.`)
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'The fare could not be held.') }
+      setStatus(`Your fare is held until ${formatAirportClock(data.createCustomerOffer.expiresAt, carrier.defaultTimezone)}. Check the total, then confirm your reservation.`, 'ok')
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'The fare could not be held.', 'bad') }
     setBusy(false)
   }
 
@@ -338,13 +353,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       setBookingCredentials(created.recordLocator, created.bookingAccessToken); setConfirmation({ recordLocator: created.recordLocator, carrierCode: carrier.code, token: created.bookingAccessToken })
       sessionStorage.removeItem(intentStorageKey); setPendingBooking(null)
       bookingAttempt.current = null; setHeldOffer(null); setSelected(null); setFlights([])
-      setStatus(`Reservation ${created.recordLocator} is confirmed and awaiting payment.`)
+      setStatus(`Reservation ${created.recordLocator} is confirmed and awaiting payment.`, 'ok')
       try {
         const current = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: created.recordLocator, token: created.bookingAccessToken })
         setManagedBooking(current.customerBooking)
-      } catch { setStatus(`Reservation ${created.recordLocator} is confirmed, but we couldn’t load it yet. Use Manage booking with the reference and your last name; don’t book again.`) }
+      } catch { setStatus(`Reservation ${created.recordLocator} is confirmed, but we couldn’t load it yet. Use Manage booking with the reference and your last name; don’t book again.`, 'warn') }
     } catch (error) {
-      setStatus(`${error instanceof Error ? error.message : 'We couldn’t confirm your reservation.'} We may still have received it, even if the fare hold has expired. Check its status below before booking again.`)
+      setStatus(`${error instanceof Error ? error.message : 'We couldn’t confirm your reservation.'} We may still have received it, even if the fare hold has expired. Check its status below before booking again.`, 'warn')
     } finally { setBusy(false) }
   }
 
@@ -373,13 +388,13 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
           if (finished.completeCustomerCheckout.status === 'paid') {
             const paid = await graphql<{ customerBooking: CustomerBooking }>(CUSTOMER_BOOKING_READ, { record: data.customerBooking.recordLocator, token: saved })
             setManagedBooking(paid.customerBooking)
-            setStatus(finished.completeCustomerCheckout.ticketingStatus === 'ticketed' ? 'Payment received. Your tickets are issued: choose seats and check in below.' : 'Payment received. Your tickets will be issued shortly.')
-          } else if (checkoutSessionId === 'cancelled') setStatus('Payment cancelled. Your reservation is still held until its payment deadline.')
-        } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t confirm your payment yet.') }
+            setStatus(finished.completeCustomerCheckout.ticketingStatus === 'ticketed' ? 'Payment received. Your tickets are issued: choose seats and check in below.' : 'Payment received. Your tickets will be issued shortly.', 'ok')
+          } else if (checkoutSessionId === 'cancelled') setStatus('Payment cancelled. Your reservation is still held until its payment deadline.', 'warn')
+        } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t confirm your payment yet.', 'warn') }
       }
     } catch (error) {
-      if (refreshAfterChange) setStatus(current => `${current} We couldn’t refresh your booking just now; retrieve it again to see the latest details.`)
-      else { setManagedBooking(null); setConfirmation(null); setStatus(error instanceof Error ? error.message : 'Booking could not be retrieved.') }
+      if (refreshAfterChange) setStatus(current => `${current} We couldn’t refresh your booking just now; retrieve it again to see the latest details.`, 'warn')
+      else { setManagedBooking(null); setConfirmation(null); setStatus(error instanceof Error ? error.message : 'Booking could not be retrieved.', 'bad') }
     }
     setBusy(false)
     if (!refreshAfterChange) revealFlow()
@@ -391,7 +406,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       const data = await graphql<{ startCustomerCheckout: { url: string } }>(`mutation($carrier:String!,$record:String!,$token:String!){startCustomerCheckout(carrierCode:$carrier,recordLocator:$record,accessToken:$token){url}}`, { carrier: carrier.code, record: locator, token })
       window.location.assign(data.startCustomerCheckout.url)
       return
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Online payment couldn’t start.') }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Online payment couldn’t start.', 'bad') }
     setBusy(false)
   }
 
@@ -402,7 +417,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     try {
       const data = await graphql<{ customerCancellationQuote: { allowed: boolean; summary: string; refundAmount: number } }>(`query($record:String!,$token:String!){customerCancellationQuote(recordLocator:$record,accessToken:$token){allowed summary refundAmount}}`, { record: recordLocator, token: accessToken })
       setCancelQuote(data.customerCancellationQuote)
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t check this booking’s cancellation terms.') }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t check this booking’s cancellation terms.', 'bad') }
     setBusy(false)
   }
   async function cancelBooking() {
@@ -411,9 +426,9 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       const data = await graphql<{ cancelCustomerBookingWithRefund: { refundAmount: number; currencyCode: string } }>(`mutation($record:String!,$token:String!,$reason:String!,$key:String!){cancelCustomerBookingWithRefund(recordLocator:$record,accessToken:$token,reason:$reason,idempotencyKey:$key){refundAmount currencyCode}}`, { record: recordLocator, token: accessToken, reason: 'Traveler cancelled before departure through self-service.', key: `self-cancel:${recordLocator}:${crypto.randomUUID()}` })
       const refunded = data.cancelCustomerBookingWithRefund
       setCancelQuote(null)
-      setStatus(refunded.refundAmount > 0 ? `Booking cancelled. ${formatMinorUnits(refunded.refundAmount, refunded.currencyCode)} is on its way back to your card.` : 'Booking cancelled. Your seats have been released.')
+      setStatus(refunded.refundAmount > 0 ? `Booking cancelled. ${formatMinorUnits(refunded.refundAmount, refunded.currencyCode)} is on its way back to your card.` : 'Booking cancelled. Your seats have been released.', 'ok')
       await manage(undefined, true)
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Cancellation failed.') }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Cancellation failed.', 'bad') }
     setBusy(false)
   }
 
@@ -423,12 +438,12 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     try {
       await graphql(`mutation($carrier:String!,$record:String!,$email:String!){recoverCustomerBookingAccess(carrierCode:$carrier,recordLocator:$record,email:$email)}`, { carrier: carrier.code, record: String(form.get('recordLocator') ?? ''), email: String(form.get('email') ?? '') })
       setStatus('If those details match a booking, a link to it is on its way to that email.'); setRecovering(false)
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t send an access code.') }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'We couldn’t send an access code.', 'bad') }
     setBusy(false)
   }
 
   async function chooseSeat(passengerId: string, segmentId: string, seat: { id: string; surchargeAmount: number }) {
-    if (seat.surchargeAmount > 0) { setStatus('Paid seats can’t be selected online.'); return }
+    if (seat.surchargeAmount > 0) { setStatus('Paid seats can’t be selected online.', 'warn'); return }
     const current = seatIntent.current
     // Reuse the key only to retry the same choice whose outcome was unknown; any new choice (even A → B → A) gets its own.
     const intent = current && current.passengerId === passengerId && current.segmentId === segmentId && current.seatId === seat.id
@@ -439,19 +454,19 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     try {
       const data = await graphql<{ assignCustomerSeat: { status: string; replayed?: boolean | null } }>(`mutation($record:String!,$token:String!,$passenger:ID!,$segment:ID!,$seat:ID!,$key:String!){assignCustomerSeat(recordLocator:$record,accessToken:$token,bookingPassengerId:$passenger,bookingSegmentId:$segment,seatId:$seat,idempotencyKey:$key){status replayed}}`, { record: recordLocator, token: accessToken, passenger: passengerId, segment: segmentId, seat: seat.id, key: intent.key })
       seatIntent.current = null
-      setStatus(data.assignCustomerSeat.replayed ? 'This seat choice was already recorded. Your current seat is shown below.' : 'Seat selected.')
+      setStatus(data.assignCustomerSeat.replayed ? 'This seat choice was already recorded. Your current seat is shown below.' : 'Seat selected.', 'ok')
       await manage(undefined, true)
     } catch (error) {
       if (!(error instanceof OutcomeUnknownError)) seatIntent.current = null
-      setStatus(error instanceof Error ? error.message : 'Seat selection failed.')
+      setStatus(error instanceof Error ? error.message : 'Seat selection failed.', 'bad')
     }
     setBusy(false)
   }
 
   async function customerCheckIn(passengerId: string, segmentId: string, retryMarker = 'initial') {
     setBusy(true)
-    try { await graphql(`mutation($record:String!,$token:String!,$passenger:ID!,$segment:ID!,$key:String!){checkInCustomerBooking(recordLocator:$record,accessToken:$token,bookingPassengerId:$passenger,bookingSegmentId:$segment,idempotencyKey:$key){status}}`, { record: recordLocator, token: accessToken, passenger: passengerId, segment: segmentId, key: `customer-checkin-${passengerId}-${segmentId}-${retryMarker}` }); setStatus(`Check-in completed with ${carrier.name}. Boarding-pass details are shown below.`); await manage(undefined, true) }
-    catch (error) { setStatus(error instanceof Error ? error.message : 'Check-in failed.') }
+    try { await graphql(`mutation($record:String!,$token:String!,$passenger:ID!,$segment:ID!,$key:String!){checkInCustomerBooking(recordLocator:$record,accessToken:$token,bookingPassengerId:$passenger,bookingSegmentId:$segment,idempotencyKey:$key){status}}`, { record: recordLocator, token: accessToken, passenger: passengerId, segment: segmentId, key: `customer-checkin-${passengerId}-${segmentId}-${retryMarker}` }); setStatus(`Check-in completed with ${carrier.name}. Boarding-pass details are shown below.`, 'ok'); await manage(undefined, true) }
+    catch (error) { setStatus(error instanceof Error ? error.message : 'Check-in failed.', 'bad') }
     setBusy(false)
   }
 
@@ -469,7 +484,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       <div className="af-field af-icon-field"><span className="af-field-label">Travelers</span><UserRound aria-hidden="true" />
         <input type="hidden" name="passengerCount" value={partySize} />
         <Popover>
-          <PopoverTrigger asChild><button type="button" aria-label={`Travelers: ${partyLabel}`} className="af-input af-trigger justify-between"><span className="min-w-0 truncate capitalize">{partyLabel}</span><ChevronDown aria-hidden="true" className="shrink-0" /></button></PopoverTrigger>
+          <PopoverTrigger asChild><button type="button" aria-label={`Travelers: ${partyLabel}`} className="af-input af-trigger justify-between"><span className="min-w-0 truncate">{partyLabel}</span><ChevronDown aria-hidden="true" className="shrink-0" /></button></PopoverTrigger>
           <PopoverContent align="start" collisionPadding={12} className="af-party p-4">
             <div>{partyRows.map(([key, text, hint, min, max]) => <div key={key} className="af-party-row">
               <div><p className="af-party-type">{text}</p><p className="af-party-hint">{hint}</p></div>
@@ -485,18 +500,18 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const inWidget = Boolean(hero)
   // On a phone the hero folds to one line once the traveler is past the search, so the results are the page.
   const inFlow = flights.length > 0 || Boolean(confirmation) || Boolean(managedBooking) || Boolean(pendingBooking)
-  const tripSummary = confirmation || managedBooking ? `Booking ${(confirmation ?? managedBooking)!.recordLocator}` : flights[0] ? `${flights[0].originCode} to ${flights[0].destinationCode} · ${shortDate.format(new Date(`${flights[0].serviceDate}T00:00:00.000Z`))} · ${flights[0].passengerCount} traveler${flights[0].passengerCount === 1 ? '' : 's'}` : 'Your trip'
+  const tripSummary = confirmation || managedBooking ? `Booking ${(confirmation ?? managedBooking)!.recordLocator}` : flights[0] ? `${flights[0].originCode} to ${flights[0].destinationCode} · ${formatServiceDay(flights[0].serviceDate, false)} · ${flights[0].passengerCount} traveler${flights[0].passengerCount === 1 ? '' : 's'}` : 'Your trip'
   const manageBlock = <>
     <form ref={manageForm} onSubmit={manage} className={inWidget ? '' : 'af-card p-4 sm:p-6'}>
       <h2 className={inWidget ? 'sr-only' : 'text-xl font-semibold'}>{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
       <div className={`grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end ${inWidget ? '' : 'mt-4'}`}>
-        <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
+        <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
         <label className="af-field"><span className="af-field-label">Last name</span><input aria-label="Last name" name="lastName" autoComplete="family-name" autoCapitalize="words" placeholder="As on the booking" className="af-input" /></label><input ref={accessTokenInput} type="hidden" name="accessToken" defaultValue="" />
         <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
       </div>
     </form>
     {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card px-4 py-3 sm:px-6">
-      <div className="flex flex-wrap items-center gap-3"><h2 className="af-field-label">Your trips</h2><div className="af-track flex-wrap">{savedTrips.map(locator => <button key={locator} type="button" disabled={busy} onClick={() => openSavedTrip(locator)} aria-pressed={managedBooking?.recordLocator === locator} className="af-pill af-pill-sm af-mono tracking-[0.14em]">{locator}</button>)}</div></div>
+      <div className="flex flex-wrap items-center gap-3"><h2 className="af-field-label">Your trips</h2><div className="af-track flex-wrap">{savedTrips.map(locator => <button key={locator} type="button" disabled={busy} onClick={() => openSavedTrip(locator)} aria-pressed={managedBooking?.recordLocator === locator} className="af-pill af-pill-sm af-code">{locator}</button>)}</div></div>
     </section>}
     {carrier.accessRecoveryEnabled ? <div className={inWidget ? 'mt-4 border-t border-[var(--af-line)] pt-3' : 'af-card px-4 py-3 sm:px-6'}>
       {recovering ? <form onSubmit={recoverAccess} className="grid gap-4 py-2 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end">
@@ -508,8 +523,8 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   </>
   const flow = <>
     {shoppingEnabled && !hero && <div className="af-widget-panel" data-standalone="true">{searchForm}</div>}
-    {status && <p role="status" className="af-notice" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'}><span className="af-dot" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'} />{status}</p>}
-    {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-sm">Next flight: {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextServiceDate}T00:00:00.000Z`))}</button></div>}
+    {status && <p role="status" className="af-notice" data-tone={statusTone}><span className="af-dot" data-tone={statusTone} />{status}</p>}
+    {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-sm">Next flight: {formatServiceDay(nextServiceDate, false)}</button></div>}
     {pendingBooking && <section aria-label="Original reservation command recovery" className="af-notice flex-col items-stretch gap-3 p-5" data-tone="warn">
       <h2 className="af-title-line font-semibold"><span className="af-dot" data-tone="warn" />We’re checking your reservation</h2>
       <p>Your request is saved in this tab. Checking never creates a booking, and a retry sends the same request.</p>
@@ -517,27 +532,27 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       <p>Don’t book again. If this doesn’t clear, contact the airline.</p>
     </section>}
     {earlierConfirmations.map(earlier => <section key={earlier.recordLocator} aria-label={`Outbound reservation ${earlier.recordLocator}`} className="af-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-      <div><p className="af-field-label">Outbound · reservation</p><p className="af-mono mt-1 text-2xl font-semibold tracking-[0.16em]">{earlier.recordLocator}</p></div>
+      <div><p className="af-field-label">Outbound · reservation</p><p className="af-code mt-1 text-2xl font-semibold">{earlier.recordLocator}</p></div>
       <p className="text-sm text-[var(--af-ink-2)]">Open it from Manage booking with this reference and your last name.</p>
     </section>)}
     {confirmation && <section className="af-pass" aria-label={`${carrier.name} reservation confirmation`}>
       <div className="min-w-0">
-        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow min-w-0 truncate !text-white/80">{carrier.name} · {leg === 'return' ? 'Return reservation' : returnSearch ? 'Outbound reservation' : 'Reservation'}</span><span className="af-mono shrink-0 text-xs font-semibold">{confirmation.carrierCode}</span></div>
+        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow min-w-0 truncate">{carrier.name} · {leg === 'return' ? 'Return reservation' : returnSearch ? 'Outbound reservation' : 'Reservation'}</span><span className="af-mono shrink-0 text-xs font-semibold">{confirmation.carrierCode}</span></div>
         <div className="p-5 sm:p-6">
           <p className="af-field-label">Booking reference</p>
-          <h2 className="af-mono mt-1 text-4xl font-semibold tracking-[0.18em] sm:text-5xl">{confirmation.recordLocator}</h2>
-          <p className="af-title-line mt-4 text-sm font-medium"><span className="af-dot" data-tone="warn" />Awaiting payment · {carrier.onlinePaymentEnabled ? 'pay now to get your tickets' : 'expires after 24 hours unless paid'}</p>
+          <h2 className="af-code mt-1 text-4xl font-semibold sm:text-5xl">{confirmation.recordLocator}</h2>
+          <p className="af-title-line mt-4 text-sm font-medium"><span className="af-dot" data-tone="warn" />Awaiting payment · {carrier.onlinePaymentEnabled ? 'pay now to get your tickets' : 'held for 24 hours unless paid'}</p>
         </div>
       </div>
       <div className="af-pass-stub p-5 sm:p-6">
         <p className="text-sm text-[var(--af-ink-2)]">Find this booking any time with the reference and your last name.{carrier.accessRecoveryEnabled ? ' We also emailed it to the lead traveler.' : ''}</p>
         {carrier.onlinePaymentEnabled && <div className="af-track mt-4" data-block="true"><button disabled={busy} onClick={() => void payOnline(confirmation.recordLocator, confirmation.token)} className="af-pill af-pill-primary">Pay now</button></div>}
-        {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className="af-pill af-pill-primary">Book return flight</button></div>}
+        {shoppingEnabled && leg === 'outbound' && returnSearch && <div className="af-track mt-2" data-block="true"><button disabled={busy} onClick={() => void searchReturn()} className={`af-pill ${carrier.onlinePaymentEnabled ? '' : 'af-pill-primary'}`}>Book return flight</button></div>}
       </div>
     </section>}
     {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-table space-y-4">
-    <p className="grid gap-1 text-[0.8125rem] text-[var(--af-ink-3)] sm:grid-cols-2">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
-      <p className="af-results-head">{returnSearch && <><span className="font-semibold">{leg === 'return' ? 'Return' : 'Outbound'}</span><span aria-hidden="true" className="af-sep" /></>}{airportCity(flights[0].originCode)} {flights[0].originCode} to {airportCity(flights[0].destinationCode)} {flights[0].destinationCode}<span aria-hidden="true" className="af-sep" />{shortDate.format(new Date(`${flights[0].serviceDate}T00:00:00.000Z`))}, <span className="capitalize">{flights[0].passengerCount} passenger{flights[0].passengerCount === 1 ? '' : 's'}</span></p>
+      <div className="af-results-head"><div className="af-meta"><p className="af-meta-row">{returnSearch && <span className="font-semibold">{leg === 'return' ? 'Return' : 'Outbound'}</span>}<span>{airportCity(flights[0].originCode)} {flights[0].originCode} to {airportCity(flights[0].destinationCode)} {flights[0].destinationCode}</span><span>{formatServiceDay(flights[0].serviceDate, false)}</span><span>{flights[0].passengerCount} traveler{flights[0].passengerCount === 1 ? '' : 's'}</span></p></div></div>
+      <div className="af-meta text-sm text-[var(--af-ink-3)]"><ul aria-label="Booking terms" className="af-meta-row">{carrier.onlinePaymentEnabled ? <li>Pay by card online</li> : <li>Reserve now, pay the airline directly</li>}<li>Unpaid reservations held up to 24 hours</li><li>One traveler 18 or over per booking</li><li>Infants have their own seat</li></ul></div>
       {flights.map(flight => {
         const duration = flightDuration(flight.scheduledDepartureAt, flight.scheduledArrivalAt)
         const isSelected = selected?.id === flight.id && selected?.inventoryBucketId === flight.inventoryBucketId
@@ -545,41 +560,47 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         const bags = flight.fareBrand.baggagePieces ?? 0
         const bagText = bags ? `${bags} checked bag${bags === 1 ? '' : 's'}${flight.fareBrand.baggageWeightGrams ? `, ${Math.round(flight.fareBrand.baggageWeightGrams / 1000)} kg each` : ''}` : 'No checked bag'
         const price = formatMinorUnits(flight.perTravelerTotalAmount, flight.currencyCode)
+        const fromZone = airportZone(flight.originCode)
+        const toZone = airportZone(flight.destinationCode)
+        const arrivesLater = dayShift(flight.scheduledDepartureAt, fromZone, flight.scheduledArrivalAt, toZone)
+        const fewSeats = !soldOut && flight.availability.available <= 9
         return <article key={`${flight.id}:${flight.inventoryBucketId}`} data-selected={isSelected ? 'true' : undefined} className="af-flight">
           <div className="min-w-0 min-[900px]:self-center">
-            <p className="text-lg text-[var(--af-ink-2)]">{carrier.code} {flight.flightNumber}<span aria-hidden="true" className="mx-2 text-[var(--af-line-2)]">|</span>Nonstop{duration ? <><span aria-hidden="true" className="mx-2 text-[var(--af-line-2)]">|</span>{duration}</> : null}</p>
+            <div className="af-meta text-lg text-[var(--af-ink-2)]"><p className="af-meta-row"><span>{carrier.code} {flight.flightNumber}</span><span>Nonstop</span>{duration ? <span>{duration}</span> : null}</p></div>
             <div className="mt-3 flex items-end justify-between gap-4">
-              <div><p className="af-time">{arrivalTime.format(new Date(flight.scheduledDepartureAt))}</p><p className="mt-1 text-lg text-[var(--af-ink-2)]">{flight.originCode}</p></div>
+              <div><p className="af-time">{airportClock(flight.scheduledDepartureAt, fromZone)}</p><p className="mt-1 text-lg text-[var(--af-ink-2)]">{flight.originCode}</p></div>
               <span aria-hidden="true" className="af-path mb-9 hidden text-[var(--af-ink-3)] sm:block" />
-              <div className="text-right"><p className="af-time">{arrivalTime.format(new Date(flight.scheduledArrivalAt))}</p><p className="mt-1 text-lg text-[var(--af-ink-2)]">{flight.destinationCode}</p></div>
+              <div className="text-right"><p className="af-time">{airportClock(flight.scheduledArrivalAt, toZone)}{arrivesLater > 0 ? <sup className="af-day-shift"><span className="sr-only">, arrives </span>+{arrivesLater}<span className="sr-only"> {arrivesLater === 1 ? 'day' : 'days'}</span></sup> : null}</p><p className="mt-1 text-lg text-[var(--af-ink-2)]">{flight.destinationCode}</p></div>
             </div>
-            <p className="mt-2 text-sm text-[var(--af-ink-3)]">{departureDate.format(new Date(flight.scheduledDepartureAt))} · {(carrier.defaultTimezone.split('/').pop() ?? carrier.defaultTimezone).replaceAll('_', ' ')} time</p>
+            <p className="mt-2 text-sm text-[var(--af-ink-3)]">{formatServiceDay(flight.serviceDate, false)} · Local time at each airport</p>
           </div>
           <div className="af-flight-fare flex min-w-0 flex-col">
             <p className="text-xl font-bold">{[flight.fareBrand.name, flight.cabinName].filter(Boolean).join(' · ')}</p>
-            <p className="af-price mt-1.5">{price}</p>
-            <p className="mt-2 text-base leading-snug text-[var(--af-ink-2)]">Per traveler. Includes {formatMinorUnits(flight.perTravelerTaxAmount, flight.currencyCode)} taxes{bags ? `, seat selection, ${bagText}` : ', seat selection'}.{flight.passengerCount > 1 ? ` ${formatMinorUnits(flight.partyTotalAmount, flight.currencyCode)} for ${flight.passengerCount} passengers.` : ''}</p>
+            <p className="af-price mt-2">{price}</p>
+            <p className="mt-2 text-base leading-snug text-[var(--af-ink-2)]">Per traveler. Includes {formatMinorUnits(flight.perTravelerTaxAmount, flight.currencyCode)} taxes{bags ? `, seat selection, ${bagText}` : ', seat selection'}.{flight.passengerCount > 1 ? ` ${formatMinorUnits(flight.partyTotalAmount, flight.currencyCode)} for ${flight.passengerCount} travelers.` : ''}</p>
             {flight.fareBrand.description && <p className="mt-1 text-sm text-[var(--af-ink-3)]">{flight.fareBrand.description}</p>}
-            <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-base text-[var(--af-ink-2)]"><span className="inline-flex items-center gap-2"><Luggage aria-hidden="true" className="size-5" strokeWidth={1.5} />{bags ? 'Checked bag' : 'Carry-on only'}</span><span>{flight.availability.available} seat{flight.availability.available === 1 ? '' : 's'} left</span></p>
-            <button onClick={() => { setSelected(flight); setHeldOffer(null); bookingAttempt.current = null }} disabled={busy || Boolean(pendingBooking) || intentUnavailable || soldOut} aria-pressed={isSelected} className={`af-pill mt-4 min-h-[3.25rem] w-full text-lg ${isSelected ? '' : 'af-pill-primary'}`}>{soldOut ? 'Sold out' : isSelected ? `Selected · ${price}` : `Select flight · ${price}`}</button>
+            <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-base text-[var(--af-ink-2)]"><span className="inline-flex items-center gap-2"><Luggage aria-hidden="true" className="size-5" strokeWidth={1.5} />{bags ? 'Checked bag' : 'Carry-on only'}</span>{fewSeats ? <span className="font-semibold text-[var(--af-warn)]">{flight.availability.available === 1 ? 'Last seat at this fare' : `${flight.availability.available} seats left at this fare`}</span> : null}</p>
+            <button onClick={() => { setSelected(flight); setHeldOffer(null); bookingAttempt.current = null }} disabled={busy || Boolean(pendingBooking) || intentUnavailable || soldOut} aria-pressed={isSelected} className={`af-pill af-pill-lg mt-4 w-full ${selected ? '' : 'af-pill-primary'}`}>{soldOut ? 'Sold out' : isSelected ? <><Check aria-hidden="true" />Selected · {price}</> : `Select · ${price}`}</button>
           </div>
         </article>
       })}
     </section>}
     {shoppingEnabled && selected && !pendingBooking && !intentUnavailable && <form key={`${selected.id}:${selected.inventoryBucketId}`} onSubmit={holdOffer} className="af-pass">
       <div className="min-w-0">
-        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow !text-white/80">Travelers · {passLabel}</span><button type="button" onClick={() => { setSelected(null); setHeldOffer(null); bookingAttempt.current = null }} className="af-pill af-pill-sm af-pill-ghost !border-white/50">Close</button></div>
+        <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3 sm:px-6"><span className="af-eyebrow">Travelers · {passLabel}</span><button type="button" onClick={() => { setSelected(null); setHeldOffer(null); bookingAttempt.current = null }} className="af-pill af-pill-sm af-pill-ghost">Close</button></div>
         <div className="space-y-6 p-5 sm:p-6">{Array.from({ length: selected.passengerCount }, (_, passengerIndex) => <fieldset disabled={Boolean(heldOffer)} key={passengerIndex} className="grid gap-4 disabled:opacity-70 sm:grid-cols-2">
-          <legend className="af-title-line mb-3 text-sm font-semibold"><span className="af-mono grid size-6 place-items-center rounded-[3px] bg-[var(--af-accent)] text-xs text-white">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}<span className="text-xs font-medium text-[var(--af-ink-3)]">{travelerBand(passengerIndex, searchParty)}</span></legend>
-          {travelerFields.map(field => <label key={field} className={`af-field ${field === 'email' ? 'sm:col-span-1' : ''}`}><span className="af-field-label">{fieldLabel(field, passengerIndex)}</span><input required={field !== 'phone' && (field !== 'email' || passengerIndex === 0)} type={field === 'email' ? 'email' : field === 'dateOfBirth' ? 'date' : 'text'} max={field === 'dateOfBirth' ? birthDateMax : undefined} name={`passenger.${passengerIndex}.${field}`} autoComplete={field === 'email' ? 'email' : field === 'phone' ? 'tel' : passengerIndex === 0 && field === 'givenName' ? 'given-name' : passengerIndex === 0 && field === 'familyName' ? 'family-name' : passengerIndex === 0 && field === 'dateOfBirth' ? 'bday' : 'off'} defaultValue={travelerValues[passengerIndex]?.[field] ?? ''} className="af-input" /></label>)}
+          <legend className="af-title-line mb-3 items-center text-sm font-semibold"><span aria-hidden="true" className="af-num">{passengerIndex + 1}</span>Traveler {passengerIndex + 1}<span className="text-xs font-medium text-[var(--af-ink-3)]">{travelerBand(passengerIndex, searchParty)}</span></legend>
+          {travelerFields.map(field => field === 'dateOfBirth'
+            ? <div key={`${field}:${travelerValues[passengerIndex]?.[field] ?? ''}`} className="af-field"><span className="af-field-label">{fieldLabel(field, passengerIndex)}</span><PlatformDateInput yearPicker required aria-label={`Date of birth, traveler ${passengerIndex + 1}`} name={`passenger.${passengerIndex}.${field}`} defaultValue={travelerValues[passengerIndex]?.[field] ?? ''} max={birthDateMax} placeholder="Select date" className="af-input af-trigger" /></div>
+            : <label key={field} className="af-field"><span className="af-field-label">{fieldLabel(field, passengerIndex)}</span><input required={field !== 'phone' && (field !== 'email' || passengerIndex === 0)} type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'} name={`passenger.${passengerIndex}.${field}`} autoComplete={field === 'email' ? 'email' : field === 'phone' ? 'tel' : passengerIndex === 0 && field === 'givenName' ? 'given-name' : passengerIndex === 0 && field === 'familyName' ? 'family-name' : 'off'} defaultValue={travelerValues[passengerIndex]?.[field] ?? ''} className="af-input" /></label>)}
         </fieldset>)}</div>
       </div>
       <div className="af-pass-stub flex flex-col gap-4 p-5 sm:p-6">
-        <div><p className="af-field-label">Flight</p><p className="af-mono mt-1 text-lg font-semibold">{carrier.code} {selected.flightNumber}</p><p className="af-display mt-1 flex items-center gap-2 text-3xl uppercase">{selected.originCode}<span className="af-path text-[var(--af-ink-3)]" />{selected.destinationCode}</p><p className="mt-1 text-xs text-[var(--af-ink-3)]">{departureDateTime.format(new Date(selected.scheduledDepartureAt))} · {selected.fareBrand.name}</p></div>
-        <div className="af-rule pt-4"><p className="af-field-label">Total</p><p className="af-mono mt-1 text-2xl font-semibold">{heldOffer ? formatMinorUnits(heldOffer.totalAmount, heldOffer.currencyCode) : money(selected.partyTotalAmount)}</p><p className="af-mono text-xs text-[var(--af-ink-3)]">{money(selected.perTravelerTotalAmount)} × {selected.passengerCount}</p></div>
+        <div><p className="af-field-label">Flight</p><p className="af-mono mt-1 text-lg font-semibold">{carrier.code} {selected.flightNumber}</p><p className="af-display mt-1 flex items-center gap-2 text-3xl uppercase">{selected.originCode}<span className="af-path text-[var(--af-ink-3)]" />{selected.destinationCode}</p><p className="mt-1 text-sm text-[var(--af-ink-2)]">{formatServiceDay(selected.serviceDate, false)} · {formatAirportClock(selected.scheduledDepartureAt, airportZone(selected.originCode))}</p><p className="text-sm text-[var(--af-ink-3)]">{[selected.fareBrand.name, selected.cabinName].filter(Boolean).join(' · ')}</p></div>
+        <div className="af-rule pt-4"><p className="af-field-label">Total</p><p className="af-mono mt-1 text-2xl font-semibold">{heldOffer ? formatMinorUnits(heldOffer.totalAmount, heldOffer.currencyCode) : money(selected.partyTotalAmount)}</p>{selected.passengerCount > 1 && <p className="af-mono text-sm text-[var(--af-ink-3)]">{money(selected.perTravelerTotalAmount)} per traveler × {selected.passengerCount}</p>}</div>
         {heldOffer ? <div className="space-y-3">
-          <p className="af-title-line text-sm font-medium"><span className="af-dot" data-tone="ok" />Fare held · <span className="af-mono">{heldOffer.offerNumber}</span></p>
-          <p className="af-mono text-xs text-[var(--af-ink-3)]">Held until {formatAirportClock(heldOffer.expiresAt, carrier.defaultTimezone)} · {carrier.onlinePaymentEnabled ? 'Pay by card after you confirm' : 'No online payment'}</p>
+          <p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone="ok" />Fare held until {formatAirportClock(heldOffer.expiresAt, carrier.defaultTimezone)}</p>
+          <p className="text-sm text-[var(--af-ink-3)]">{carrier.onlinePaymentEnabled ? 'You pay by card once you confirm.' : 'You pay the airline directly once you confirm.'}</p>
           <div className="af-track" data-block="true"><button type="button" disabled={busy} onClick={() => void confirmBooking()} className="af-pill af-pill-primary">Confirm reservation</button></div>
         </div> : <div className="af-track mt-auto" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">Hold fare for {passLabel}</button></div>}
       </div>
@@ -590,7 +611,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
           <div className="min-w-0">
             <p className="af-eyebrow">{managedBooking.carrier.name}</p>
-            <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-mono text-3xl font-semibold tracking-[0.16em]">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
+            <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-code text-3xl font-semibold">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
             <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
           {mode !== 'check-in' && <div className="af-track w-fit flex-wrap">{carrier.onlinePaymentEnabled && confirmation?.recordLocator !== managedBooking.recordLocator && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
@@ -604,7 +625,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
             <div className="min-w-0 space-y-1"><p className="af-field-label">Booked fare · <span className="normal-case tracking-normal">{managedBooking.bookingReceipt.accepted.offerNumber}</span></p>{managedBooking.bookingReceipt.accepted.items.map((item, index) => <p key={index} className="text-sm">{item.description} · {item.quantity === 1 ? '1 traveler' : `${item.quantity} travelers`} · {item.fareName ?? 'Accepted fare'}{item.includedBaggage ? ` · ${item.includedBaggage.pieces} ${item.includedBaggage.pieces === 1 ? 'bag' : 'bags'}, ${item.includedBaggage.maxWeightGrams / 1000} kg` : ''}</p>)}</div>
             <p className="af-mono text-xl font-semibold">{formatMinorUnits(managedBooking.bookingReceipt.accepted.totalAmount, managedBooking.bookingReceipt.accepted.currencyCode)}</p>
           </div> : <p role="status" className="text-sm text-[var(--af-ink-2)]">Original fare details unavailable.</p>}
-          <p className="af-mono mt-3 text-[0.6875rem] text-[var(--af-ink-3)]">{managedBooking.status === 'cancelled' ? 'This booking is cancelled' : managedBooking.paymentStatus === 'paid' ? 'Paid by card online' : carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
+          <p className="mt-3 text-sm text-[var(--af-ink-3)]">{managedBooking.status === 'cancelled' ? 'This booking is cancelled' : managedBooking.paymentStatus === 'paid' ? 'Paid by card online' : carrier.onlinePaymentEnabled ? 'Card payment online · tickets issue when paid' : 'No online payment · paid once the airline confirms'}</p>
         </div>
       </div>
       {managedBooking.segments.map(segment => {

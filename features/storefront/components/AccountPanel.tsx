@@ -131,7 +131,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
           <label className="af-field"><span className="af-field-label">First name</span><input name="givenName" defaultValue={profile.givenName} required autoComplete="given-name" className="af-input" /></label>
           <label className="af-field"><span className="af-field-label">Last name</span><input name="familyName" defaultValue={profile.familyName} required autoComplete="family-name" className="af-input" /></label>
         </div>
-        <div className="af-field"><span className="af-field-label">Date of birth</span><PlatformDateInput aria-label="Date of birth" name="dateOfBirth" defaultValue={profile.dateOfBirth} max={new Date().toISOString().slice(0, 10)} placeholder="Select date" className="af-input af-trigger" /></div>
+        <div className="af-field"><span className="af-field-label">Date of birth</span><PlatformDateInput yearPicker aria-label="Date of birth" name="dateOfBirth" defaultValue={profile.dateOfBirth} max={new Date().toISOString().slice(0, 10)} placeholder="Select date" className="af-input af-trigger" /></div>
         <label className="af-field"><span className="af-field-label">Phone (optional)</span><input name="phone" type="tel" defaultValue={profile.phone} autoComplete="tel" className="af-input" /></label>
         <button disabled={busy} className="af-pill w-full">Save details</button>
       </form>
