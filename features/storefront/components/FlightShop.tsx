@@ -15,7 +15,7 @@ import { networkHub } from '@/features/storefront/lib/hub'
 import { parseBookingAccessForm, parseStorefrontPassengers, parseStorefrontSearchForm } from '@/features/storefront/lib/forms'
 import { bookingIntentVariables, CUSTOMER_BOOKING_COMMAND, CUSTOMER_BOOKING_READ, parsePendingBookingIntent, type BookingReceipt, type PendingBookingIntent } from '@/features/storefront/lib/booking-intent'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
-import { formatAirportClock, formatAirportTime } from '@/features/airline/lib/time'
+import { formatAirportClock } from '@/features/airline/lib/time'
 import { airportClock, dayShift, formatServiceDay } from '@/features/storefront/lib/airport-time'
 import { OutcomeUnknownError, postGraphql as graphql } from '@/features/storefront/lib/request-errors'
 
@@ -89,10 +89,6 @@ function segmentClosedReason(segment: { status: string; flightStatus?: string; s
   return null
 }
 
-// Airport-local time with an explicit zone, so travelers outside the carrier timezone read the right date.
-function localTime(value: string | null | undefined, timeZone: string | null | undefined) {
-  return formatAirportTime(value, timeZone)
-}
 
 type TripType = 'one-way' | 'round-trip'
 type Party = { adults: number; children: number; infants: number }
@@ -513,7 +509,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         <div className={`grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end ${inWidget ? '' : 'mt-4'}`}>
           <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
           <label className="af-field"><span className="af-field-label">Last name</span><input aria-label="Last name" name="lastName" autoComplete="family-name" autoCapitalize="words" placeholder="As on the booking" className="af-input" /></label><input ref={accessTokenInput} type="hidden" name="accessToken" defaultValue="" />
-          <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
+          <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${managedBooking ? '' : 'af-pill-primary'}`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
         </div>
       </form>
       {recovery}
@@ -611,8 +607,10 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       <div className="af-card overflow-hidden">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
           <div className="min-w-0">
-            <p className="af-eyebrow">Booking reference</p>
-            <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-code text-3xl font-semibold">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2>
+            {confirmation?.recordLocator === managedBooking.recordLocator
+              ? <><p className="af-eyebrow">Booking details</p><h2 className="af-title-line mt-2 text-lg font-semibold"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="sr-only">Booking {managedBooking.recordLocator}: </span>{label(bookingStatusLabels, managedBooking.status)}</h2></>
+              : <><p className="af-eyebrow">Booking reference</p>
+            <h2 className="af-title-line mt-2"><span className="af-dot" data-tone={tripTone(managedBooking.status)} /><span className="af-code text-3xl font-semibold">{managedBooking.recordLocator}</span><span className="text-sm font-semibold text-[var(--af-ink-2)]">{label(bookingStatusLabels, managedBooking.status)}</span></h2></>}
             <dl className="af-mono mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--af-ink-3)]"><div className="flex gap-2"><dt>Payment</dt><dd className="text-[var(--af-ink)]">{label(paymentStatusLabels, managedBooking.paymentStatus)}</dd></div><div className="flex gap-2"><dt>Ticket</dt><dd className="text-[var(--af-ink)]">{label(ticketStatusLabels, managedBooking.ticketingStatus)}</dd></div></dl>
           </div>
           {mode !== 'check-in' && <div className="af-track w-fit flex-wrap">{carrier.onlinePaymentEnabled && confirmation?.recordLocator !== managedBooking.recordLocator && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
@@ -630,15 +628,19 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         </div>
       </div>
       {managedBooking.segments.map(segment => {
-        const departure = localTime(segment.actualDepartureAt ?? segment.estimatedDepartureAt ?? segment.scheduledDepartureAt, segment.originTimezone)
-        const arrival = localTime(segment.actualArrivalAt ?? segment.estimatedArrivalAt ?? segment.scheduledArrivalAt, segment.destinationTimezone)
+        // The board head carries the day, so each time is its airport's clock (+N for a later-day arrival).
+        const fromZone = segment.originTimezone || carrier.defaultTimezone
+        const toZone = segment.destinationTimezone || carrier.defaultTimezone
+        const departsAt = segment.actualDepartureAt ?? segment.estimatedDepartureAt ?? segment.scheduledDepartureAt
+        const arrivesAt = segment.actualArrivalAt ?? segment.estimatedArrivalAt ?? segment.scheduledArrivalAt
+        const arrivesLater = segment.scheduledDepartureAt && arrivesAt ? dayShift(segment.scheduledDepartureAt, fromZone, arrivesAt, toZone) : 0
         const closedReason = segmentClosedReason(segment, bookingReadAt)
         const serviceOpen = seatSelectionOpen(managedBooking) && !closedReason
         return <article key={segment.id} className="af-card overflow-hidden">
           <header className="af-board px-5 py-5 sm:px-6">
             <div className="flex flex-wrap items-baseline justify-between gap-3"><p className="af-board-cell af-signal text-sm font-semibold">{managedBooking.carrier.code} {segment.flightNumber}{segment.serviceDate ? ` · ${formatServiceDay(segment.serviceDate)}` : ''}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={segmentTone(segment.status)} />{label(segmentStatusLabels, segment.status)}</p></div>
             <p className="af-display mt-3 flex items-center gap-3 text-5xl uppercase">{segment.originCode}<span className="af-path" />{segment.destinationCode}</p>
-            {segment.scheduledDepartureAt && <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="af-eyebrow">Departs · {segment.actualDepartureAt ? 'actual' : segment.estimatedDepartureAt ? 'estimated' : 'scheduled'}</dt><dd className="af-board-cell mt-1">{departure}{segment.estimatedDepartureAt && !segment.actualDepartureAt ? <span className="block text-xs text-[var(--af-board-ink-2)]">Scheduled {localTime(segment.scheduledDepartureAt, segment.originTimezone)}</span> : null}</dd></div><div><dt className="af-eyebrow">Arrives · {segment.actualArrivalAt ? 'actual' : segment.estimatedArrivalAt ? 'estimated' : 'scheduled'}</dt><dd className="af-board-cell mt-1">{arrival}</dd></div></dl>}
+            {segment.scheduledDepartureAt && <dl className="mt-4 grid grid-cols-2 gap-3"><div><dt className="af-eyebrow">Departs · {segment.actualDepartureAt ? 'Actual' : segment.estimatedDepartureAt ? 'Estimated' : 'Scheduled'}</dt><dd className="af-board-cell af-time mt-1">{formatAirportClock(departsAt, fromZone)}</dd>{segment.estimatedDepartureAt && !segment.actualDepartureAt ? <dd className="mt-1 text-sm text-[var(--af-board-ink-2)]">Scheduled {formatAirportClock(segment.scheduledDepartureAt, fromZone)}</dd> : null}</div><div><dt className="af-eyebrow">Arrives · {segment.actualArrivalAt ? 'Actual' : segment.estimatedArrivalAt ? 'Estimated' : 'Scheduled'}</dt><dd className="af-board-cell af-time mt-1">{formatAirportClock(arrivesAt, toZone)}{arrivesLater > 0 ? <sup className="af-day-shift"><span className="sr-only">, </span>+{arrivesLater}<span className="sr-only"> {arrivesLater === 1 ? 'day' : 'days'}</span></sup> : null}</dd></div></dl>}
           </header>
           <div className="divide-y divide-[var(--af-line)]">{managedBooking.passengers.map(passenger => {
             const checkIn = managedBooking.checkIns.find(entry => entry.bookingPassengerId === passenger.id && entry.bookingSegmentId === segment.id)
@@ -656,15 +658,15 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
               {serviceOpen ? <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="af-field-label">Choose a seat</p><ul aria-label="Seat key" className="af-seat-key">{([['selected', 'Yours'], ['taken', 'Taken'], ['paid', 'Paid, not online']] as const).map(([state, name]) => <li key={state}><span aria-hidden="true" className="af-seat-swatch" data-state={state} />{name}</li>)}</ul></div>
                 {(() => { const map = seatRows(segment.seats); const lockedByCheckIn = Boolean(checkIn && checkIn.status !== 'offloaded'); return <div aria-label={`Seats for ${segment.originCode} to ${segment.destinationCode}`} className="af-well -mx-2 max-h-96 overflow-auto px-2 py-3 sm:mx-0 sm:px-3">
-                  <div className="mx-auto w-fit space-y-1.5">
-                    <div aria-hidden="true" className="flex items-center gap-1.5"><span className="w-7" />{map.columns.map((column, index) => <span key={column} className={`af-seat-label w-10 max-[389px]:w-9 text-center sm:w-11 ${index === map.aisleAfter ? 'mr-5' : ''}`}>{column}</span>)}</div>
-                    {map.rows.map(([row, seatsByColumn]) => <div key={row} className="flex items-center gap-1.5"><span className="af-seat-label w-7 text-right">{row || ''}</span>{map.columns.map((column, index) => { const seat = seatsByColumn.get(column); const spacing = index === map.aisleAfter ? 'mr-5' : ''; if (!seat) return <span key={column} aria-hidden="true" className={`w-10 max-[389px]:w-9 sm:w-11 ${spacing}`} />; const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || lockedByCheckIn} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className={`af-seat w-10 max-[389px]:w-9 text-xs sm:w-11 ${spacing}`}>{column}</button> })}</div>)}
+                  <div className="af-seat-map">
+                    <div aria-hidden="true" className="af-seat-row"><span className="w-7" />{map.columns.map((column, index) => <span key={column} className={`af-seat-label w-10 max-[389px]:w-9 text-center sm:w-11 ${index === map.aisleAfter ? 'mr-5' : ''}`}>{column}</span>)}</div>
+                    {map.rows.map(([row, seatsByColumn]) => <div key={row} className="af-seat-row"><span className="af-seat-label w-7 text-right">{row || ''}</span>{map.columns.map((column, index) => { const seat = seatsByColumn.get(column); const spacing = index === map.aisleAfter ? 'mr-5' : ''; if (!seat) return <span key={column} aria-hidden="true" className={`w-10 max-[389px]:w-9 sm:w-11 ${spacing}`} />; const mine = seat.selectedForPassengerId === passenger.id; return <button key={seat.id} disabled={seat.surchargeAmount > 0 || !seat.isAvailable || lockedByCheckIn} onClick={() => chooseSeat(passenger.id, segment.id, seat)} data-state={mine ? 'selected' : !seat.isAvailable ? 'taken' : seat.surchargeAmount > 0 ? 'paid' : undefined} aria-label={`Seat ${seat.designator}${mine ? ', selected' : !seat.isAvailable ? ', occupied' : ''}${seat.surchargeAmount ? `, ${formatMinorUnits(seat.surchargeAmount, seat.currencyCode)}, not available online` : ''}`} className={`af-seat w-10 max-[389px]:w-9 text-xs sm:w-11 ${spacing}`}>{column}</button> })}</div>)}
                   </div>
                 </div> })()}
               </div> : managedBooking.status === 'cancelled' || segment.status === 'cancelled' ? null : <p className="text-sm text-[var(--af-ink-3)]">{closedReason ?? 'Seat selection opens once your ticket is issued.'}</p>}
               {pass && <div className="af-pass" aria-label={`Boarding pass ${pass.passNumber}`}>
                 <div className="min-w-0">
-                  <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-2.5"><span className="af-eyebrow">Boarding pass</span><span className="text-xs font-semibold">{label(passStatusLabels, pass.status)}</span></div>
+                  <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-3"><span className="af-eyebrow">Boarding pass</span><span className="text-xs font-semibold">{label(passStatusLabels, pass.status)}</span></div>
                   <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
                     {[['Seat', pass.seatDesignatorSnapshot], ['Group', pass.boardingGroup], ['Terminal', pass.terminalSnapshot], ['Gate', pass.gateSnapshot]].filter(([, value]) => value?.trim()).map(([name, value]) => <div key={name}><p className="af-field-label">{name}</p><p className="af-mono mt-1 text-2xl font-semibold">{value}</p></div>)}
                   </div>
@@ -680,7 +682,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
 
   if (!hero) return <div className="space-y-6">{flow}</div>
   return <>
-    <HomeHero lead={hero.lead} compact={inFlow && !editingSearch} summary={inFlow && !editingSearch ? <button type="button" onClick={() => setEditingSearch(true)} className="af-trip-summary"><span className="min-w-0 truncate">{tripSummary}</span><span className="shrink-0 font-semibold underline underline-offset-4">Change</span></button> : null}>
+    <HomeHero lead={hero.lead} compact={inFlow && !editingSearch} summary={inFlow && !editingSearch ? <button type="button" onClick={() => setEditingSearch(true)} className="af-trip-summary"><span className="min-w-0 text-left">{tripSummary}</span><span className="shrink-0 font-semibold underline underline-offset-4">Change</span></button> : null}>
       <div role="tablist" aria-label="Book or manage" className="af-widget-tabs">
         <button type="button" role="tab" id="af-tab-book" aria-selected={widgetTab === 'book'} aria-controls="af-panel-book" onClick={() => setWidgetTab('book')} className="af-widget-tab"><Plane aria-hidden="true" />Book a flight</button>
         <button type="button" role="tab" id="af-tab-manage" aria-selected={widgetTab === 'manage'} aria-controls="af-panel-manage" onClick={() => setWidgetTab('manage')} className="af-widget-tab"><Ticket aria-hidden="true" />Manage booking</button>

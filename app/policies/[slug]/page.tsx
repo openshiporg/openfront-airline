@@ -22,7 +22,7 @@ export default async function PolicyPage({ params }: { params: Promise<{ slug: s
   const carrier = await getStorefrontCarrierIdentity()
   const sections = policy.sections({ airline: carrier?.name ?? 'The airline', operator: carrier?.legalName || carrier?.name || 'The airline', email: carrierContact(carrier).email })
   return <PublicPageShell carrier={carrier} current="/help" eyebrow="Travel policies" title={policy.title}>
-    <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
+    <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,var(--af-measure-prose))_16rem]">
       <article className="af-card grid min-w-0 gap-7 p-5 sm:p-8">
         {sections.map(([title, body]) => <section key={title}><h2 className="af-card-title">{title}</h2><p className="mt-2 text-base leading-7 text-[var(--af-ink-2)]">{body}</p></section>)}
         <p className="text-sm text-[var(--af-ink-3)]">Published November 22, 2026. Your accepted booking receipt and applicable passenger rights remain part of your terms.</p>

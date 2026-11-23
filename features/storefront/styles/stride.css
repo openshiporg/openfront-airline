@@ -110,6 +110,7 @@
   --af-header-h: 4rem;
   --af-measure-lead: 34rem;
   --af-measure-rows: 64rem;
+  --af-measure-prose: 44rem;
   --af-hero-band: 15rem;
   --af-widget-inset: 5.75rem;
   --af-wing-w: 3.25rem;
@@ -541,6 +542,9 @@
 .af-seat[data-state="taken"] { background: var(--af-paper-2); color: var(--af-ink-3); text-decoration: line-through; }
 .af-seat[data-state="paid"] { background: repeating-linear-gradient(135deg, var(--af-paper-2) 0 4px, var(--af-card) 4px 8px); color: var(--af-ink-3); }
 /* Seat map key and row/column labels: read at the body's small size, never below 12px. */
+/* Seat map: seats sit a half-step apart, closer than the 8px grid, as cabin seats do. */
+.af-seat-map { --af-seat-gap: calc(var(--af-space-1) * 1.5); display: grid; gap: var(--af-seat-gap); width: fit-content; margin-inline: auto; }
+.af-seat-row { display: flex; align-items: center; gap: var(--af-seat-gap); }
 .af-seat-key { display: flex; flex-wrap: wrap; gap: var(--af-space-1) var(--af-space-4); font-size: var(--af-text-xs); color: var(--af-ink-3); }
 .af-seat-key li { display: inline-flex; align-items: center; gap: var(--af-space-2); }
 .af-seat-swatch { width: var(--af-space-4); height: var(--af-space-4); border: 1px solid var(--af-line-2); border-radius: var(--af-radius-sm); background: var(--af-card); }
