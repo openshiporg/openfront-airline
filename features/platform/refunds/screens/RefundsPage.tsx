@@ -50,12 +50,14 @@ export async function RefundsPage({ searchParams }: { searchParams?: SearchParam
   const page = Number.isFinite(pageParam) && pageParam > 0 && pageParam <= 1000 ? pageParam : 1
   const filters = { q, status, page }
 
+  // Refunds on bookings hidden as leftover QA records stay out of the list (nothing is deleted).
+  const VISIBLE = { booking: { hiddenAt: { equals: null } } }
   const search = q
     ? [{ OR: [
       { refundKey: { contains: q, mode: 'insensitive' } },
       { booking: { recordLocator: { contains: q.toUpperCase() } } },
-    ] }]
-    : []
+    ] }, VISIBLE]
+    : [VISIBLE]
   const withStatus = (value: string) => ({ AND: [...search, { status: { equals: value } }] })
   const countVariables = Object.fromEntries(REFUND_STATUSES.map(value => [`${value}Where`, withStatus(value)]))
 

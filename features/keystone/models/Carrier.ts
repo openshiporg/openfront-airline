@@ -1,6 +1,6 @@
 import { lifecycleHooks } from '../lib/lifecycle'
 import { list } from '@keystone-6/core'
-import { checkbox, relationship, select, text } from '@keystone-6/core/fields'
+import { checkbox, integer, relationship, select, text } from '@keystone-6/core/fields'
 
 import { freshCarrierFilter, hasFreshPermission, isFreshSignedIn } from '../access'
 import { ONBOARDING_CURRENCIES } from '../lib/currency-policy'
@@ -60,6 +60,14 @@ export const Carrier = list({
       ],
     }),
     directSalesEnabled: checkbox({ defaultValue: true }),
+    // Staff refunds above this many minor units wait for a second person with payment rights. Customer self-service
+    // refunds follow the fare rules instead. Changed by an administrator in Settings (updateRefundApprovalThreshold).
+    refundApprovalThreshold: integer({
+      defaultValue: 100000,
+      validation: { isRequired: true, min: 0 },
+      access: { create: () => false, update: () => false },
+      ui: { description: 'Refunds above this amount (minor units) need a second approver' },
+    }),
     storefrontBrandColor: select({
       type: 'string',
       options: [

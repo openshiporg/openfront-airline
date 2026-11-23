@@ -234,8 +234,10 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
       const remaining = remainingRefund(booking)
       if (amount <= 0 || remaining === null || amount > remaining) throw new Error('Enter a positive amount within the currently refundable balance. Reload if the balance is unavailable.')
       if (!window.confirm(`Refund ${formatMinorUnits(amount, booking.currencyCode)} to the original payment for ${booking.recordLocator}? Card payments are refunded to the card. Remaining balance: ${formatMinorUnits(remaining, booking.currencyCode)}.`)) return
-      await mutate(`mutation($id: ID!, $amount: Int!, $reason: String!, $reference: String!, $key: String!) { processBookingRefund(bookingId: $id, amount: $amount, reason: $reason, providerReference: $reference, idempotencyKey: $key) { status } }`, { id: booking.id, amount, reason, reference: providerReference, key: `refund-${crypto.randomUUID()}` })
-      setMessage(`Refund of ${formatMinorUnits(amount, booking.currencyCode)} issued for ${booking.recordLocator}.`); router.refresh()
+      const refundResult = await mutate(`mutation($id: ID!, $amount: Int!, $reason: String!, $reference: String!, $key: String!) { processBookingRefund(bookingId: $id, amount: $amount, reason: $reason, providerReference: $reference, idempotencyKey: $key) { status } }`, { id: booking.id, amount, reason, reference: providerReference, key: `refund-${crypto.randomUUID()}` })
+      setMessage(refundResult?.processBookingRefund?.status === 'requested'
+        ? `Refund of ${formatMinorUnits(amount, booking.currencyCode)} for ${booking.recordLocator} is above the approval limit. It is waiting in Refunds for a second person to approve.`
+        : `Refund of ${formatMinorUnits(amount, booking.currencyCode)} issued for ${booking.recordLocator}.`); router.refresh()
     } catch (error) { setMessageFailed(true); setMessage(error instanceof Error ? error.message : 'Refund failed.') }
     finally { endTask(aggregate) }
   }

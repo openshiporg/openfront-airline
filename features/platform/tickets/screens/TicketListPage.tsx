@@ -58,6 +58,8 @@ export async function TicketListPage({ searchParams }: { searchParams?: SearchPa
     { passenger: { givenName: insensitive } },
     { passenger: { familyName: insensitive } },
   ] }] : []
+  // Tickets on bookings hidden as leftover QA records stay out of the list (nothing is deleted).
+  and.push({ booking: { hiddenAt: { equals: null } } })
   const base = { AND: and }
   const where = status ? { AND: [...and, { status: { equals: status } }] } : base
 

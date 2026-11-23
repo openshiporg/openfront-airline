@@ -14,7 +14,7 @@ export const PLATFORM_OFFERS_QUERY = `query PlatformOffers(
     id inventoryBucketId flightNumber scheduledDepartureAt scheduledArrivalAt originCode destinationCode
     fareBrand { code name } currencyCode totalAmount availability { available }
   }
-  passengers(take: 20) { id givenName familyName }
+  passengers(where: { hiddenAt: { equals: null } }, take: 20, orderBy: { createdAt: desc }) { id givenName familyName }
   offers(
     where: $offerWhere,
     take: ${OFFER_WORKLIST_PAGE_SIZE + 1},

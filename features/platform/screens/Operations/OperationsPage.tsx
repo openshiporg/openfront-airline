@@ -65,7 +65,7 @@ const NEXT_DEPARTURES_QUERY = `query OperationsNextDepartures($now: DateTime!) {
 // Each queue is read on its own, so a desk the operator cannot read drops out without blanking the page.
 const QUEUES = [
   { key: 'approvals', label: 'Payments awaiting approval', href: '/dashboard/platform/bookings', query: `query OperationsQueueApprovals { count: manualPaymentEvidencesCount(where: { status: { equals: submitted } }) }` },
-  { key: 'unpaid', label: 'Unpaid bookings', href: '/dashboard/platform/bookings', query: `query OperationsQueueUnpaid { count: bookingsCount(where: { paymentStatus: { equals: unpaid } }) }` },
+  { key: 'unpaid', label: 'Unpaid bookings', href: '/dashboard/platform/bookings', query: `query OperationsQueueUnpaid { count: bookingsCount(where: { paymentStatus: { equals: unpaid }, hiddenAt: { equals: null } }) }` },
   { key: 'disruptions', label: 'Open disruptions', href: '/dashboard/platform/disruptions', query: `query OperationsQueueDisruptions { count: disruptionsCount(where: { status: { in: [detected, published, recovering] } }) }` },
   { key: 'delayed', label: 'Delayed flights', href: '/dashboard/platform/flight-ops', query: `query OperationsQueueDelayed { count: flightInstancesCount(where: { status: { equals: delayed } }) }` },
   { key: 'bags', label: 'Mishandled bags', href: '/dashboard/platform/baggage', query: `query OperationsQueueBags { count: bagsCount(where: { status: { in: [delayed, mishandled] } }) }` },

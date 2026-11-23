@@ -47,7 +47,7 @@ export const platformNavItems: PlatformNavItem[] = [
   { title: 'Payment providers', href: '/platform/payment-providers', icon: Landmark, section: 'finance' },
   { title: 'Storefront settings', href: '/platform/store-settings', icon: Palette, section: 'settings' },
   { title: 'Settings', href: '/platform/settings', icon: Settings2, section: 'settings' },
-  { title: 'Staff access', href: '/users', icon: UserRoundCog, section: 'settings' },
+  { title: 'Staff', href: '/platform/staff', icon: UserRoundCog, section: 'settings' },
 ]
 
 export const platformStandaloneItems = platformNavItems.filter((item) => item.section)

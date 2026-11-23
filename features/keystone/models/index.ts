@@ -54,12 +54,14 @@ import { TicketCouponLineage } from './TicketCouponLineage'
 import { ServiceObligation } from './ServiceObligation'
 import { TravelDocument } from './TravelDocument'
 import { User } from './User'
+import { StaffInvite } from './StaffInvite'
 import { WebhookEndpoint } from './WebhookEndpoint'
 import { WebhookEvent } from './WebhookEvent'
 import { guardFilterAccess } from './filterAccess'
 
 const rawModels = {
   User,
+  StaffInvite,
   Role,
   Carrier,
   Airport,

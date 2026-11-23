@@ -619,6 +619,7 @@ type Carrier {
   defaultTimezone: String
   status: CarrierStatusType
   directSalesEnabled: Boolean
+  refundApprovalThreshold: Int
   storefrontBrandColor: String
   logoIcon: String
   logoColor: String
@@ -689,6 +690,7 @@ input CarrierWhereInput {
   defaultTimezone: StringFilter
   status: CarrierStatusTypeNullableFilter
   directSalesEnabled: BooleanFilter
+  refundApprovalThreshold: IntFilter
   storefrontBrandColor: StringNullableFilter
   logoIcon: StringFilter
   logoColor: StringFilter
@@ -737,6 +739,17 @@ input CarrierStatusTypeNullableFilter {
   in: [CarrierStatusType!]
   notIn: [CarrierStatusType!]
   not: CarrierStatusTypeNullableFilter
+}
+
+input IntFilter {
+  equals: Int
+  in: [Int!]
+  notIn: [Int!]
+  lt: Int
+  lte: Int
+  gt: Int
+  gte: Int
+  not: IntFilter
 }
 
 input RoleManyRelationFilter {
@@ -810,6 +823,7 @@ input CarrierOrderByInput {
   defaultTimezone: OrderDirection
   status: OrderDirection
   directSalesEnabled: OrderDirection
+  refundApprovalThreshold: OrderDirection
   storefrontBrandColor: OrderDirection
   logoIcon: OrderDirection
   logoColor: OrderDirection
@@ -832,6 +846,7 @@ input CarrierUpdateInput {
   defaultTimezone: String
   status: CarrierStatusType
   directSalesEnabled: Boolean
+  refundApprovalThreshold: Int
   storefrontBrandColor: String
   logoIcon: String
   logoColor: String
@@ -939,6 +954,7 @@ input CarrierCreateInput {
   defaultTimezone: String
   status: CarrierStatusType
   directSalesEnabled: Boolean
+  refundApprovalThreshold: Int
   storefrontBrandColor: String
   logoIcon: String
   logoColor: String
@@ -1864,17 +1880,6 @@ input InventoryBucketWhereInput {
   updatedAt: DateTimeFilter
 }
 
-input IntFilter {
-  equals: Int
-  in: [Int!]
-  notIn: [Int!]
-  lt: Int
-  lte: Int
-  gt: Int
-  gte: Int
-  not: IntFilter
-}
-
 input InventoryBucketStatusTypeNullableFilter {
   equals: InventoryBucketStatusType
   in: [InventoryBucketStatusType!]
@@ -2715,6 +2720,7 @@ type Passenger {
   genderMarker: PassengerGenderMarkerType
   nationalityCode: String
   email: String
+  hiddenAt: DateTime
   phone: String
   preferredLanguage: String
   status: PassengerStatusType
@@ -2785,6 +2791,7 @@ input PassengerWhereInput {
   genderMarker: PassengerGenderMarkerTypeNullableFilter
   nationalityCode: StringNullableFilter
   email: StringFilter
+  hiddenAt: DateTimeNullableFilter
   phone: StringFilter
   preferredLanguage: StringFilter
   status: PassengerStatusTypeNullableFilter
@@ -2879,6 +2886,7 @@ input PassengerOrderByInput {
   genderMarker: OrderDirection
   nationalityCode: OrderDirection
   email: OrderDirection
+  hiddenAt: OrderDirection
   phone: OrderDirection
   preferredLanguage: OrderDirection
   status: OrderDirection
@@ -2898,6 +2906,7 @@ input PassengerUpdateInput {
   genderMarker: PassengerGenderMarkerType
   nationalityCode: String
   email: String
+  hiddenAt: DateTime
   phone: String
   preferredLanguage: String
   status: PassengerStatusType
@@ -3003,6 +3012,7 @@ input PassengerCreateInput {
   genderMarker: PassengerGenderMarkerType
   nationalityCode: String
   email: String
+  hiddenAt: DateTime
   phone: String
   preferredLanguage: String
   status: PassengerStatusType
@@ -3252,6 +3262,7 @@ type Booking {
   idempotencyKey: String
   accessTokenHash: String
   accessTokenExpiresAt: DateTime
+  hiddenAt: DateTime
   accessTokenVersion: Int
   status: BookingStatusType
   paymentStatus: BookingPaymentStatusType
@@ -3369,6 +3380,7 @@ input BookingWhereInput {
   idempotencyKey: StringFilter
   accessTokenHash: StringNullableFilter
   accessTokenExpiresAt: DateTimeNullableFilter
+  hiddenAt: DateTimeNullableFilter
   accessTokenVersion: IntNullableFilter
   status: BookingStatusTypeNullableFilter
   paymentStatus: BookingPaymentStatusTypeNullableFilter
@@ -3477,6 +3489,7 @@ input BookingOrderByInput {
   idempotencyKey: OrderDirection
   accessTokenHash: OrderDirection
   accessTokenExpiresAt: OrderDirection
+  hiddenAt: OrderDirection
   accessTokenVersion: OrderDirection
   status: OrderDirection
   paymentStatus: OrderDirection
@@ -7055,6 +7068,13 @@ type Mutation {
   rejectManualPaymentEvidence(evidenceId: ID!, reason: String!, idempotencyKey: String!): AirlineOperationResult!
   captureBookingPayment(bookingId: ID!, idempotencyKey: String!, providerReference: String!, instrumentBrand: String, instrumentLast4: String): AirlineOperationResult!
   issueBookingTickets(bookingId: ID!, idempotencyKey: String!): AirlineOperationResult!
+  inviteStaffMember(email: String!, roleId: ID!): StaffInvitation!
+  hideRecords(bookingIds: [ID!]!, hidden: Boolean!): HiddenRecordsResult!
+  hidePassengers(passengerIds: [ID!]!, hidden: Boolean!): HiddenRecordsResult!
+  revokeStaffInvite(id: ID!): Boolean!
+  acceptStaffInvite(token: String!, name: String!, password: String!): StaffInviteAccepted!
+  decideRefundRequest(refundId: ID!, approve: Boolean!, reason: String, idempotencyKey: String!): AirlineOperationResult!
+  updateRefundApprovalThreshold(amount: Int!): RefundApprovalThresholdResult!
   processBookingRefund(bookingId: ID!, amount: Int!, reason: String!, providerReference: String!, idempotencyKey: String!): AirlineOperationResult!
   provisionDatedFlight(scheduleId: ID!, cabinId: ID!, fareBrandId: ID!, serviceDate: String!, scheduledDepartureAt: String!, scheduledArrivalAt: String!, capacity: Int!, baseAmount: Int!, taxAmount: Int!, currencyCode: String!, departureTerminal: String, departureGate: String, idempotencyKey: String!): AirlineOperationResult!
   setDatedFlightSalesStatus(flightInstanceId: ID!, status: AirlineSalesStatus!, idempotencyKey: String!): AirlineOperationResult!
@@ -7272,6 +7292,8 @@ type Query {
   authenticatedItem: AuthenticatedItem
   validateUserPasswordResetToken(email: String!, token: String!): ValidateUserPasswordResetTokenResult
   redirectToInit: Boolean
+  pendingStaffInvites: [StaffInvitation!]!
+  staffInvitePreview(token: String!): StaffInvitePreview
   airlineFlightOptions(originCode: String!, destinationCode: String!, serviceDate: String!, passengerCount: Int = 1): [AirlineFlightOption!]!
   customerBooking(recordLocator: String!, accessToken: String!): CustomerBooking!
   openCustomerBooking(carrierCode: String!, recordLocator: String!, lastName: String!): String!
@@ -7427,6 +7449,33 @@ enum KeystoneAdminUISortDirection {
 enum AirlineSalesStatus {
   open_for_sale
   closed_for_sale
+}
+
+type HiddenRecordsResult {
+  bookings: Int!
+  passengers: Int!
+}
+
+type StaffInvitation {
+  id: ID!
+  email: String!
+  roleName: String!
+  expiresAt: String!
+}
+
+type StaffInvitePreview {
+  email: String!
+  roleName: String!
+  carrierName: String!
+}
+
+type StaffInviteAccepted {
+  email: String!
+}
+
+type RefundApprovalThresholdResult {
+  id: ID!
+  refundApprovalThreshold: Int!
 }
 
 type AirlineOperationResult {

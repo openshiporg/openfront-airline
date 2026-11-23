@@ -25,6 +25,7 @@ import {
   BOOKING_WORKLIST_QUERY,
   bookingWorklistNextHref,
   bookingWorklistWhere,
+  VISIBLE_BOOKING,
   bookingWorklistPage,
   normalizeBookingWorklistCursor,
 } from '@/features/platform/lib/booking-worklist'
@@ -103,6 +104,7 @@ import {
 import { formatMinorUnits } from '@/features/keystone/lib/money'
 import { Code, DeskSection, DeskTone, Field, FilterBar, Notice, Panel, Pill, Readout, ReadoutStrip, RowLink, StatusLabel, TitleLine, Track, Well, deskInput, statusTone, DeskHeader } from '@/features/platform/components/desk'
 import { OptionSelect } from '@/features/platform/components/OptionSelect'
+import { ApprovalLimitForm } from '@/features/platform/components/ApprovalLimitForm'
 import { PlatformDateInput } from '@/features/platform/components/PlatformDateTime'
 import { plural } from '@/features/platform/lib/plural'
 
@@ -176,7 +178,7 @@ export async function PlatformBookingsPage({ searchParams }: { searchParams?: Se
   const { where: searchWhere, locatorOnly } = bookingWorklistWhere(query)
   const cleanupWhere = {
     AND: [
-      { OR: [{ paymentStatus: { equals: 'refunded' } }, { ticketingStatus: { equals: 'voided' } }] },
+      { OR: [{ paymentStatus: { equals: 'refunded' } }, { ticketingStatus: { equals: 'voided' } }] }, VISIBLE_BOOKING,
       ...(query ? [searchWhere] : []),
     ],
   }
@@ -205,7 +207,7 @@ export async function PlatformPassengersPage({ searchParams }: { searchParams?: 
   const filters = worklistSearch(params, ['active','merged','restricted','archived'])
   const passengerCursor = normalizePassengerServiceCursor(params.passengerCursor)
   const response = await keystoneClient<{ authenticatedItem: PassengerServiceActor; passengers: PassengerServiceRow[] | null; passengersCount: number | null }>(PASSENGER_SERVICE_QUERY, {
-    passengerWhere: { ...(filters.q ? { OR: [{ givenName: textSearch(filters.q) }, { familyName: textSearch(filters.q) }, { passengerKey: textSearch(filters.q) }] } : {}), ...(filters.status ? { status: { equals: filters.status } } : {}) },
+    passengerWhere: { hiddenAt: { equals: null }, ...(filters.q ? { OR: [{ givenName: textSearch(filters.q) }, { familyName: textSearch(filters.q) }, { passengerKey: textSearch(filters.q) }] } : {}), ...(filters.status ? { status: { equals: filters.status } } : {}) },
     passengerCursor: passengerCursor ? { id: passengerCursor } : null,
     passengerSkip: passengerCursor ? 1 : 0,
   })
@@ -557,6 +559,9 @@ export async function PlatformSettingsPage({ searchParams }: { searchParams?: Se
   return <Shell title="Settings" eyebrow="Carrier" tone={carrier ? carrier.directSalesEnabled === true ? 'ok' : 'idle' : undefined} status={carrier ? carrier.directSalesEnabled === true ? 'Direct sales on' : 'Direct sales off' : undefined} meta={carrier ? <span><span className="tabular-nums">{carrier.code ?? '—'}</span> · {carrier.name ?? 'Carrier'}</span> : undefined}>
     {!actorResponse.success ? <Failure error={actorResponse.error} /> : <div className="space-y-8">
       {carrier ? <ReadoutStrip><Readout label="Carrier" value={<span className="tabular-nums">{carrier.code ?? '—'}</span>} sub={carrier.name ?? undefined} /><Readout label="Currency" value={<span className="tabular-nums">{carrier.defaultCurrencyCode ?? '—'}</span>} /><Readout label="Timezone" value={<span className="text-base">{carrier.defaultTimezone ?? '—'}</span>} /><Readout label="Direct sales" tone={carrier.directSalesEnabled === true ? 'ok' : 'idle'} value={carrier.directSalesEnabled === true ? 'On' : carrier.directSalesEnabled === false ? 'Off' : '—'} /></ReadoutStrip> : <StateNotice>No carrier identity returned.</StateNotice>}
+      {carrier && typeof carrier.refundApprovalThreshold === 'number' && <DeskSection title="Refund approval">
+        <ApprovalLimitForm amount={carrier.refundApprovalThreshold} currencyCode={carrier.defaultCurrencyCode ?? 'USD'} canEdit={actor?.role?.canManageCarriers === true} />
+      </DeskSection>}
       <SearchFilters action="/dashboard/platform/settings" filters={filters} label="Connection name or reference" statuses={['pending', 'active', 'paused', 'failed', 'revoked']} />
       <DeskSection title="Connections" count={connectionPage?.state === 'ready' ? connectionPage.totalCount ?? undefined : undefined} actions={connectionPage?.state === 'ready' && connectionPage.hasNextPage && nextConnectionPageHref ? <PageLink href={nextConnectionPageHref}>Next 100</PageLink> : undefined}>
         {scope === 'denied' ? <StateNotice role="alert">Your role can’t read integrations.</StateNotice>

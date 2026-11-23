@@ -4,7 +4,7 @@ export const PROVIDER_CONNECTION_WORKLIST_WHERE = {} as const
 export const PLATFORM_SETTINGS_ACTOR_SCOPE_QUERY = `query PlatformSettingsActorScope {
   authenticatedItem {
     ... on User {
-      carrier { id name code status directSalesEnabled defaultCurrencyCode defaultTimezone }
+      carrier { id name code status directSalesEnabled defaultCurrencyCode defaultTimezone refundApprovalThreshold }
       role { canReadIntegrations canManageIntegrations canManageCarriers }
     }
   }
@@ -42,6 +42,7 @@ export type ProviderConnectionWorklistActor = {
     directSalesEnabled?: boolean | null
     defaultCurrencyCode?: string | null
     defaultTimezone?: string | null
+    refundApprovalThreshold?: number | null
   } | null
   role?: {
     canReadIntegrations: boolean | null

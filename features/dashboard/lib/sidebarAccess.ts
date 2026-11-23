@@ -34,6 +34,7 @@ export const PLATFORM_PAGE_PERMISSIONS: Record<string, string[]> = {
   'store-settings': ['canManageOnboarding'],
   onboarding: ['canManageOnboarding'],
   settings: ['canReadIntegrations', 'canManageIntegrations'],
+  staff: ['canReadUsers', 'canManageUsers', 'canManageCarriers'],
 }
 
 /** An unknown role is left to the middleware; a known role must hold one of the page's permissions. */

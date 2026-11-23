@@ -9,6 +9,7 @@ import {
   BOOKING_WORKLIST_QUERY,
   bookingWorklistNextHref,
   bookingWorklistWhere,
+  VISIBLE_BOOKING,
   bookingWorklistPage,
   normalizeBookingWorklistCursor,
 } from '@/features/platform/lib/booking-worklist'
@@ -18,7 +19,7 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
   const locator = (typeof params.q === 'string' ? params.q : typeof params.locator === 'string' ? params.locator : '').trim()
   const { where: searchWhere } = bookingWorklistWhere(locator)
   const bookingCursor = normalizeBookingWorklistCursor(params.bookingCursor)
-  const cleanupWhere = { AND: [{ OR: [{ paymentStatus: { equals: 'refunded' } }, { ticketingStatus: { equals: 'voided' } }] }, ...(locator ? [searchWhere] : [])] }
+  const cleanupWhere = { AND: [{ OR: [{ paymentStatus: { equals: 'refunded' } }, { ticketingStatus: { equals: 'voided' } }] }, VISIBLE_BOOKING, ...(locator ? [searchWhere] : [])] }
   const response = await readBookingWorkspace({
     where: searchWhere,
     cleanupWhere,

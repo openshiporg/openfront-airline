@@ -38,6 +38,8 @@ export const Booking = list({
     idempotencyKey: text({ isIndexed: 'unique', validation: { isRequired: true } }),
     accessTokenHash: text({ isIndexed: true, db: { isNullable: true }, access: { read: denyAll, create: denyAll, update: denyAll }, ui: { createView: { fieldMode: 'hidden' }, itemView: { fieldMode: 'hidden' }, listView: { fieldMode: 'hidden' } } }),
     accessTokenExpiresAt: timestamp(),
+    // Set by an administrator (hideRecords) for leftover QA records: desk lists skip them; nothing is deleted.
+    hiddenAt: timestamp({ db: { isNullable: true }, access: { create: () => false, update: () => false }, ui: { createView: { fieldMode: 'hidden' }, itemView: { fieldMode: 'read' } } }),
     accessTokenVersion: integer({ defaultValue: 1, validation: { min: 1 } }),
     status: select({
       type: 'enum',

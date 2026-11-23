@@ -45,6 +45,22 @@ model User {
   @@index([approvedAgentId])
 }
 
+model StaffInvite {
+  id          String    @id @default(cuid())
+  carrierId   String    @default("")
+  roleId      String    @default("")
+  email       String    @default("")
+  tokenHash   String    @unique @default("")
+  invitedById String    @default("")
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@index([email])
+}
+
 model Role {
   id                           String   @id @default(cuid())
   name                         String   @default("")
@@ -98,6 +114,7 @@ model Carrier {
   defaultTimezone                      String                   @default("UTC")
   status                               CarrierStatusType        @default(active)
   directSalesEnabled                   Boolean                  @default(true)
+  refundApprovalThreshold              Int                      @default(100000)
   storefrontBrandColor                 String?
   logoIcon                             String                   @default("<svg fill=\"none\" height=\"100%\" viewBox=\"0 0 31 48\" width=\"100%\" xmlns=\"http://www.w3.org/2000/svg\"><g fill=\"#444ce7\"><path d=\"m-.00195312 17.8433 30.90545312-17.8433-.8189 12.6994-26.32058 15.1961z\"/><path d=\"m3.76367 27.8951 21.73573-12.5492-.8189 12.6994-17.15086 9.902z\" opacity=\".5\"/><path d=\"m7.52734 37.9477 12.56596-7.255-.8189 12.6994-7.9811 4.6079z\" opacity=\".25\"/></g></svg>")
   logoColor                            String                   @default("330")
@@ -577,6 +594,7 @@ model Passenger {
   genderMarker            PassengerGenderMarkerType?
   nationalityCode         String?
   email                   String                     @default("")
+  hiddenAt                DateTime?
   phone                   String                     @default("")
   preferredLanguage       String                     @default("en")
   status                  PassengerStatusType?       @default(active)
@@ -671,6 +689,7 @@ model Booking {
   idempotencyKey          String                      @unique @default("")
   accessTokenHash         String?
   accessTokenExpiresAt    DateTime?
+  hiddenAt                DateTime?
   accessTokenVersion      Int?                        @default(1)
   status                  BookingStatusType           @default(pending)
   paymentStatus           BookingPaymentStatusType?   @default(unpaid)

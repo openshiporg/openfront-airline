@@ -9,7 +9,7 @@ const query = `query OperatorShopping($origin: String!, $destination: String!, $
     id inventoryBucketId flightNumber scheduledDepartureAt scheduledArrivalAt originCode destinationCode
     fareBrand { code name } currencyCode totalAmount availability { available }
   }
-  passengers(take: 50, orderBy: { createdAt: desc }) { id givenName familyName }
+  passengers(where: { hiddenAt: { equals: null } }, take: 50, orderBy: { createdAt: desc }) { id givenName familyName }
 }`
 
 export default async function ShoppingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

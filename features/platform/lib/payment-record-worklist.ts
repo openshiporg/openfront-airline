@@ -1,5 +1,6 @@
 export const PAYMENT_RECORD_WORKLIST_PAGE_SIZE = 100
-export const PAYMENT_RECORD_WORKLIST_WHERE = {} as const
+// Payments on bookings an administrator hid as leftover QA records stay out of the list (nothing is deleted).
+export const PAYMENT_RECORD_WORKLIST_WHERE = { OR: [{ booking: null }, { booking: { hiddenAt: { equals: null } } }] } as const
 
 export type PaymentRecordWorklistActor = {
   carrier?: { id: string } | null

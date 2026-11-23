@@ -8,15 +8,19 @@ import {
   captureBookingPayment,
   checkInBookingPassenger,
   createOfferFromShopping,
+  decideRefundRequest,
   issueBookingTickets,
   processBookingRefund,
   registerPassengerTravelDocument,
   rejectManualPaymentEvidence,
   searchAirlineFlights,
   submitManualPaymentEvidence,
+  updateRefundApprovalThreshold,
   verifyPassengerTravelDocument,
 } from './airlineWorkflows';
 import { recoverCustomerBookingAccess } from './storefrontAccess'
+import { hidePassengers, hideRecords } from './hiddenRecords'
+import { acceptStaffInvite, inviteStaffMember, revokeStaffInvite, staffInvitePreview, staffInvites } from './staffInvites'
 import { cancelCustomerBookingWithRefund, customerCancellationQuote } from './storefrontCancellation'
 import { recordBagEvent, registerAirport, updateFlightOperations } from './airlineOperationsControl'
 import { recordReceivedPayment, refreshAirlineClocks, reissueBookingAccessCode } from './airlinePaymentsDesk'
@@ -39,6 +43,33 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       enum AirlineSalesStatus {
         open_for_sale
         closed_for_sale
+      }
+
+      type HiddenRecordsResult {
+        bookings: Int!
+        passengers: Int!
+      }
+
+      type StaffInvitation {
+        id: ID!
+        email: String!
+        roleName: String!
+        expiresAt: String!
+      }
+
+      type StaffInvitePreview {
+        email: String!
+        roleName: String!
+        carrierName: String!
+      }
+
+      type StaffInviteAccepted {
+        email: String!
+      }
+
+      type RefundApprovalThresholdResult {
+        id: ID!
+        refundApprovalThreshold: Int!
       }
 
       type AirlineOperationResult {
@@ -272,6 +303,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
 
       type Query {
         redirectToInit: Boolean
+        pendingStaffInvites: [StaffInvitation!]!
+        staffInvitePreview(token: String!): StaffInvitePreview
         airlineFlightOptions(
           originCode: String!
           destinationCode: String!
@@ -416,6 +449,13 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           instrumentLast4: String
         ): AirlineOperationResult!
         issueBookingTickets(bookingId: ID!, idempotencyKey: String!): AirlineOperationResult!
+        inviteStaffMember(email: String!, roleId: ID!): StaffInvitation!
+        hideRecords(bookingIds: [ID!]!, hidden: Boolean!): HiddenRecordsResult!
+        hidePassengers(passengerIds: [ID!]!, hidden: Boolean!): HiddenRecordsResult!
+        revokeStaffInvite(id: ID!): Boolean!
+        acceptStaffInvite(token: String!, name: String!, password: String!): StaffInviteAccepted!
+        decideRefundRequest(refundId: ID!, approve: Boolean!, reason: String, idempotencyKey: String!): AirlineOperationResult!
+        updateRefundApprovalThreshold(amount: Int!): RefundApprovalThresholdResult!
         processBookingRefund(
           bookingId: ID!
           amount: Int!
@@ -502,6 +542,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
     resolvers: {
       Query: {
         redirectToInit,
+        pendingStaffInvites: staffInvites,
+        staffInvitePreview,
         customerBooking: getCustomerBooking,
         openCustomerBooking,
         travelerAccount: customerAccount,
@@ -571,6 +613,13 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         captureBookingPayment,
         issueBookingTickets,
         processBookingRefund,
+        decideRefundRequest,
+        updateRefundApprovalThreshold,
+        inviteStaffMember,
+        hideRecords,
+        hidePassengers,
+        revokeStaffInvite,
+        acceptStaffInvite,
         provisionDatedFlight,
         setDatedFlightSalesStatus,
         setInventoryAuthorization,

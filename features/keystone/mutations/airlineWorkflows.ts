@@ -182,6 +182,10 @@ export type CreateOfferArgs = {
   shoppingSessionHash?: string
 }
 
+export const REFUND_APPROVAL_THRESHOLD_DEFAULT = 100000
+function formatThreshold(minor: number, currencyCode: string) {
+  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(minor / 100) } catch { return `${(minor / 100).toFixed(2)} ${currencyCode}` }
+}
 const MAX_ACTIVE_STOREFRONT_OFFERS = 2
 const MAX_ACTIVE_STOREFRONT_HELD_SEATS = 9
 
@@ -634,7 +638,7 @@ export async function processBookingRefund(
 export async function processBookingRefundInTransaction(
   transactionContext: Context,
   args: { bookingId: string; amount: number; reason: string; providerReference: string; idempotencyKey: string },
-  options: { authorize: boolean; cardOnly?: boolean },
+  options: { authorize: boolean; cardOnly?: boolean; approvedRefundId?: string },
 ): Promise<WorkflowResult> {
   {
     if (options.authorize) await requireFreshPermission(transactionContext, 'canManagePayments')
@@ -670,13 +674,37 @@ export async function processBookingRefundInTransaction(
     if (!payment) throw new DomainError('No captured payment is available to refund.')
     if (options.cardOnly && payment.provider.adapterType !== 'stripe') throw new DomainError('This booking was not paid by card online. Contact the airline to cancel it.')
     const remaining = payment.capturedAmount - payment.refundedAmount
-    if (args.amount > remaining) throw new DomainError('Refund amount exceeds the remaining captured amount.')
+    // Staff refunds wait for a second person above the carrier's threshold; refunds already waiting count against what is left.
+    const waiting = await (transactionContext.prisma as any).refund.findMany({ where: { paymentId: payment.id, status: 'requested', ...(options.approvedRefundId ? { id: { not: options.approvedRefundId } } : {}) }, select: { amount: true } })
+    const waitingAmount = waiting.reduce((sum: number, item: any) => sum + Number(item.amount ?? 0), 0)
+    if (args.amount > remaining - waitingAmount) throw new DomainError(waitingAmount ? 'Refund amount exceeds what is left after the refunds waiting for approval.' : 'Refund amount exceeds the remaining captured amount.')
+    const carrierRow = await (transactionContext.prisma as any).carrier.findUnique({ where: { id: booking.carrier.id }, select: { refundApprovalThreshold: true } })
+    const needsApproval = options.authorize && !options.approvedRefundId && args.amount > Number(carrierRow?.refundApprovalThreshold ?? REFUND_APPROVAL_THRESHOLD_DEFAULT)
     const providerLock = await transactionContext.prisma.$queryRaw(Prisma.sql`SELECT "id" FROM "PaymentProvider" WHERE "id" = ${payment.provider.id} FOR UPDATE`)
     throwIfKeystonePrismaError(providerLock)
     const duplicateRefundReference = await (transactionContext.prisma as any).refund.findFirst({ where: { providerRefundId: providerReference, payment: { providerId: payment.provider.id } }, select: { id: true } })
     if (duplicateRefundReference) throw new DomainError('Settlement refund reference was already consumed by this provider.')
     const claim = await beginOperation(sudo, transactionContext, booking.carrier.id, key, 'refund.process', request)
     if (claim.replay) return { ...(claim.replay.result ?? {}), replayed: true } as WorkflowResult
+    if (needsApproval) {
+      const requestedAt = new Date().toISOString()
+      const requested = await sudo.query.Refund.createOne({
+        data: {
+          carrier: { connect: { id: booking.carrier.id } }, booking: { connect: { id: booking.id } }, payment: { connect: { id: payment.id } },
+          refundKey: `REF-${randomReference('', 12)}`, idempotencyKey: claim.storageKey, status: 'requested',
+          reason, amount: args.amount, currencyCode: booking.currencyCode, requestedAt,
+          note: `Waiting for a second approver: above ${formatThreshold(Number(carrierRow?.refundApprovalThreshold ?? REFUND_APPROVAL_THRESHOLD_DEFAULT), booking.currencyCode)}.`,
+          metadata: { adapterType: payment.provider.adapterType, requestedById: transactionContext.session?.itemId ?? null, providerReference },
+        }, query: 'id',
+      })
+      await writeAudit(sudo, transactionContext, {
+        carrierId: booking.carrier.id, key: claim.storageKey, action: 'refund.request', aggregateType: 'Refund', aggregateId: requested.id,
+        after: { status: 'requested', amount: args.amount, currencyCode: booking.currencyCode }, metadata: { bookingId: booking.id, paymentId: payment.id, threshold: carrierRow?.refundApprovalThreshold },
+      })
+      const result = { resourceType: 'Refund', resourceId: requested.id, status: 'requested', changed: true, replayed: false }
+      await finishOperation(sudo, claim.record.id, result)
+      return result
+    }
     const manualEvidence = payment.provider.adapterType === 'manual' ? await (transactionContext.prisma as any).manualPaymentEvidence.findFirst({
       where: { bookingId: booking.id, purpose: 'refund', externalReference: providerReference, amount: args.amount, currencyCode: booking.currencyCode, status: 'approved' },
     }) : null
@@ -696,7 +724,14 @@ export async function processBookingRefundInTransaction(
     const nextRefunded = payment.refundedAmount + args.amount
     const fullyRefunded = nextRefunded === payment.capturedAmount
     const processedAt = new Date().toISOString()
-    const refund = await sudo.query.Refund.createOne({
+    const refund = options.approvedRefundId ? await sudo.query.Refund.updateOne({
+      where: { id: options.approvedRefundId },
+      data: { status: 'approved', approvedAt: processedAt },
+      query: 'id',
+    }).then(async (approved: any) => {
+      await sudo.query.Refund.updateOne({ where: { id: approved.id }, data: { status: 'processing' } })
+      return sudo.query.Refund.updateOne({ where: { id: approved.id }, data: { status: 'succeeded', providerRefundId: refunded.providerRefundId, processedAt, note: '' }, query: 'id' })
+    }) : await sudo.query.Refund.createOne({
       data: {
         carrier: { connect: { id: booking.carrier.id } }, booking: { connect: { id: booking.id } }, payment: { connect: { id: payment.id } },
         refundKey: `REF-${randomReference('', 12)}`, idempotencyKey: claim.storageKey, status: 'succeeded',
@@ -727,6 +762,57 @@ export async function processBookingRefundInTransaction(
     await finishOperation(sudo, claim.record.id, result)
     return result
   }
+}
+
+// A refund above the threshold waits as 'requested'. A different person with payment rights approves it (the money
+// moves then) or declines it (cancelled, nothing moves).
+export async function decideRefundRequest(
+  _root: unknown,
+  args: { refundId: string; approve: boolean; reason?: string | null; idempotencyKey: string },
+  context: Context,
+): Promise<WorkflowResult> {
+  return runSerializableTransaction(context, async transactionContext => {
+    await requireFreshPermission(transactionContext, 'canManagePayments')
+    const sudo = transactionContext.sudo() as any
+    const refund = await (transactionContext.prisma as any).refund.findUnique({ where: { id: args.refundId }, select: { id: true, carrierId: true, bookingId: true, status: true, amount: true, reason: true, metadata: true } })
+    if (!refund) throw new DomainError('Resource not found or inaccessible.')
+    const actor = await requireFreshCarrierPermission(transactionContext, 'canManagePayments', refund.carrierId)
+    const lock = await transactionContext.prisma.$queryRaw(Prisma.sql`SELECT "id" FROM "Refund" WHERE "id" = ${refund.id} FOR UPDATE`)
+    throwIfKeystonePrismaError(lock)
+    const current = await (transactionContext.prisma as any).refund.findUnique({ where: { id: refund.id }, select: { status: true, metadata: true } })
+    if (current?.status !== 'requested') throw new DomainError('This refund is no longer waiting for approval.')
+    if ((current.metadata as any)?.requestedById === actor.itemId) throw new DomainError('A different person has to approve a refund you asked for.')
+    if (args.approve) {
+      const result = await processBookingRefundInTransaction(transactionContext, {
+        bookingId: refund.bookingId, amount: refund.amount, reason: refund.reason,
+        providerReference: String((current.metadata as any)?.providerReference ?? ''), idempotencyKey: args.idempotencyKey,
+      }, { authorize: true, approvedRefundId: refund.id })
+      return result
+    }
+    const reason = String(args.reason ?? '').trim()
+    if (!reason || reason.length > 500) throw new DomainError('Say why the refund is declined.')
+    const key = normalizeIdempotencyKey(args.idempotencyKey)
+    const claim = await beginOperation(sudo, transactionContext, refund.carrierId, key, 'refund.decline', { refundId: refund.id, reason })
+    if (claim.replay) return { ...(claim.replay.result ?? {}), replayed: true } as WorkflowResult
+    await sudo.query.Refund.updateOne({ where: { id: refund.id }, data: { status: 'cancelled', note: `Declined: ${reason}` } })
+    await writeAudit(sudo, transactionContext, { carrierId: refund.carrierId, key: claim.storageKey, action: 'refund.decline', aggregateType: 'Refund', aggregateId: refund.id, before: { status: 'requested' }, after: { status: 'cancelled' }, metadata: { reason } })
+    const result = { resourceType: 'Refund', resourceId: refund.id, status: 'cancelled', changed: true, replayed: false }
+    await finishOperation(sudo, claim.record.id, result)
+    return result
+  })
+}
+
+// Administrators set the amount above which a staff refund needs a second approver.
+export async function updateRefundApprovalThreshold(_root: unknown, args: { amount: number }, context: Context) {
+  return runSerializableTransaction(context, async transactionContext => {
+    const { carrierId } = await requireFreshPermission(transactionContext, 'canManageCarriers')
+    if (!Number.isSafeInteger(args.amount) || args.amount < 0 || args.amount > 1_000_000_000) throw new DomainError('Enter an amount of zero or more.')
+    const sudo = transactionContext.sudo() as any
+    const before = await (transactionContext.prisma as any).carrier.findUnique({ where: { id: carrierId }, select: { refundApprovalThreshold: true } })
+    await (transactionContext.prisma as any).carrier.update({ where: { id: carrierId }, data: { refundApprovalThreshold: args.amount } })
+    await writeAudit(sudo, transactionContext, { carrierId, key: `refund-threshold:${crypto.randomUUID()}`, action: 'carrier.refund-threshold', aggregateType: 'Carrier', aggregateId: carrierId, before: { refundApprovalThreshold: before?.refundApprovalThreshold }, after: { refundApprovalThreshold: args.amount }, metadata: {} })
+    return { id: carrierId, refundApprovalThreshold: args.amount }
+  })
 }
 
 // The BookingSegment columns issueBookingTickets selects; coupons copy their fare basis and booking class from these.

@@ -65,10 +65,13 @@ export function bookingWorklistNextHref(basePath: string, locator: string, curso
   return `${basePath}?${params.toString()}`
 }
 
+// Leftover QA bookings an administrator hid (hideRecords) stay out of desk lists; nothing is deleted.
+export const VISIBLE_BOOKING = { hiddenAt: { equals: null } }
+
 // One search box for the desk: a record locator, a traveler's name (first, last or "first last") or the contact email.
 export function bookingWorklistWhere(query: string): { where: Record<string, unknown>; locatorOnly: Record<string, unknown> | null } {
   const q = query.trim().replace(/\s+/g, ' ').slice(0, 120)
-  if (!q) return { where: {}, locatorOnly: null }
+  if (!q) return { where: VISIBLE_BOOKING, locatorOnly: null }
   const upper = q.toUpperCase()
   const locatorFilter = /^[A-Z0-9]{5,8}$/.test(upper) ? { equals: upper } : { contains: upper }
   const text = (value: string) => ({ contains: value, mode: 'insensitive' })
@@ -76,8 +79,10 @@ export function bookingWorklistWhere(query: string): { where: Record<string, unk
   const nameClauses = words.length >= 2
     ? [{ passengers: { some: { passenger: { AND: [{ givenName: text(words[0]) }, { familyName: text(words.slice(1).join(' ')) }] } } } }]
     : [{ passengers: { some: { passenger: { OR: [{ givenName: text(q) }, { familyName: text(q) }] } } } }]
+  const search = { OR: [{ recordLocator: locatorFilter }, { contactEmail: text(q) }, ...nameClauses] }
   return {
-    where: { OR: [{ recordLocator: locatorFilter }, { contactEmail: text(q) }, ...nameClauses] },
+    // An exact six-character reference still finds a hidden booking; any other search skips them.
+    where: /^[A-Z0-9]{6}$/.test(upper) ? search : { AND: [VISIBLE_BOOKING, search] },
     locatorOnly: /^[A-Z0-9]{3,8}$/.test(upper) ? { recordLocator: locatorFilter } : null,
   }
 }

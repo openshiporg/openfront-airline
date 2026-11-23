@@ -35,6 +35,8 @@ export const Passenger = list({
       validation: { match: { regex: /^[A-Z]{2}$/, explanation: 'Use an ISO 3166-1 alpha-2 code.' } },
     }),
     email: text(),
+    // Set by an administrator (hideRecords) for leftover QA travelers: desk lists skip them; nothing is deleted.
+    hiddenAt: timestamp({ db: { isNullable: true }, access: { create: () => false, update: () => false }, ui: { createView: { fieldMode: 'hidden' }, itemView: { fieldMode: 'read' } } }),
     phone: text(),
     preferredLanguage: text({ defaultValue: 'en' }),
     status: select({

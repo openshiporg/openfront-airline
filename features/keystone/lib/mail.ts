@@ -193,3 +193,34 @@ ${emailParagraph('This link works for one hour.')}`,
     return false
   }
 }
+
+// Staff invitation: the link opens /dashboard/join, where the invitee chooses a name and password.
+export async function sendStaffInviteEmail(input: { to: string; token: string; roleName: string; carrierName?: string | null; invitedBy?: string | null }): Promise<string | null> {
+  if (!emailConfigured()) {
+    console.warn('Staff invite email not sent: SMTP is not configured.')
+    return null
+  }
+  const name = safeCarrierName(input.carrierName ?? storeNameFromEnv())
+  const url = `${getBaseUrlForEmails()}/dashboard/join?token=${encodeURIComponent(input.token)}`
+  const who = input.invitedBy ? `${escapeHtml(input.invitedBy)} invited you` : 'You are invited'
+  try {
+    const info = await transport.sendMail({
+      to: input.to,
+      from: process.env.SMTP_FROM,
+      subject: `You're invited to the ${name} staff desk`,
+      html: emailLayout({
+        storeName: name,
+        preheader: `Set a password to start as ${input.roleName}`,
+        title: `Join ${name}`,
+        body: `${emailParagraph(`${who} to the ${escapeHtml(name)} staff desk as <strong>${escapeHtml(input.roleName)}</strong>.`)}
+${emailButton('Set your password', url)}
+${emailParagraph('This link works for seven days and only once. If you weren’t expecting it, ignore this email.')}`,
+      }),
+    })
+    console.log(`Staff invite email accepted by mail server: ${info.messageId}`)
+    return String(info.messageId ?? '') || 'sent'
+  } catch (error) {
+    console.error('Staff invite email could not be sent:', error instanceof Error ? error.message : 'unknown error')
+    return null
+  }
+}

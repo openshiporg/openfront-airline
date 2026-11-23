@@ -8,7 +8,7 @@ export const DASHBOARD_BASE_PATH = '/dashboard'
 type Env = Record<string, string | undefined>
 
 /** Exact match for a single-page auth route, so `/dashboard/resets` is not the reset page. */
-export function isDashboardRoute(pathname: string, route: 'init' | 'signin' | 'signup' | 'reset' | 'no-access') {
+export function isDashboardRoute(pathname: string, route: 'init' | 'signin' | 'signup' | 'reset' | 'no-access' | 'join') {
   const target = `${DASHBOARD_BASE_PATH}/${route}`
   return pathname === target || pathname === `${target}/`
 }

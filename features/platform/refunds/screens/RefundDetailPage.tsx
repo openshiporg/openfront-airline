@@ -12,6 +12,7 @@ import {
   refundStatusLabel,
   refundTone,
 } from '@/features/platform/refunds/components/refundFormat'
+import { RefundDecision } from '@/features/platform/refunds/components/RefundDecision'
 
 const PATH = '/dashboard/platform/refunds'
 
@@ -100,6 +101,7 @@ export async function RefundDetailPage({ params }: { params: Promise<{ id: strin
         ) : (
           <>
             {refund.status === 'failed' && refund.errorMessage && <Notice tone="bad">{refund.errorMessage}</Notice>}
+            {refund.status === 'requested' && <DeskSection title="Waiting for approval"><RefundDecision refundId={refund.id} amountLabel={formatMinorUnits(refund.amount, refund.currencyCode)} /></DeskSection>}
             <div className="grid min-w-0 gap-6 lg:grid-cols-2">
               <DeskSection title="Refund">
                 <Panel className="px-4">

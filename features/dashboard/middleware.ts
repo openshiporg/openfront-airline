@@ -99,6 +99,8 @@ export async function handleDashboardRoutes(
   const isSignupRoute = isDashboardRoute(pathname, 'signup') && publicSignUpsAllowed();
   const isNoAccessRoute = isDashboardRoute(pathname, 'no-access');
   const isResetRoute = isDashboardRoute(pathname, 'reset');
+  // An emailed staff invite opens here, signed out; it creates the account and then signs the invitee in.
+  const isJoinRoute = isDashboardRoute(pathname, 'join');
   const fromPath = request.nextUrl.searchParams.get("from");
 
   // Handle redirectToInit for dashboard routes
@@ -115,7 +117,7 @@ export async function handleDashboardRoutes(
   }
 
   // Handle unauthenticated users
-  if (!user && !isSigninRoute && !isSignupRoute && !isResetRoute) {
+  if (!user && !isSigninRoute && !isSignupRoute && !isResetRoute && !isJoinRoute) {
     const signinUrl = new URL(`${basePath}/signin`, request.url);
     if (!isNoAccessRoute) {
       signinUrl.searchParams.set("from", request.nextUrl.pathname);
