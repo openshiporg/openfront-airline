@@ -112,7 +112,7 @@ function seatRows<T extends { designator: string; rowNumber?: number | null; col
 }
 
 // `hero` (home only) puts the search widget inside the home hero, under the given headline block.
-export function FlightShop({ initialDate, carrier, mode = 'book', network, hero }: { initialDate: string; carrier: PublicCarrierIdentity; mode?: FlightShopMode; network?: StorefrontNetwork; hero?: { lead: ReactNode; windowImage?: string | null } }) {
+export function FlightShop({ initialDate, carrier, mode = 'book', network, hero }: { initialDate: string; carrier: PublicCarrierIdentity; mode?: FlightShopMode; network?: StorefrontNetwork; hero?: { lead: ReactNode } }) {
   const storagePrefix = `airline:${carrier.code.toLowerCase()}`
   const shoppingEnabled = mode === 'book'
   const [flights, setFlights] = useState<Flight[]>([])
@@ -656,7 +656,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
 
   if (!hero) return <div className="space-y-6">{flow}</div>
   return <>
-    <HomeHero lead={hero.lead} windowImage={hero.windowImage} compact={inFlow && !editingSearch} summary={inFlow && !editingSearch ? <button type="button" onClick={() => setEditingSearch(true)} className="af-trip-summary"><span className="min-w-0 truncate">{tripSummary}</span><span className="shrink-0 font-semibold underline underline-offset-4">Change</span></button> : null}>
+    <HomeHero lead={hero.lead} compact={inFlow && !editingSearch} summary={inFlow && !editingSearch ? <button type="button" onClick={() => setEditingSearch(true)} className="af-trip-summary"><span className="min-w-0 truncate">{tripSummary}</span><span className="shrink-0 font-semibold underline underline-offset-4">Change</span></button> : null}>
       <div role="tablist" aria-label="Book or manage" className="af-widget-tabs">
         <button type="button" role="tab" id="af-tab-book" aria-selected={widgetTab === 'book'} aria-controls="af-panel-book" onClick={() => setWidgetTab('book')} className="af-widget-tab"><Plane aria-hidden="true" />Book a flight</button>
         <button type="button" role="tab" id="af-tab-manage" aria-selected={widgetTab === 'manage'} aria-controls="af-panel-manage" onClick={() => setWidgetTab('manage')} className="af-widget-tab"><CalendarDays aria-hidden="true" />Manage booking</button>

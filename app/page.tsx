@@ -8,7 +8,6 @@ import { StorefrontFacts } from '@/features/storefront/components/StorefrontFact
 import { StorefrontFrame } from '@/features/storefront/components/StorefrontChrome'
 import { getStorefrontCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { carrierCalendarDate } from '@/features/storefront/lib/branding'
-import { destinationArt } from '@/features/storefront/lib/destination-art'
 import { networkHub } from '@/features/storefront/lib/hub'
 import { storefrontBrandPalette } from '@/features/storefront/lib/theme'
 import { storefrontPageMetadata } from '@/features/storefront/lib/metadata'
@@ -52,11 +51,10 @@ export default async function Home() {
     {configured && <p className="af-lead-text mt-4 max-w-[34rem] text-lg leading-[1.4] text-[var(--af-board-ink-2)] sm:text-xl">{carrier!.storefrontHomepageDescription}</p>}
     {hub && <a href="#routes" className="af-pill af-pill-ghost mt-6 px-7">Explore our routes<ArrowRight aria-hidden="true" /></a>}
   </>
-  const windowImage = hub ? destinationArt(hub.code) : null
 
   return <StorefrontFrame carrier={carrier} current="/" overlay>
-    {selling ? <FlightShop initialDate={initialDate} carrier={carrier!} network={network!} hero={{ lead, windowImage }} />
-      : <HomeHero lead={lead} windowImage={windowImage}>
+    {selling ? <FlightShop initialDate={initialDate} carrier={carrier!} network={network!} hero={{ lead }} />
+      : <HomeHero lead={lead}>
         <div className="af-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <p role="status" className="af-title-line font-semibold"><span className="af-dot" data-tone="warn" />{configured ? 'Online booking is temporarily unavailable.' : 'Online booking isn’t available yet.'}</p>
           {!configured && <Link href="/dashboard" className="af-pill af-pill-sm w-fit">Operator sign in</Link>}
