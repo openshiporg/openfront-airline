@@ -512,6 +512,14 @@
 .af-seat[data-state="selected"] { border-color: var(--af-accent); background: var(--af-accent); color: var(--af-white); }
 .af-seat[data-state="taken"] { background: var(--af-paper-2); color: var(--af-ink-3); text-decoration: line-through; }
 .af-seat[data-state="paid"] { background: repeating-linear-gradient(135deg, var(--af-paper-2) 0 4px, var(--af-card) 4px 8px); color: var(--af-ink-3); }
+/* Seat map key and row/column labels: read at the body's small size, never below 12px. */
+.af-seat-key { display: flex; flex-wrap: wrap; gap: var(--af-space-1) var(--af-space-4); font-size: var(--af-text-xs); color: var(--af-ink-3); }
+.af-seat-key li { display: inline-flex; align-items: center; gap: var(--af-space-2); }
+.af-seat-swatch { width: var(--af-space-4); height: var(--af-space-4); border: 1px solid var(--af-line-2); border-radius: var(--af-radius-sm); background: var(--af-card); }
+.af-seat-swatch[data-state="selected"] { border-color: var(--af-accent); background: var(--af-accent); }
+.af-seat-swatch[data-state="taken"] { background: var(--af-paper-2); }
+.af-seat-swatch[data-state="paid"] { background: repeating-linear-gradient(135deg, var(--af-paper-2) 0 3px, var(--af-card) 3px 6px); }
+.af-seat-label { font-size: var(--af-text-xs); font-weight: 600; color: var(--af-ink-3); font-variant-numeric: tabular-nums; }
 
 /* Flight path line between two airport codes */
 .af-path { position: relative; flex: 1 1 auto; height: 1px; min-width: var(--af-space-8); background: currentColor; opacity: 0.35; }
