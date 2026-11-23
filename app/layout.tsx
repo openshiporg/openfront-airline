@@ -18,14 +18,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Flights',
   description: 'Search flights, manage bookings, and check in online.',
+  // Storefront pages replace this with the carrier's wing (features/storefront/lib/branding.ts).
+  icons: { icon: '/favicon.svg' },
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link href="/favicon.svg" rel="icon" />
-      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background font-sans`}>
         {children}
       </body>

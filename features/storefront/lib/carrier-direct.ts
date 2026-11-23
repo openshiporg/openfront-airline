@@ -9,15 +9,15 @@ import type { PublicCarrierIdentity } from './carrier'
 // GraphQL self-call used by getStorefrontCarrierIdentity has no request to forward, so it uses this instead.
 export async function getStorefrontCarrierIdentityDirect(): Promise<PublicCarrierIdentity | null> {
   try {
-    const prisma = keystoneContext.prisma as any
+    const prisma = keystoneContext.prisma
     const identity = await lookupCarrierIdentity(prisma, await configuredPublicCarrierCode(prisma))
     return {
       id: identity.id, code: identity.code, name: identity.name, legalName: identity.legalName,
       defaultCurrencyCode: identity.defaultCurrencyCode, defaultTimezone: identity.defaultTimezone,
-      salesEnabled: identity.salesEnabled, logoIcon: (identity as any).logoIcon || null, logoColor: (identity as any).logoColor || null, storefrontBrandColor: identity.storefrontBrandColor,
+      salesEnabled: identity.salesEnabled, logoIcon: identity.logoIcon || null, logoColor: identity.logoColor || null, storefrontBrandColor: identity.storefrontBrandColor,
       storefrontHomepageTitle: identity.storefrontHomepageTitle, storefrontHomepageDescription: identity.storefrontHomepageDescription,
       storefrontConfigured: identity.storefrontConfigured, accessRecoveryEnabled: accessRecoveryEnabled(),
-      storefrontContactEmail: (identity as any).storefrontContactEmail || null, storefrontContactPhone: (identity as any).storefrontContactPhone || null, storefrontServiceHours: (identity as any).storefrontServiceHours || null,
+      storefrontContactEmail: identity.storefrontContactEmail || null, storefrontContactPhone: identity.storefrontContactPhone || null, storefrontServiceHours: identity.storefrontServiceHours || null,
     }
   } catch {
     return null

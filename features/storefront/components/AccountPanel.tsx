@@ -100,12 +100,12 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
       {notice}
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 id="trips-title" className="text-2xl font-medium tracking-[-0.01em]">My trips</h2>
-        <Link href="/#book" className="af-pill af-pill-raised af-pill-sm">Book a flight</Link>
+        <Link href="/#book" className="af-pill af-pill-sm">Book a flight</Link>
       </div>
       {!profile.emailVerified ? <div className="af-card grid gap-3 p-5">
         <p className="font-medium">Confirm your email to see your trips</p>
         <p className="text-sm text-[var(--af-ink-2)]">We sent a link to {profile.email}. Trips booked with this email show here once it’s confirmed.</p>
-        <div className="af-track w-fit"><button disabled={busy} onClick={() => run(() => graphql(`mutation($c:String!,$e:String!){sendCustomerAccountLink(carrierCode:$c,email:$e,purpose:"verify")}`, { c: carrierCode, e: profile.email }), 'Link sent. Check your inbox.')} className="af-pill af-pill-raised af-pill-sm">Send the link again</button></div>
+        <div className="af-track w-fit"><button disabled={busy} onClick={() => run(() => graphql(`mutation($c:String!,$e:String!){sendCustomerAccountLink(carrierCode:$c,email:$e,purpose:"verify")}`, { c: carrierCode, e: profile.email }), 'Link sent. Check your inbox.')} className="af-pill af-pill-sm">Send the link again</button></div>
       </div> : trips.length === 0 ? <div className="af-card p-5 text-sm text-[var(--af-ink-2)]">No trips booked with {profile.email} yet.</div>
         : <ul className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">{trips.map(trip => {
           const state = tripState(trip)
@@ -133,7 +133,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
         </div>
         <div className="af-field"><span className="af-field-label">Date of birth</span><PlatformDateInput aria-label="Date of birth" name="dateOfBirth" defaultValue={profile.dateOfBirth} max={new Date().toISOString().slice(0, 10)} placeholder="Select date" className="af-input af-trigger" /></div>
         <label className="af-field"><span className="af-field-label">Phone (optional)</span><input name="phone" type="tel" defaultValue={profile.phone} autoComplete="tel" className="af-input" /></label>
-        <button disabled={busy} className="af-pill af-pill-raised w-full">Save details</button>
+        <button disabled={busy} className="af-pill w-full">Save details</button>
       </form>
       <div className="af-card flex items-center justify-between gap-3 p-5">
         <p className="min-w-0 truncate text-sm">Signed in as <span className="font-medium">{profile.email}</span></p>

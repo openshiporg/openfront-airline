@@ -5,3 +5,5 @@ import { Figtree } from 'next/font/google'
 const figtree = Figtree({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--af-font-body', display: 'swap' })
 
 export const storefrontFontVariables = figtree.variable
+// The family itself, for the popovers that portal outside the storefront frame.
+export const storefrontFontFamily = figtree.style.fontFamily

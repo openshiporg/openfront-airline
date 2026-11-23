@@ -1,10 +1,9 @@
 import { ArrowRight } from 'lucide-react'
 
 import { formatMinorUnits } from '@/features/keystone/lib/money'
+import { countWord } from '@/features/storefront/lib/branding'
 import { destinationArt } from '@/features/storefront/lib/destination-art'
 import { routeDatesKey, type StorefrontNetwork } from '@/features/storefront/lib/network'
-
-const COUNT_WORDS = ['', 'one', 'two', 'three', 'four'] as const
 
 /** The routes from one origin as photo tiles: city, the lowest fare on sale, and a link that opens the search on that route. */
 export function DestinationTiles({ network, origin, rows = false }: { network: StorefrontNetwork; origin: string; rows?: boolean }) {
@@ -29,7 +28,7 @@ export function DestinationTiles({ network, origin, rows = false }: { network: S
           <p className="af-dest-tag">Nonstop from {origin}</p>
           {fare ? <>
             <p className="af-dest-price"><span className="hidden lg:inline">From </span>{formatMinorUnits(fare.amount, fare.currencyCode)}</p>
-            <p className="af-dest-note">{fare.checkedBags ? `Includes seat selection & ${COUNT_WORDS[fare.checkedBags] ?? fare.checkedBags} checked bag${fare.checkedBags === 1 ? '' : 's'}` : 'Includes seat selection'}</p>
+            <p className="af-dest-note">{fare.checkedBags ? `Includes seat selection & ${countWord(fare.checkedBags)} checked bag${fare.checkedBags === 1 ? '' : 's'}` : 'Includes seat selection'}</p>
           </> : <p className="af-dest-note">{firstDate ? 'See fares for your dates' : 'Not on sale yet'}</p>}
           {rows && <span aria-hidden="true" className="af-pill af-pill-primary af-dest-cta w-fit">Book now<ArrowRight /></span>}
         </div>

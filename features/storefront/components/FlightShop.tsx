@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeftRight, ArrowRight, CalendarDays, ChevronDown, Luggage, MapPin, Minus, Plane, Plus, UserRound } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, ChevronDown, Luggage, MapPin, Minus, Plane, Plus, Ticket, UserRound } from 'lucide-react'
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
@@ -131,7 +131,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const [pendingBooking, setPendingBooking] = useState<PendingBookingIntent | null>(null)
   const [intentUnavailable, setIntentUnavailable] = useState(false)
   // Search console: route pickers fed by the carrier's network, trip type and the party by fare type.
-  const routes = network?.routes ?? []
+  const routes = useMemo(() => network?.routes ?? [], [network])
   const [tripType] = useState<TripType>('one-way')
   // Home widget: the search and the booking lookup share one panel.
   const [widgetTab, setWidgetTab] = useState<'book' | 'manage'>('book')
@@ -169,7 +169,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const destinations = useMemo(() => routes.filter(route => route.origin === origin).map(route => route.destination), [routes, origin])
   const airportCity = (code: string) => network?.airports.find(entry => entry.code === code)?.city || code
   const canSwap = routes.some(route => route.origin === destination && route.destination === origin)
-  const partyLabel = `${partySize} passenger${partySize === 1 ? '' : 's'}`
+  const partyLabel = `${partySize} traveler${partySize === 1 ? '' : 's'}`
   const airportLabel = (code: string) => { const airport = network?.airports.find(entry => entry.code === code); return airport?.city ? `${airport.city} (${code})` : code }
   const intentStorageKey = `${storagePrefix}:original-booking-intent`
   useEffect(() => {
@@ -222,7 +222,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         if (saved && (returned || new URLSearchParams(window.location.search).get('checkout'))) { setBookingCredentials(reference, saved); requestAnimationFrame(() => manageForm.current?.requestSubmit()) }
       } catch { /* the customer enters the code */ }
     }
-  }, [])
+  }, [storagePrefix])
   const accessTokenInput = useRef<HTMLInputElement>(null)
   const money = useMemo(() => (amount: number) => formatMinorUnits(amount, selected?.currencyCode ?? carrier.defaultCurrencyCode), [selected?.currencyCode, carrier.defaultCurrencyCode])
   const departureDateTime = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: carrier.defaultTimezone, dateStyle: 'medium', timeStyle: 'short' }), [carrier.defaultTimezone])
@@ -462,20 +462,20 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const searchForm = <form onSubmit={search}>
     <div className="af-widget-grid" data-return={tripType === 'round-trip' ? 'true' : undefined}>
       <div className="af-field af-icon-field af-field-wide"><span className="af-field-label">From</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Origin airport" name="originCode" value={origin} onValueChange={next => { setOrigin(next); const reachable = routes.filter(route => route.origin === next).map(route => route.destination); if (!reachable.includes(destination)) setDestination('') }} required className="af-input af-trigger" options={[...new Set(routes.map(route => route.origin))].map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Origin airport" name="originCode" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="JFK" className="af-input af-input-code" />}</div>
-      <button type="button" aria-label="Swap origin and destination" disabled={!canSwap} onClick={() => { setOrigin(destination); setDestination(origin) }} className="af-swap"><ArrowLeftRight aria-hidden="true" className="size-5" /></button>
+      <button type="button" aria-label="Swap origin and destination" disabled={!canSwap} onClick={() => { setOrigin(destination); setDestination(origin) }} className="af-swap"><ArrowLeftRight aria-hidden="true" /></button>
       <div className="af-field af-icon-field af-field-wide"><span className="af-field-label">To</span><MapPin aria-hidden="true" />{routes.length ? <PlatformSelect aria-label="Destination airport" name="destinationCode" value={destination} onValueChange={setDestination} required placeholder="Select a destination" className="af-input af-trigger" options={destinations.map(code => ({ value: code, label: airportLabel(code) }))} /> : <input aria-label="Destination airport" name="destinationCode" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{3}" maxLength={3} required placeholder="BOS" className="af-input af-input-code" />}</div>
       <div className="af-field"><span className="af-field-label">Depart</span><PlatformDateInput aria-label="Departure date" name="serviceDate" value={departDate} onChange={setDepartDate} required placeholder="Select date" className="af-input af-trigger" /></div>
       {tripType === 'round-trip' && <div className="af-field"><span className="af-field-label">Return</span><PlatformDateInput aria-label="Return date" value={returnDate} min={departDate} onChange={setReturnDate} required placeholder="Select date" className="af-input af-trigger" /></div>}
-      <div className="af-field af-icon-field"><span className="af-field-label">Passengers</span><UserRound aria-hidden="true" />
+      <div className="af-field af-icon-field"><span className="af-field-label">Travelers</span><UserRound aria-hidden="true" />
         <input type="hidden" name="passengerCount" value={partySize} />
         <Popover>
-          <PopoverTrigger asChild><button type="button" aria-label={`Passengers: ${partyLabel}`} className="af-input af-trigger flex items-center justify-between gap-2 text-left"><span className="truncate capitalize">{partyLabel}</span><ChevronDown aria-hidden="true" className="size-4 shrink-0 text-[var(--af-ink-3)]" /></button></PopoverTrigger>
-          <PopoverContent align="start" collisionPadding={12} className="w-[19rem] max-w-[calc(100vw-1.5rem)] rounded-xl p-4">
-            <div className="grid gap-3">{partyRows.map(([key, text, hint, min, max]) => <div key={key} className="flex items-center justify-between gap-3">
-              <div><p className="text-base font-semibold">{text}</p><p className="text-sm text-muted-foreground">{hint}</p></div>
-              <div className="flex items-center gap-2"><button type="button" aria-label={`Fewer ${text.toLowerCase()}`} disabled={party[key] <= min} onClick={() => setPartyCount(key, party[key] - 1)} className="af-stepper"><Minus aria-hidden="true" /></button><span aria-live="polite" aria-label={`${text}: ${party[key]}`} className="w-6 text-center text-base font-semibold tabular-nums">{party[key]}</span><button type="button" aria-label={`More ${text.toLowerCase()}`} disabled={party[key] >= max || partySize >= 9} onClick={() => setPartyCount(key, party[key] + 1)} className="af-stepper"><Plus aria-hidden="true" /></button></div>
+          <PopoverTrigger asChild><button type="button" aria-label={`Travelers: ${partyLabel}`} className="af-input af-trigger justify-between"><span className="min-w-0 truncate capitalize">{partyLabel}</span><ChevronDown aria-hidden="true" className="shrink-0" /></button></PopoverTrigger>
+          <PopoverContent align="start" collisionPadding={12} className="af-party p-4">
+            <div>{partyRows.map(([key, text, hint, min, max]) => <div key={key} className="af-party-row">
+              <div><p className="af-party-type">{text}</p><p className="af-party-hint">{hint}</p></div>
+              <div className="flex items-center gap-2"><button type="button" aria-label={`Fewer ${text.toLowerCase()}`} disabled={party[key] <= min} onClick={() => setPartyCount(key, party[key] - 1)} className="af-stepper"><Minus aria-hidden="true" /></button><span aria-live="polite" aria-label={`${text}: ${party[key]}`} className="af-party-count">{party[key]}</span><button type="button" aria-label={`More ${text.toLowerCase()}`} disabled={party[key] >= max || partySize >= 9} onClick={() => setPartyCount(key, party[key] + 1)} className="af-stepper"><Plus aria-hidden="true" /></button></div>
             </div>)}</div>
-            <p className="mt-3 border-t pt-3 text-sm text-muted-foreground">Up to 9 travelers, with one aged 18 or over.</p>
+            <p className="af-party-note">Up to 9 travelers, with one aged 18 or over.</p>
           </PopoverContent>
         </Popover>
       </div>
@@ -492,7 +492,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       <div className={`grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end ${inWidget ? '' : 'mt-4'}`}>
         <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code text-lg" /></label>
         <label className="af-field"><span className="af-field-label">Last name</span><input aria-label="Last name" name="lastName" autoComplete="family-name" autoCapitalize="words" placeholder="As on the booking" className="af-input" /></label><input ref={accessTokenInput} type="hidden" name="accessToken" defaultValue="" />
-        <div className="af-track" data-block="true"><button disabled={busy} className={`af-pill ${shoppingEnabled ? 'af-pill-raised' : 'af-pill-primary'} min-h-11 px-6`}>{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
+        <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">{busy ? 'Retrieving…' : mode === 'check-in' ? 'Retrieve for check-in' : 'Retrieve'}</button></div>
       </div>
     </form>
     {!shoppingEnabled && savedTrips.length > 0 && <section aria-label="Your trips" className="af-card px-4 py-3 sm:px-6">
@@ -503,17 +503,17 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
         <label className="af-field"><span className="af-field-label">Booking reference</span><input name="recordLocator" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
         <label className="af-field"><span className="af-field-label">Lead traveler email</span><input name="email" type="email" autoComplete="email" required className="af-input" /></label>
         <div className="af-track"><button disabled={busy} className="af-pill af-pill-primary">Email new code</button><button type="button" onClick={() => setRecovering(false)} className="af-pill">Cancel</button></div>
-      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Can’t open your booking?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-raised af-pill-sm">Email me a link</button></div></div>}
-    </div> : <p className={`text-sm ${inWidget ? 'mt-4' : ''}`}>Can’t open your booking? <a href="/contact" className="font-semibold underline underline-offset-4">Contact the airline</a></p>}
+      </form> : <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-[var(--af-ink-2)]">Can’t open your booking?</p><div className="af-track"><button type="button" onClick={() => setRecovering(true)} className="af-pill af-pill-sm">Email me a link</button></div></div>}
+    </div> : <p className={`text-sm ${inWidget ? 'mt-4' : ''}`}>Can’t open your booking? <a href="/contact" className="af-link">Contact the airline</a></p>}
   </>
   const flow = <>
-    {shoppingEnabled && !hero && <div className="af-card af-widget-panel !rounded-xl">{searchForm}</div>}
+    {shoppingEnabled && !hero && <div className="af-widget-panel" data-standalone="true">{searchForm}</div>}
     {status && <p role="status" className="af-notice" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'}><span className="af-dot" data-tone={/fail|couldn|can’t|cannot|expired|invalid|unavailable|not available|enter /i.test(status) ? 'warn' : 'ok'} />{status}</p>}
-    {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-raised af-pill-sm">Next flight: {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextServiceDate}T00:00:00.000Z`))}</button></div>}
+    {shoppingEnabled && nextServiceDate && flights.length === 0 && <div className="af-track w-fit"><button disabled={busy} onClick={() => void searchNextServiceDate()} className="af-pill af-pill-sm">Next flight: {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextServiceDate}T00:00:00.000Z`))}</button></div>}
     {pendingBooking && <section aria-label="Original reservation command recovery" className="af-notice flex-col items-stretch gap-3 p-5" data-tone="warn">
       <h2 className="af-title-line font-semibold"><span className="af-dot" data-tone="warn" />We’re checking your reservation</h2>
       <p>Your request is saved in this tab. Checking never creates a booking, and a retry sends the same request.</p>
-      <div className="af-track w-fit"><button disabled={busy} onClick={() => void confirmBooking(true)} className="af-pill af-pill-raised">Check status</button><button disabled={busy} onClick={() => void confirmBooking(false)} className="af-pill">Retry original request</button></div>
+      <div className="af-track w-fit"><button disabled={busy} onClick={() => void confirmBooking(true)} className="af-pill">Check status</button><button disabled={busy} onClick={() => void confirmBooking(false)} className="af-pill">Retry original request</button></div>
       <p>Don’t book again. If this doesn’t clear, contact the airline.</p>
     </section>}
     {earlierConfirmations.map(earlier => <section key={earlier.recordLocator} aria-label={`Outbound reservation ${earlier.recordLocator}`} className="af-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -596,7 +596,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
           {mode !== 'check-in' && <div className="af-track w-fit flex-wrap">{carrier.onlinePaymentEnabled && confirmation?.recordLocator !== managedBooking.recordLocator && ['unpaid', 'failed'].includes(managedBooking.paymentStatus) && managedBooking.status !== 'cancelled' && <button disabled={busy} onClick={() => void payOnline(managedBooking.recordLocator, accessToken)} className="af-pill af-pill-primary af-pill-sm">Pay now</button>}{!['cancelled', 'completed'].includes(managedBooking.status) && <button disabled={busy} onClick={() => void reviewCancellation()} className="af-pill af-pill-danger af-pill-sm">Cancel booking</button>}</div>}
           {mode !== 'check-in' && cancelQuote && managedBooking.status !== 'cancelled' && <div role="region" aria-label="Cancel booking" className="af-notice mt-3 w-full max-w-xl flex-col !items-stretch" data-tone={cancelQuote.allowed ? 'warn' : 'bad'}>
             <p className="text-sm font-medium"><span className="af-dot" data-tone={cancelQuote.allowed ? 'warn' : 'bad'} />{cancelQuote.summary}</p>
-            <div className="af-track mt-3 flex-wrap">{cancelQuote.allowed && <button disabled={busy} onClick={() => void cancelBooking()} className="af-pill af-pill-danger af-pill-sm">{cancelQuote.refundAmount > 0 ? 'Cancel and refund' : 'Cancel booking'}</button>}<button type="button" onClick={() => setCancelQuote(null)} className="af-pill af-pill-raised af-pill-sm">{cancelQuote.allowed ? 'Keep booking' : 'Close'}</button>{!cancelQuote.allowed && <a href="/contact" className="af-pill af-pill-sm">Contact the airline</a>}</div>
+            <div className="af-track mt-3 flex-wrap">{cancelQuote.allowed && <button disabled={busy} onClick={() => void cancelBooking()} className="af-pill af-pill-danger af-pill-sm">{cancelQuote.refundAmount > 0 ? 'Cancel and refund' : 'Cancel booking'}</button>}<button type="button" onClick={() => setCancelQuote(null)} className="af-pill af-pill-sm">{cancelQuote.allowed ? 'Keep booking' : 'Close'}</button>{!cancelQuote.allowed && <a href="/contact" className="af-pill af-pill-sm">Contact the airline</a>}</div>
           </div>}
         </div>
         <div className="af-rule bg-[var(--af-paper)] px-5 py-4 sm:px-6">
@@ -659,7 +659,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
     <HomeHero lead={hero.lead} compact={inFlow && !editingSearch} summary={inFlow && !editingSearch ? <button type="button" onClick={() => setEditingSearch(true)} className="af-trip-summary"><span className="min-w-0 truncate">{tripSummary}</span><span className="shrink-0 font-semibold underline underline-offset-4">Change</span></button> : null}>
       <div role="tablist" aria-label="Book or manage" className="af-widget-tabs">
         <button type="button" role="tab" id="af-tab-book" aria-selected={widgetTab === 'book'} aria-controls="af-panel-book" onClick={() => setWidgetTab('book')} className="af-widget-tab"><Plane aria-hidden="true" />Book a flight</button>
-        <button type="button" role="tab" id="af-tab-manage" aria-selected={widgetTab === 'manage'} aria-controls="af-panel-manage" onClick={() => setWidgetTab('manage')} className="af-widget-tab"><CalendarDays aria-hidden="true" />Manage booking</button>
+        <button type="button" role="tab" id="af-tab-manage" aria-selected={widgetTab === 'manage'} aria-controls="af-panel-manage" onClick={() => setWidgetTab('manage')} className="af-widget-tab"><Ticket aria-hidden="true" />Manage booking</button>
       </div>
       <div className="af-widget-panel">
         <div role="tabpanel" id="af-panel-book" aria-labelledby="af-tab-book" hidden={widgetTab !== 'book'}>{searchForm}</div>

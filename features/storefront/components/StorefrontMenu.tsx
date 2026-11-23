@@ -9,12 +9,12 @@ import { Menu, UserRound, X } from 'lucide-react'
 // keeps the storefront's colours.
 export function StorefrontMenu({ items, current, tripsHref }: { items: ReadonlyArray<{ href: string; label: string }>; current?: string; tripsHref: string }) {
   return <Dialog.Root>
-    <Dialog.Trigger aria-label="Menu" className="af-menu-toggle xl:hidden"><Menu aria-hidden="true" className="size-6" /></Dialog.Trigger>
+    <Dialog.Trigger aria-label="Menu" className="af-menu-toggle xl:hidden"><Menu aria-hidden="true" /></Dialog.Trigger>
     <Dialog.Overlay className="af-drawer-scrim" />
     <Dialog.Content aria-describedby={undefined} className="af-drawer">
       <div className="af-drawer-head">
-        <Dialog.Title className="text-lg font-semibold">Menu</Dialog.Title>
-        <Dialog.Close aria-label="Close menu" className="af-drawer-close"><X aria-hidden="true" className="size-6" /></Dialog.Close>
+        <Dialog.Title className="af-drawer-title">Menu</Dialog.Title>
+        <Dialog.Close aria-label="Close menu" className="af-drawer-close"><X aria-hidden="true" /></Dialog.Close>
       </div>
       <nav aria-label="Passenger services" className="af-drawer-nav">
         {items.map(item => <Dialog.Close asChild key={item.href}>
@@ -22,7 +22,7 @@ export function StorefrontMenu({ items, current, tripsHref }: { items: ReadonlyA
         </Dialog.Close>)}
       </nav>
       <div className="af-drawer-foot">
-        <Dialog.Close asChild><Link href={tripsHref} aria-current={current === tripsHref ? 'page' : undefined} className="af-pill af-pill-primary w-full"><UserRound aria-hidden="true" />My trips · Sign in</Link></Dialog.Close>
+        <Dialog.Close asChild><Link href={tripsHref} aria-current={current === tripsHref ? 'page' : undefined} className="af-pill af-pill-primary w-full"><UserRound aria-hidden="true" />My trips</Link></Dialog.Close>
       </div>
     </Dialog.Content>
   </Dialog.Root>

@@ -1,393 +1,547 @@
 /* Airline storefront: "Stride".
-   A deep cabin-blue ground (mixed from the carrier's own colour, --storefront-brand) carries the header, the hero
-   with its cabin window, page heads and the footer; the work sits on warm white with soft-cornered white cards.
-   Figtree throughout: light display lines, tracked caps for small labels, bold tabular figures for times and fares. */
+   A deep cabin-blue ground (mixed from the carrier's own colour, --storefront-brand) carries the header, the hero,
+   page heads and the footer; the work sits on warm white in white cards. Figtree throughout: light display lines,
+   tracked caps for small labels, bold tabular figures for times and fares.
 
-.af {
+   The design system is the block below. Every rule after it uses its variables: no raw colours, no one-off sizes,
+   three corners. The type steps equal Tailwind's text-xs…text-5xl and the space steps its 0.25rem unit, so the
+   utilities in the storefront TSX stay on the same scale. Popovers (airports, dates, travelers) portal to <body>,
+   so the same tokens are set on their wrapper whenever a storefront is on the page; StorefrontFrame puts the
+   carrier colour and the Figtree family on <body> for them. */
+
+/* ── Design system ─────────────────────────────────────────────────────────────────────────────────────────── */
+.af, body:has(.af) [data-radix-popper-content-wrapper] {
+  /* Palette: the carrier colour drives the accent, the deep ground and the sky; everything else is neutral. */
   --af-accent: var(--storefront-brand, #0a3161);
   --af-accent-hover: var(--storefront-brand-hover, #072448);
   --af-accent-soft: var(--storefront-brand-soft, #eaf1f8);
-  /* The cabin ground and the sky accent both come from the carrier colour. */
-  --af-deep: color-mix(in oklab, var(--af-accent) 58%, #030816);
-  --af-deep-2: color-mix(in oklab, var(--af-accent) 78%, #030816);
+  --af-white: #ffffff;
+  --af-night: #030816;
+  --af-deep: color-mix(in oklab, var(--af-accent) 58%, var(--af-night));
+  --af-deep-2: color-mix(in oklab, var(--af-accent) 78%, var(--af-night));
   --af-sky: color-mix(in oklab, var(--af-accent) 22%, #4cb2ff);
+  --af-sky-soft: color-mix(in oklab, var(--af-sky) 35%, var(--af-white));
+  --af-hero-dusk: #272c44; /* the lower edge of hero-jet.webp, so the phone band continues the photo */
   --af-paper: #f8f8f6;
   --af-paper-2: #eff1f3;
-  --af-card: #ffffff;
+  --af-card: var(--af-white);
   --af-ink: color-mix(in oklab, var(--af-accent) 30%, #0b1120);
   --af-ink-2: #3a4658;
   --af-ink-3: #5d6878;
   --af-line: #dfe3e8;
   --af-line-2: #c3c9d2;
-  --af-board: var(--af-deep);
-  --af-board-line: rgb(255 255 255 / 0.18);
-  --af-board-ink: #ffffff;
-  --af-board-ink-2: rgb(255 255 255 / 0.8);
-  --af-signal: var(--af-sky);
+  /* On the deep ground: text, secondary text, hairlines, outline edges and a hover wash. */
+  --af-on-deep: var(--af-white);
+  --af-on-deep-2: color-mix(in oklab, var(--af-white) 82%, transparent);
+  --af-on-deep-line: color-mix(in oklab, var(--af-white) 18%, transparent);
+  --af-on-deep-edge: color-mix(in oklab, var(--af-white) 55%, transparent);
+  --af-on-deep-wash: color-mix(in oklab, var(--af-white) 10%, transparent);
+  /* State. Green is done, orange needs the traveler, red is stopped, slate is not started; the accent informs. */
   --af-ok: #17734b;
-  --af-warn: #9a5b00;
+  --af-warn: #b54708;
   --af-bad: #b42318;
-  --af-idle: #7b828a;
+  --af-idle: #6b7380;
+  --af-info: var(--af-accent);
+  --af-ok-on-deep: #7ee2b0;
+  --af-warn-on-deep: #ffb38a;
+  --af-bad-on-deep: #ffa094;
+  /* Board roles (the deep ground); white surfaces placed on it reset them to ink on paper. */
+  --af-board: var(--af-deep);
+  --af-board-ink: var(--af-on-deep);
+  --af-board-ink-2: var(--af-on-deep-2);
+  --af-board-line: var(--af-on-deep-line);
+  --af-signal: var(--af-sky);
+
+  /* Type: one family, ten steps, three line heights, four trackings. */
+  --af-text-xs: 0.75rem;
+  --af-text-sm: 0.875rem;
+  --af-text-base: 1rem;
+  --af-text-lg: 1.125rem;
+  --af-text-xl: 1.25rem;
+  --af-text-2xl: 1.5rem;
+  --af-text-3xl: 1.875rem;
+  --af-text-4xl: 2.25rem;
+  --af-text-5xl: 3rem;
+  --af-text-display: 3.5rem;
+  --af-leading-none: 1;
+  --af-leading-tight: 1.1;
+  --af-leading-snug: 1.3;
+  --af-leading: 1.5;
+  --af-track-tight: -0.015em;
+  --af-track-caps: 0.12em;
+  --af-track-wide-sm: 0.2em;
+  --af-track-wide: 0.28em;
+
+  /* Corners: chips, controls and cards. */
+  --af-radius-sm: 4px;
   --af-radius: 8px;
   --af-radius-lg: 12px;
-  --af-shadow: 0 1px 2px rgb(11 17 32 / 0.05), 0 6px 20px rgb(11 17 32 / 0.06);
-  background: var(--af-paper);
+
+  /* Space: 4px steps. */
+  --af-space-1: 0.25rem;
+  --af-space-2: 0.5rem;
+  --af-space-3: 0.75rem;
+  --af-space-4: 1rem;
+  --af-space-5: 1.25rem;
+  --af-space-6: 1.5rem;
+  --af-space-8: 2rem;
+  --af-space-10: 2.5rem;
+  --af-space-12: 3rem;
+  --af-space-14: 3.5rem;
+  --af-space-16: 4rem;
+  --af-space-20: 5rem;
+
+  /* Controls: fields and buttons are 46px; 44px is the smallest tap target; 52px rows. */
+  --af-control: 2.875rem;
+  --af-control-sm: 2.75rem;
+  --af-control-lg: 3.25rem;
+  --af-field-pad: 0.875rem;
+  --af-icon-sm: 1rem;
+  --af-icon: 1.125rem;
+  --af-icon-md: 1.25rem;
+  --af-icon-lg: 1.5rem;
+  --af-icon-xl: 2.25rem;
+  --af-icon-2xl: 2.5rem;
+  --af-dot: 0.5rem;
+
+  /* Layout: the page, then the fixed sizes of the parts that have one. */
+  --af-page-max: 92rem;
+  --af-gutter: 3.75rem;
+  --af-header-h: 4rem;
+  --af-measure-lead: 34rem;
+  --af-measure-rows: 64rem;
+  --af-hero-band: 15rem;
+  --af-widget-inset: 5.75rem;
+  --af-wing-w: 3.25rem;
+  --af-wing-w-lg: 4.25rem;
+  --af-popover-w: 20rem;
+  --af-drawer-w: 21rem;
+  --af-stub-w: 17rem;
+  --af-sweep-w: 34rem;
+  --af-sweep-clear: 13rem;
+  --af-tile-photo: 7.5rem;
+  --af-row-photo: 11rem;
+  --af-chip: 1.375rem;
+  --af-chip-sm: 1.125rem;
+
+  /* Elevation and motion */
+  --af-shadow: 0 1px 2px color-mix(in oklab, var(--af-night) 5%, transparent), 0 6px 20px color-mix(in oklab, var(--af-night) 6%, transparent);
+  --af-shadow-pop: 0 2px 6px color-mix(in oklab, var(--af-night) 8%, transparent), 0 16px 40px color-mix(in oklab, var(--af-night) 16%, transparent);
+  --af-shadow-lift: 0 12px 40px color-mix(in oklab, var(--af-night) 28%, transparent);
+  --af-shadow-text: 0 1px 14px color-mix(in oklab, var(--af-night) 55%, transparent);
+  --af-scrim: color-mix(in oklab, var(--af-night) 55%, transparent);
+  --af-ease: 140ms ease;
+
+  /* The shared pieces (popover, select, calendar) and Tailwind's rounded-* read these, so inside the storefront
+     they resolve to the system above. */
+  --radius: var(--af-radius);
+  --background: var(--af-card);
+  --foreground: var(--af-ink);
+  --popover: var(--af-card);
+  --popover-foreground: var(--af-ink);
+  --muted: var(--af-paper-2);
+  --muted-foreground: var(--af-ink-3);
+  --accent: var(--af-accent-soft);
+  --accent-foreground: var(--af-ink);
+  --primary: var(--af-accent);
+  --primary-foreground: var(--af-white);
+  --border: var(--af-line);
+  --input: var(--af-line-2);
+  --ring: var(--af-sky);
+  --destructive: var(--af-bad);
+
+  color-scheme: light;
   color: var(--af-ink);
   font-family: var(--af-font-body), ui-sans-serif, system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
 }
+.af { display: flex; min-height: 100dvh; flex-direction: column; background: var(--af-paper); }
 
-.af ::selection { background: var(--af-accent); color: #fff; }
-.af :focus-visible { outline: 2px solid var(--af-sky); outline-offset: 2px; }
+/* ── Base ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+.af ::selection { background: var(--af-accent); color: var(--af-white); }
+.af :focus-visible, body:has(.af) [data-radix-popper-content-wrapper] :focus-visible { outline: 2px solid var(--af-sky); outline-offset: 2px; }
 
-.af-container { width: 100%; max-width: 92rem; margin-inline: auto; padding-inline: 1rem; }
-@media (min-width: 640px) { .af-container { padding-inline: 1.5rem; } }
-@media (min-width: 1024px) { .af-container { padding-inline: 3.75rem; } }
+.af-container { width: 100%; max-width: var(--af-page-max); margin-inline: auto; padding-inline: var(--af-space-4); }
+@media (min-width: 640px) { .af-container { padding-inline: var(--af-space-6); } }
+@media (min-width: 1024px) { .af-container { padding-inline: var(--af-gutter); } }
 
-/* Display lines: light, wide and calm. */
-.af-display { font-weight: 300; letter-spacing: -0.015em; line-height: 1.08; text-wrap: balance; }
+/* ── Type ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* Display lines: light, wide and calm, with the accented word in italic sky. */
+.af-display { font-weight: 300; letter-spacing: var(--af-track-tight); line-height: var(--af-leading-tight); text-wrap: balance; }
 .af-display em, .af-display i { font-style: italic; color: var(--af-sky); }
+/* The title of every inner page and the 404. */
+.af-page-title { font-size: var(--af-text-3xl); }
+@media (min-width: 640px) { .af-page-title { font-size: var(--af-text-4xl); } }
+@media (min-width: 1024px) { .af-page-title { font-size: var(--af-text-5xl); } }
 .af-mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+/* Booking references, pass numbers and other codes: tabular, tracked caps. */
+.af-code { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: var(--af-track-caps); text-transform: uppercase; }
 /* Tracked caps: section labels and field labels. */
-.af-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--af-ink-3); }
-.af-kicker { font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.32em; text-transform: uppercase; }
+.af-eyebrow { font-size: var(--af-text-xs); font-weight: 600; letter-spacing: var(--af-track-caps); text-transform: uppercase; color: var(--af-ink-3); }
+.af-kicker { font-size: var(--af-text-sm); font-weight: 500; letter-spacing: var(--af-track-wide); text-transform: uppercase; color: var(--af-on-deep-2); }
+@media (max-width: 389px) { .af-kicker { letter-spacing: var(--af-track-wide-sm); } }
+.af-lead-text { max-width: var(--af-measure-lead); font-size: var(--af-text-base); line-height: var(--af-leading); color: var(--af-board-ink-2); }
+@media (min-width: 640px) { .af-lead-text { font-size: var(--af-text-xl); } }
 
-/* Deep ground: header, hero, page heads, footer, flight heads. Board-only colours are variables, so white cards
-   placed on the ground reset them and read as ink on paper again. */
-.af-board { background: var(--af-board); color: var(--af-board-ink); --af-board-ink-2: rgb(255 255 255 / 0.8); --af-board-line: rgb(255 255 255 / 0.18); --af-signal: var(--af-sky); --af-dot-ok: #7ee2b0; --af-dot-warn: #ffd166; --af-dot-accent: #fff; }
-.af-card, .af-table, .af-pass, .af-notice, .af-well, .af-widget-panel { color: var(--af-ink); --af-board-ink-2: var(--af-ink-3); --af-board-line: var(--af-line); --af-signal: var(--af-accent); --af-dot-ok: var(--af-ok); --af-dot-warn: #c98300; --af-dot-accent: var(--af-accent); }
+/* ── The deep ground: header, hero, page heads, footer, flight heads ──────────────────────────────────────── */
+.af-board { background: var(--af-board); color: var(--af-board-ink); --af-board-ink-2: var(--af-on-deep-2); --af-board-line: var(--af-on-deep-line); --af-signal: var(--af-sky); --af-dot-ok: var(--af-ok-on-deep); --af-dot-warn: var(--af-warn-on-deep); --af-dot-bad: var(--af-bad-on-deep); --af-dot-accent: var(--af-on-deep); }
+.af-card, .af-table, .af-pass, .af-notice, .af-well, .af-widget-panel { color: var(--af-ink); --af-board-ink-2: var(--af-ink-3); --af-board-line: var(--af-line); --af-signal: var(--af-accent); --af-dot-ok: var(--af-ok); --af-dot-warn: var(--af-warn); --af-dot-bad: var(--af-bad); --af-dot-accent: var(--af-accent); }
 .af-board .af-eyebrow { color: var(--af-board-ink-2); }
 .af-board-row { border-top: 1px solid var(--af-board-line); }
 .af-board-cell { font-variant-numeric: tabular-nums; }
 .af-signal { color: var(--af-signal); }
+/* Page heads sit under the header with a hairline between them. */
+.af-page-head { border-top: 1px solid var(--af-board-line); }
 
 /* Header: clear over the home hero, solid on every other page. */
-.af-header { position: relative; z-index: 30; background: var(--af-deep); color: #fff; }
+.af-header { position: relative; z-index: 30; background: var(--af-deep); color: var(--af-on-deep); }
 .af-header[data-overlay="true"] { position: absolute; inset: 0 0 auto 0; background: transparent; }
-.af-wordmark { font-size: 1.5rem; font-style: italic; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
-@media (min-width: 1024px) { .af-wordmark { font-size: 1.875rem; } }
-.af-nav-link { position: relative; display: flex; align-items: center; padding: 0 0.25rem; font-size: 1rem; font-weight: 500; color: rgb(255 255 255 / 0.88); transition: color 140ms ease; }
-.af-nav-link:hover { color: #fff; }
-.af-nav-link[aria-current="page"] { color: #fff; }
-.af-nav-link[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 1rem; height: 2px; border-radius: 1px; background: var(--af-sky); }
-.af-nav-trips[aria-current="page"]::after { bottom: 0.125rem; }
-.af-menu { color: var(--af-ink); background: var(--af-card); border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); box-shadow: var(--af-shadow); overflow: hidden; }
-
-/* Home hero: the cabin wall, the window with the city in it, and the seat edge. */
-.af-hero { position: relative; isolation: isolate; overflow: hidden; background: linear-gradient(105deg, var(--af-deep) 0%, var(--af-deep-2) 46%, var(--af-deep) 100%); color: #fff; --af-board-ink-2: rgb(255 255 255 / 0.84); }
-.af-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgb(8 12 32 / 0.78) 0%, rgb(8 12 32 / 0.5) 38%, rgb(8 12 32 / 0.08) 68%, transparent 100%), linear-gradient(180deg, rgb(8 12 32 / 0.35) 0%, transparent 22%, transparent 62%, rgb(8 12 32 / 0.55) 100%); }
-.af-hero-photo { position: absolute; inset: 0; z-index: -2; background: #1d2442 url(/storefront/hero-jet.webp) 64% 42% / cover no-repeat; }
-/* Phones: the jet sits in its own band above the headline, never behind it; "Elevated" takes a lighter tint and a shadow. */
-@media (max-width: 639px) {
-  .af-hero-photo { bottom: auto; height: 15rem; background-size: auto 15rem; background-position: 72% 0; }
-  .af-hero { background: #262646; }
-  .af-hero::before { background: linear-gradient(180deg, rgb(8 12 32 / 0.45) 0, rgb(8 12 32 / 0.1) 5rem, rgb(8 12 32 / 0.4) 10rem, #262646 15rem); }
-  .af-hero:not([data-compact="true"]) .af-hero-inner { padding-top: 8.75rem; }
-  .af-hero-title em { color: #cfe4ff; text-shadow: 0 1px 2px rgb(3 8 22 / 0.5), 0 1px 14px rgb(3 8 22 / 0.6); }
+.af-wordmark { font-size: var(--af-text-2xl); font-style: italic; font-weight: 600; letter-spacing: var(--af-track-tight); line-height: var(--af-leading-none); }
+@media (min-width: 1024px) { .af-wordmark { font-size: var(--af-text-3xl); } }
+.af-wing { display: block; flex-shrink: 0; width: var(--af-wing-w); height: var(--af-icon-lg); }
+@media (min-width: 1024px) { .af-wing { width: var(--af-wing-w-lg); height: var(--af-space-8); } }
+.af-rule-v { width: 1px; height: var(--af-space-6); flex-shrink: 0; background: var(--af-on-deep-edge); }
+.af-nav-link { position: relative; display: flex; align-items: center; padding: 0 var(--af-space-1); font-size: var(--af-text-base); font-weight: 500; color: var(--af-on-deep-2); transition: color var(--af-ease); }
+.af-nav-link:hover, .af-nav-link[aria-current="page"] { color: var(--af-on-deep); }
+.af-nav-link[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: var(--af-space-4); height: 2px; border-radius: 1px; background: var(--af-sky); }
+.af-nav-trips { min-height: var(--af-control-sm); gap: var(--af-space-2); font-size: var(--af-text-sm); white-space: nowrap; }
+.af-nav-trips[aria-current="page"]::after { bottom: 0; }
+.af-nav-trips svg { width: var(--af-icon-md); height: var(--af-icon-md); flex-shrink: 0; }
+@media (min-width: 1280px) { .af-nav-trips { font-size: var(--af-text-base); } .af-nav-trips svg { width: var(--af-icon-lg); height: var(--af-icon-lg); } }
+/* Narrow phones (under 390px) keep the whole carrier name: My trips shows as its icon, the divider goes. */
+@media (max-width: 389px) {
+  .af-header .af-rule-v { display: none; }
+  .af-nav-trips { min-width: var(--af-control-sm); justify-content: center; }
+  .af-nav-trips-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
-.af-hero-inner { position: relative; padding-top: 4.75rem; padding-bottom: 1.25rem; }
-@media (min-width: 1024px) { .af-hero-inner { padding-top: 5.75rem; padding-bottom: 1.5rem; } }
-.af-hero-title { font-size: clamp(2.125rem, 3.65vw, 3.5rem); text-shadow: 0 1px 14px rgb(3 8 22 / 0.55); }
-.af-hero-title > span { display: inline; }
-@media (min-width: 640px) { .af-hero-title > span { display: block; } }
-@media (max-width: 639px) { .af-hero-title { font-size: 1.875rem; } .af-hero-title > span { display: block; } .af-hero-title { font-size: 1.625rem; } .af-hero-inner .af-lead-text { font-size: 0.9375rem; } }
+.af-menu-toggle { display: grid; place-items: center; width: var(--af-control-sm); height: var(--af-control-sm); margin-left: calc(var(--af-space-3) * -1); color: var(--af-on-deep); cursor: pointer; }
+.af-menu-toggle svg { width: var(--af-icon-lg); height: var(--af-icon-lg); }
+@media (min-width: 1280px) { .af-menu-toggle { display: none; } }
 
-/* Search widget: two tabs on a white panel, at first paint. */
-.af-widget { position: relative; margin-top: 1.25rem; }
-@media (min-width: 1024px) { .af-widget { margin-inline: 5.75rem; } }
+/* ── Home hero: a jet above the clouds at dusk ─────────────────────────────────────────────────────────────── */
+.af-hero { position: relative; isolation: isolate; overflow: hidden; background: linear-gradient(105deg, var(--af-deep) 0%, var(--af-deep-2) 46%, var(--af-deep) 100%); color: var(--af-on-deep); }
+.af-hero::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--af-night) 78%, transparent) 0%, color-mix(in oklab, var(--af-night) 50%, transparent) 38%, color-mix(in oklab, var(--af-night) 8%, transparent) 68%, transparent 100%),
+    linear-gradient(180deg, color-mix(in oklab, var(--af-night) 35%, transparent) 0%, transparent 22%, transparent 62%, color-mix(in oklab, var(--af-night) 55%, transparent) 100%);
+}
+.af-hero-photo { position: absolute; inset: 0; z-index: -2; background: var(--af-hero-dusk) url(/storefront/hero-jet.webp) 64% 42% / cover no-repeat; }
+.af-hero-inner { position: relative; padding-top: calc(var(--af-header-h) + var(--af-space-3)); padding-bottom: var(--af-space-5); }
+@media (min-width: 1024px) { .af-hero-inner { padding-top: calc(var(--af-header-h) + var(--af-space-8)); padding-bottom: var(--af-space-6); } }
+.af-hero-title { font-size: clamp(var(--af-text-4xl), 3.65vw, var(--af-text-display)); text-shadow: var(--af-shadow-text); }
+.af-hero-title > span { display: block; }
+/* Phones: the jet sits in its own band above the headline, never behind it; "Elevated" takes a lighter tint. */
+@media (max-width: 639px) {
+  .af-hero { background: var(--af-hero-dusk); }
+  .af-hero-photo { bottom: auto; height: var(--af-hero-band); background-size: auto var(--af-hero-band); background-position: 72% 0; }
+  .af-hero::before { background: linear-gradient(180deg, color-mix(in oklab, var(--af-night) 45%, transparent) 0, color-mix(in oklab, var(--af-night) 10%, transparent) calc(var(--af-hero-band) / 3), color-mix(in oklab, var(--af-night) 40%, transparent) calc(var(--af-hero-band) * 2 / 3), var(--af-hero-dusk) var(--af-hero-band)); }
+  .af-hero:not([data-compact="true"]) .af-hero-inner { padding-top: calc(var(--af-header-h) + var(--af-space-20)); }
+  .af-hero-title { font-size: clamp(var(--af-text-2xl), 7vw, var(--af-text-3xl)); }
+  .af-hero-title em { color: var(--af-sky-soft); text-shadow: 0 1px 2px color-mix(in oklab, var(--af-night) 50%, transparent), var(--af-shadow-text); }
+}
+
+/* ── Search widget: two tabs on a white panel, at first paint ──────────────────────────────────────────────── */
+.af-widget { position: relative; margin-top: var(--af-space-5); }
+@media (min-width: 1024px) { .af-widget { margin-inline: var(--af-widget-inset); } }
 .af-widget-tabs { display: flex; }
-.af-widget-tab { display: inline-flex; align-items: center; gap: 0.625rem; min-height: 2.75rem; padding: 0 1.25rem; border-radius: var(--af-radius-lg) var(--af-radius-lg) 0 0; background: rgb(255 255 255 / 0.82); font-size: 0.9375rem; font-weight: 500; color: var(--af-ink-2); cursor: pointer; }
-@media (min-width: 640px) { .af-widget-tab { padding: 0 2rem; } }
-.af-widget-tab svg { width: 1.125rem; height: 1.125rem; }
-.af-widget-tab[aria-selected="true"] { position: relative; background: #fff; font-weight: 600; color: var(--af-ink); }
-.af-widget-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 1.25rem; right: 1.25rem; bottom: 0; height: 2px; background: var(--af-accent); }
-@media (min-width: 640px) { .af-widget-tab[aria-selected="true"]::after { left: 2rem; right: 2rem; } }
-.af-widget-panel { padding: 0.75rem; border-radius: 0 var(--af-radius-lg) var(--af-radius-lg) var(--af-radius-lg); background: #fff; box-shadow: 0 12px 40px rgb(3 8 22 / 0.28); }
-@media (min-width: 640px) { .af-widget-panel { padding: 1.25rem 1.5rem 1.375rem; } }
-.af-widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; }
-@media (min-width: 640px) { .af-widget-grid { gap: 0.875rem; } }
-@media (min-width: 1100px) { .af-widget-grid { grid-template-columns: minmax(0, 1.25fr) auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 0.75rem; } .af-widget-grid[data-return="true"] { grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) auto; } }
-.af-widget-submit { padding-inline: 1.5rem; }
+.af-widget-tab { display: inline-flex; align-items: center; gap: var(--af-space-2); min-height: var(--af-control-sm); padding: 0 var(--af-space-4); border-radius: var(--af-radius-lg) var(--af-radius-lg) 0 0; background: color-mix(in oklab, var(--af-white) 82%, transparent); font-size: var(--af-text-sm); font-weight: 500; color: var(--af-ink-2); cursor: pointer; transition: color var(--af-ease); }
+@media (min-width: 640px) { .af-widget-tab { gap: var(--af-space-3); padding: 0 var(--af-space-8); font-size: var(--af-text-base); } }
+.af-widget-tab svg { width: var(--af-icon); height: var(--af-icon); flex-shrink: 0; }
+.af-widget-tab:hover { color: var(--af-ink); }
+@media (max-width: 389px) { .af-widget-tab { padding: 0 var(--af-space-3); } .af-widget-tab svg { display: none; } .af-widget-tab[aria-selected="true"]::after { left: var(--af-space-3); right: var(--af-space-3); } }
+.af-widget-tab[aria-selected="true"] { position: relative; background: var(--af-card); font-weight: 600; color: var(--af-ink); }
+.af-widget-tab[aria-selected="true"]::after { content: ""; position: absolute; left: var(--af-space-4); right: var(--af-space-4); bottom: 0; height: 2px; background: var(--af-accent); }
+@media (min-width: 640px) { .af-widget-tab[aria-selected="true"]::after { left: var(--af-space-8); right: var(--af-space-8); } }
+.af-widget-panel { padding: var(--af-space-3); border-radius: 0 var(--af-radius-lg) var(--af-radius-lg) var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow-lift); }
+@media (min-width: 640px) { .af-widget-panel { padding: var(--af-space-5) var(--af-space-6) var(--af-space-6); } }
+/* Inner pages: the search panel stands alone on paper, so all four corners round and it sits flat. */
+.af-widget-panel[data-standalone="true"] { border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); box-shadow: var(--af-shadow); }
+.af-widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--af-space-3); }
+@media (min-width: 640px) { .af-widget-grid { gap: var(--af-space-4); } }
+@media (min-width: 1100px) { .af-widget-grid { grid-template-columns: minmax(0, 1.25fr) auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: var(--af-space-3); } .af-widget-grid[data-return="true"] { grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.95fr) auto; } }
+.af-widget-submit { padding-inline: var(--af-space-6); }
 @media (max-width: 1099px) { .af-widget-submit { grid-column: span 2; } }
+/* Narrow phones (under 390px): every field takes a full row, so no date or party size is cut. */
+@media (max-width: 389px) { .af-widget-grid > .af-field { grid-column: span 2; } }
 .af-swap { display: none; }
-@media (min-width: 1100px) { .af-swap { display: grid; place-items: center; width: 2.25rem; height: 2.875rem; border-radius: var(--af-radius); color: var(--af-ink); cursor: pointer; } .af-swap:hover { background: var(--af-paper-2); } .af-swap:disabled { opacity: 0.35; cursor: default; } }
-/* A leading icon inside a field. */
-.af-icon-field { position: relative; }
-.af-icon-field > svg { position: absolute; left: 0.875rem; bottom: 0.875rem; z-index: 1; width: 1.125rem; height: 1.125rem; color: var(--af-ink); pointer-events: none; }
-.af-icon-field .af-input { padding-left: 2.5rem; }
-@media (max-width: 639px) { .af-icon-field > svg { left: 0.625rem; } .af-icon-field .af-input { padding-left: 2.125rem; } }
-.af-choice { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; font-size: 0.9375rem; font-weight: 500; color: var(--af-ink-2); cursor: pointer; }
-.af-choice::before { content: ""; width: 1rem; height: 1rem; border-radius: 50%; border: 1.5px solid var(--af-line-2); background: #fff; }
-.af-choice[aria-pressed="true"] { color: var(--af-ink); font-weight: 600; }
-.af-choice[aria-pressed="true"]::before { border: 5px solid var(--af-accent); }
-.af-stepper { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--af-line-2); border-radius: var(--af-radius); background: #fff; color: var(--af-ink); cursor: pointer; }
+@media (min-width: 1100px) {
+  .af-swap { display: grid; place-items: center; width: var(--af-control-sm); height: var(--af-control); border-radius: var(--af-radius); color: var(--af-ink); cursor: pointer; }
+  .af-swap svg { width: var(--af-icon); height: var(--af-icon); }
+  .af-swap:hover { background: var(--af-paper-2); }
+  .af-swap:disabled { opacity: 0.35; cursor: default; }
+}
+
+/* Travelers picker: rows of fare types with steppers, in a popover. */
+.af-party { width: min(var(--af-popover-w), calc(100vw - var(--af-space-6))); }
+.af-party-row { display: flex; align-items: center; justify-content: space-between; gap: var(--af-space-3); }
+.af-party-row + .af-party-row { margin-top: var(--af-space-3); }
+.af-party-type { font-size: var(--af-text-base); font-weight: 600; }
+.af-party-hint { font-size: var(--af-text-sm); color: var(--af-ink-3); }
+.af-party-count { width: var(--af-space-6); text-align: center; font-size: var(--af-text-base); font-weight: 600; }
+.af-party-note { margin-top: var(--af-space-4); padding-top: var(--af-space-3); border-top: 1px solid var(--af-line); font-size: var(--af-text-sm); color: var(--af-ink-3); }
+.af-stepper { display: grid; place-items: center; width: var(--af-control-sm); height: var(--af-control-sm); border: 1px solid var(--af-line-2); border-radius: var(--af-radius); background: var(--af-card); color: var(--af-ink); cursor: pointer; transition: border-color var(--af-ease); }
 .af-stepper:hover:not(:disabled) { border-color: var(--af-accent); }
 .af-stepper:disabled { opacity: 0.35; cursor: default; }
-.af-stepper svg { width: 1rem; height: 1rem; }
+.af-stepper svg { width: var(--af-icon-sm); height: var(--af-icon-sm); }
 
-/* Section head: tracked caps with a keyline running to the edge. */
-.af-section-head { display: flex; align-items: center; gap: 1.5rem; font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--af-ink); }
-@media (min-width: 640px) { .af-section-head { letter-spacing: 0.3em; } }
-.af-section-head::after { content: ""; flex: 1; height: 1px; background: color-mix(in oklab, var(--af-accent) 55%, #fff); }
+/* ── Section head: tracked caps with a keyline running to the edge ─────────────────────────────────────────── */
+.af-section-head { display: flex; align-items: center; gap: var(--af-space-6); font-size: var(--af-text-sm); font-weight: 500; letter-spacing: var(--af-track-wide-sm); text-transform: uppercase; color: var(--af-ink); }
+@media (max-width: 389px) { .af-section-head { gap: var(--af-space-4); font-size: var(--af-text-xs); letter-spacing: var(--af-track-caps); } }
+@media (min-width: 640px) { .af-section-head { letter-spacing: var(--af-track-wide); } }
+.af-section-head::after { content: ""; flex: 1; height: 1px; background: color-mix(in oklab, var(--af-accent) 55%, var(--af-white)); }
 
-/* Destination tiles: a photo with the city on it (wide screens) or beside the fare (phones). */
-.af-dest-grid { display: grid; gap: 1rem; }
-@media (min-width: 1024px) { .af-dest-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.125rem; } }
+/* ── Destination tiles: a photo with the city on it (wide screens) or beside the fare (phones) ─────────────── */
+.af-dest-grid { display: grid; gap: var(--af-space-4); }
+@media (min-width: 1024px) { .af-dest-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--af-space-5); } }
 .af-dest { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow); color: var(--af-ink); }
-.af-dest-photo { position: relative; min-height: 7.5rem; background-color: var(--af-deep-2); background-image: linear-gradient(140deg, var(--af-deep-2), var(--af-deep)); background-size: cover; background-position: center; }
-.af-dest-body { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; padding: 0.875rem 1rem; }
-.af-dest-city { font-size: 1.375rem; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; }
-.af-dest-tag { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--af-ink-2); }
-.af-dest-price { margin-top: 0.375rem; font-size: 1.375rem; font-weight: 600; line-height: 1.1; }
-.af-dest-note { font-size: 0.8125rem; line-height: 1.3; color: var(--af-ink-2); }
-.af-dest-cta { margin-top: 0.625rem; }
+/* The whole tile is one link, so its focus ring circles the tile, not the city name. */
+.af-dest-link::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+.af-dest-link:focus-visible { outline: none; }
+.af-dest:has(.af-dest-link:focus-visible) { outline: 2px solid var(--af-sky); outline-offset: 2px; }
+.af-dest-photo { position: relative; min-height: var(--af-tile-photo); background-color: var(--af-deep-2); background-image: linear-gradient(140deg, var(--af-deep-2), var(--af-deep)); background-size: cover; background-position: center; }
+.af-dest-body { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: var(--af-space-1); padding: var(--af-space-4); }
+.af-dest-city { font-size: var(--af-text-2xl); font-weight: 500; line-height: var(--af-leading-tight); letter-spacing: var(--af-track-tight); }
+.af-dest-tag { font-size: var(--af-text-xs); font-weight: 500; letter-spacing: var(--af-track-caps); text-transform: uppercase; color: var(--af-ink-2); }
+.af-dest-price { margin-top: var(--af-space-1); font-size: var(--af-text-2xl); font-weight: 600; line-height: var(--af-leading-tight); }
+.af-dest-note { font-size: var(--af-text-sm); line-height: var(--af-leading-snug); color: var(--af-ink-2); }
+.af-dest-cta { margin-top: var(--af-space-3); }
+/* Narrow phones: the fare side takes three fifths, so the city and its tag stay on one line. */
+@media (max-width: 389px) { .af-dest { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); } .af-dest-body { padding: var(--af-space-3); } }
 /* Home tiles are the link themselves; the Book now button belongs to the inner-page rows. */
 .af-dest-grid:not([data-rows]) .af-dest-cta { display: none; }
 .af-dest-arrow { display: none; }
-@media (min-width: 640px) and (max-width: 1023px) { .af-dest-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 1rem; padding: 1.25rem; } .af-dest-body > :not(.af-dest-cta) { grid-column: 1; } .af-dest-cta { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; } .af-dest-city { font-size: 1.625rem; } .af-dest-price { font-size: 1.625rem; } }
+@media (min-width: 640px) and (max-width: 1023px) {
+  .af-dest-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--af-space-4); padding: var(--af-space-5); }
+  .af-dest-body > :not(.af-dest-cta) { grid-column: 1; }
+  .af-dest-cta { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; }
+}
 @media (min-width: 1024px) {
-  .af-dest { display: block; aspect-ratio: 1.73; border: 0; color: #fff; }
+  .af-dest { display: block; aspect-ratio: 1.73; border: 0; color: var(--af-on-deep); }
   .af-dest-photo { position: absolute; inset: 0; min-height: 0; transition: transform 500ms ease; }
   .af-dest:hover .af-dest-photo { transform: scale(1.03); }
   .af-dest-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, color-mix(in oklab, var(--af-deep) 88%, transparent) 100%); }
-  .af-dest-body { position: absolute; inset: auto 0 0 0; padding: 0 3.5rem 1rem 1.5rem; gap: 0; }
-  .af-dest-city { font-size: 1.75rem; }
-  .af-dest-tag { color: rgb(255 255 255 / 0.92); }
+  .af-dest-body { position: absolute; inset: auto 0 0 0; gap: 0; padding: 0 var(--af-space-14) var(--af-space-4) var(--af-space-6); }
+  .af-dest-city { font-size: var(--af-text-3xl); }
+  .af-dest-tag { color: var(--af-on-deep-2); }
   .af-dest-grid:not([data-rows]) .af-dest-price { display: none; }
   .af-dest .af-dest-note, .af-dest .af-dest-cta { display: none; }
-  .af-dest-arrow { display: block; position: absolute; right: 1.5rem; bottom: 1.25rem; width: 1.5rem; height: 1.5rem; transition: transform 200ms ease; }
+  .af-dest-arrow { display: block; position: absolute; right: var(--af-space-6); bottom: var(--af-space-5); width: var(--af-icon-lg); height: var(--af-icon-lg); transition: transform 200ms ease; }
   .af-dest:hover .af-dest-arrow { transform: translateX(3px); }
 }
-/* The whole tile is one link. */
-.af-dest-link::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+/* Inner pages: the routes as rows, photo left and the fare with its Book now button right. */
+.af-dest-grid[data-rows="true"] { gap: var(--af-space-5); max-width: var(--af-measure-rows); }
+@media (min-width: 1024px) {
+  .af-dest-grid[data-rows="true"] { grid-template-columns: minmax(0, 1fr); }
+  .af-dest-grid[data-rows="true"] .af-dest { display: grid; aspect-ratio: auto; min-height: var(--af-row-photo); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--af-line); color: var(--af-ink); }
+  .af-dest-grid[data-rows="true"] .af-dest-photo { position: relative; inset: auto; min-height: var(--af-row-photo); }
+  .af-dest-grid[data-rows="true"] .af-dest:hover .af-dest-photo { transform: none; }
+  .af-dest-grid[data-rows="true"] .af-dest-photo::after { display: none; }
+  .af-dest-grid[data-rows="true"] .af-dest-body { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--af-space-6); padding: var(--af-space-6) var(--af-space-8); }
+  .af-dest-grid[data-rows="true"] .af-dest-body > :not(.af-dest-cta) { grid-column: 1; }
+  .af-dest-grid[data-rows="true"] .af-dest-cta { display: inline-flex; grid-column: 2; grid-row: 1 / span 4; margin-top: 0; }
+  .af-dest-grid[data-rows="true"] .af-dest .af-dest-note { display: block; }
+  .af-dest-grid[data-rows="true"] .af-dest-tag { color: var(--af-ink-2); }
+  .af-dest-grid[data-rows="true"] .af-dest-price { margin-top: var(--af-space-2); }
+  .af-dest-grid[data-rows="true"] .af-dest-arrow { display: none; }
+}
 
-/* What every booking includes: four short facts, divided by keylines. */
-.af-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem 1rem; }
-@media (min-width: 1024px) { .af-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; } .af-facts > * + * { border-left: 1px solid var(--af-line-2); } .af-facts > * { justify-content: center; padding-inline: 1.5rem; } }
-.af-fact { display: flex; min-width: 0; align-items: center; gap: 0.875rem; }
-.af-fact svg { width: 2.25rem; height: 2.25rem; flex-shrink: 0; stroke-width: 1.5; color: var(--af-ink); }
-@media (min-width: 1024px) { .af-fact { gap: 1.5rem; } .af-fact svg { width: 2.5rem; height: 2.5rem; } }
-.af-fact-title { font-size: 1rem; font-weight: 600; line-height: 1.25; }
-@media (min-width: 1024px) { .af-fact-title { font-size: 1.125rem; } }
-.af-fact-text { font-size: 0.8125rem; line-height: 1.35; color: var(--af-ink-2); }
+/* ── The Experience: four short facts, divided by keylines ─────────────────────────────────────────────────── */
+.af-facts { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--af-space-5); }
+@media (min-width: 640px) { .af-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--af-space-6) var(--af-space-4); } }
+@media (min-width: 1024px) { .af-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; } .af-facts > * + * { border-left: 1px solid var(--af-line-2); } .af-facts > * { justify-content: center; padding-inline: var(--af-space-6); } }
+.af-fact { display: flex; min-width: 0; align-items: center; gap: var(--af-space-4); }
+.af-fact svg { width: var(--af-icon-xl); height: var(--af-icon-xl); flex-shrink: 0; stroke-width: 1.5; color: var(--af-ink); }
+@media (min-width: 1024px) { .af-fact { gap: var(--af-space-6); } .af-fact svg { width: var(--af-icon-2xl); height: var(--af-icon-2xl); } }
+.af-fact-title { font-size: var(--af-text-base); font-weight: 600; line-height: var(--af-leading-snug); }
+@media (min-width: 1024px) { .af-fact-title { font-size: var(--af-text-lg); } }
+.af-fact-text { font-size: var(--af-text-sm); line-height: var(--af-leading-snug); color: var(--af-ink-2); }
 
-/* Footer: the deep ground rises in a slow curve, with a sky sweep in the corner. */
-.af-footer { position: relative; margin-top: auto; overflow: hidden; background: var(--af-paper); color: #fff; }
-.af-footer-wave { display: block; width: 100%; height: 2.25rem; }
+/* ── Footer: the deep ground rises in a slow curve, with a sky sweep in the corner ─────────────────────────── */
+.af-footer { position: relative; margin-top: auto; overflow: hidden; background: var(--af-paper); color: var(--af-on-deep); }
+.af-footer-wave { display: block; width: 100%; height: var(--af-space-10); }
 .af-footer-body { position: relative; background: var(--af-deep); }
-.af-footer-sweep { position: absolute; right: 0; bottom: 0; width: min(34rem, 42%); height: 100%; pointer-events: none; }
-.af-footer-nav a { display: inline-flex; align-items: center; min-height: 2.75rem; color: rgb(255 255 255 / 0.8); }
-.af-footer-nav a:hover { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
-@media (min-width: 640px) { .af-footer-nav a { min-height: 2rem; } }
+.af-footer-sweep { position: absolute; right: 0; bottom: 0; width: min(var(--af-sweep-w), 42%); height: 100%; pointer-events: none; }
+.af-footer-legal { font-size: var(--af-text-xs); font-weight: 500; letter-spacing: var(--af-track-wide); text-transform: uppercase; color: var(--af-on-deep-2); }
+.af-footer-nav { font-size: var(--af-text-sm); }
+.af-footer-nav a { display: inline-flex; align-items: center; min-height: var(--af-control-sm); color: var(--af-on-deep-2); }
+.af-footer-nav a:hover { color: var(--af-on-deep); text-decoration: underline; text-underline-offset: 4px; }
+/* The links stay clear of the sweep in the corner. */
+@media (min-width: 1024px) { .af-footer-nav { margin-left: auto; margin-right: min(var(--af-sweep-clear), 15vw); justify-content: flex-end; } }
 
-/* Flight results: a summary band, then one card per fare. */
+/* ── Flight results: a summary band, then one card per fare ────────────────────────────────────────────────── */
 .af-table { background: transparent; color: var(--af-ink); }
-.af-results-head { border-radius: var(--af-radius-lg); background: var(--af-deep); color: #fff; padding: 1rem 1.25rem; font-size: 1.0625rem; line-height: 1.35; }
-@media (min-width: 640px) { .af-results-head { padding: 1.125rem 1.5rem; font-size: 1.1875rem; } }
-.af-results-head .af-sep { display: inline-block; width: 1px; height: 1.1em; margin-inline: 0.75rem; vertical-align: -0.15em; background: rgb(255 255 255 / 0.4); }
-.af-flight { display: grid; gap: 1.125rem; padding: 1.25rem; border: 1px solid var(--af-line-2); border-radius: var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow); }
-.af-flight-fare { border-top: 1px solid var(--af-line); padding-top: 1.125rem; }
-@media (min-width: 900px) { .af-flight { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 2rem; padding: 1.5rem 1.75rem; } .af-flight-fare { border-top: 0; border-left: 1px solid var(--af-line); padding-top: 0; padding-left: 2rem; } }
+.af-results-head { padding: var(--af-space-4) var(--af-space-5); border-radius: var(--af-radius-lg); background: var(--af-deep); color: var(--af-on-deep); font-size: var(--af-text-lg); line-height: var(--af-leading-snug); }
+@media (min-width: 640px) { .af-results-head { padding: var(--af-space-5) var(--af-space-6); font-size: var(--af-text-xl); } }
+.af-sep { display: inline-block; width: 1px; height: 1.1em; margin-inline: var(--af-space-3); vertical-align: -0.15em; background: var(--af-on-deep-edge); }
+.af-flight { display: grid; gap: var(--af-space-5); padding: var(--af-space-5); border: 1px solid var(--af-line-2); border-radius: var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow); }
+.af-flight-fare { border-top: 1px solid var(--af-line); padding-top: var(--af-space-5); }
+@media (min-width: 900px) { .af-flight { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--af-space-8); padding: var(--af-space-6); } .af-flight-fare { border-top: 0; border-left: 1px solid var(--af-line); padding-top: 0; padding-left: var(--af-space-8); } }
 .af-flight[data-selected="true"] { border-color: var(--af-accent); box-shadow: 0 0 0 1px var(--af-accent), var(--af-shadow); }
-.af-time { font-size: 1.75rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
-.af-price { font-size: 2.5rem; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+.af-time { font-size: var(--af-text-2xl); font-weight: 700; line-height: var(--af-leading-tight); letter-spacing: var(--af-track-tight); }
+@media (min-width: 640px) { .af-time { font-size: var(--af-text-3xl); } }
+.af-price { font-size: var(--af-text-4xl); font-weight: 700; line-height: var(--af-leading-tight); letter-spacing: var(--af-track-tight); }
 
-/* Surfaces */
+/* ── Surfaces ──────────────────────────────────────────────────────────────────────────────────────────────── */
 .af-card { background: var(--af-card); border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); box-shadow: var(--af-shadow); }
 .af-well { background: var(--af-paper-2); border: 1px solid var(--af-line); border-radius: var(--af-radius); }
 .af-rule { border-top: 1px solid var(--af-line); }
 
-/* Button rows. A track of tabs (aria-pressed / aria-current) reads as underline tabs on a keyline. */
-.af-track { display: inline-flex; max-width: 100%; align-items: center; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; }
+/* ── Buttons ───────────────────────────────────────────────────────────────────────────────────────────────── */
+/* Rows of buttons. A track of tabs (aria-pressed / aria-current) reads as underline tabs on a keyline. */
+.af-track { display: inline-flex; max-width: 100%; align-items: center; gap: var(--af-space-2); overflow-x: auto; scrollbar-width: none; }
 .af-track[data-block="true"] { display: flex; width: 100%; }
 .af-track[data-block="true"] > * { flex: 1 1 0; }
 .af-track[role="group"]:has(> [aria-pressed]), .af-track:has(> [aria-current]) { gap: 0; border-bottom: 1px solid var(--af-line); }
 
+/* Variants. .af-pill is the secondary (outline) button; -primary is the one main action of a view; -ghost is the
+   outline button on the deep ground; -danger cancels. Sizes: 46px, or -sm at 44px. */
 .af-pill {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  min-height: 2.875rem;
-  padding: 0 1.25rem;
+  gap: var(--af-space-2);
+  min-height: var(--af-control);
+  padding: 0 var(--af-space-5);
   border: 1px solid var(--af-line-2);
   border-radius: var(--af-radius);
   background: var(--af-card);
-  font-size: 1rem;
+  font-size: var(--af-text-base);
   font-weight: 600;
   white-space: nowrap;
   color: var(--af-ink);
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  transition: background-color var(--af-ease), color var(--af-ease), border-color var(--af-ease), box-shadow var(--af-ease);
   cursor: pointer;
 }
 .af-pill:hover { border-color: var(--af-ink); }
 .af-pill:disabled, .af-pill[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
-.af-pill svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
-.af-pill-sm { min-height: 2.75rem; padding: 0 1rem; font-size: 0.9375rem; }
-.af-menu-toggle { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; margin-left: -0.625rem; color: #fff; cursor: pointer; }
-.af-pill-raised { background: var(--af-card); }
+.af-pill svg { width: var(--af-icon); height: var(--af-icon); flex-shrink: 0; }
+.af-pill-sm { min-height: var(--af-control-sm); padding: 0 var(--af-space-4); font-size: var(--af-text-sm); }
 /* Tabs: aria-pressed / aria-current pills become underline tabs. */
-[role="group"] > .af-pill[aria-pressed], .af-pill[aria-current] {
-  margin-bottom: -1px;
-  padding: 0 0.875rem;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--af-ink-3);
-}
+[role="group"] > .af-pill[aria-pressed], .af-pill[aria-current] { margin-bottom: -1px; padding: 0 var(--af-space-4); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--af-ink-3); }
 [role="group"] > .af-pill[aria-pressed]:hover, .af-pill[aria-current]:hover { color: var(--af-ink); }
 [role="group"] > .af-pill[aria-pressed="true"], .af-pill[aria-current="page"] { color: var(--af-ink); border-bottom-color: var(--af-accent); }
 .af-pill[aria-pressed="true"]:not([role="group"] > *) { background: var(--af-accent-soft); border-color: var(--af-accent); color: var(--af-accent); }
-.af-pill-primary { border-color: transparent; background: linear-gradient(180deg, color-mix(in oklab, var(--af-accent) 78%, #3b8cf0), var(--af-accent)); color: #fff; box-shadow: 0 1px 2px rgb(3 8 22 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.18); }
-.af-pill-primary:hover { border-color: transparent; background: linear-gradient(180deg, var(--af-accent), var(--af-accent-hover)); color: #fff; }
-/* Outline button on the deep ground. */
-.af-pill-ghost { border-color: #e9c27a; background: transparent; color: #fff; font-weight: 500; }
-.af-pill-ghost:hover { border-color: #fff; background: rgb(255 255 255 / 0.08); }
-.af-pill-danger { color: var(--af-bad); border-color: rgb(180 35 24 / 0.45); }
+.af-pill-primary { border-color: transparent; background: linear-gradient(180deg, color-mix(in oklab, var(--af-accent) 78%, var(--af-sky)), var(--af-accent)); color: var(--af-white); box-shadow: 0 1px 2px color-mix(in oklab, var(--af-night) 25%, transparent), inset 0 1px 0 color-mix(in oklab, var(--af-white) 18%, transparent); }
+.af-pill-primary:hover { border-color: transparent; background: linear-gradient(180deg, var(--af-accent), var(--af-accent-hover)); color: var(--af-white); }
+.af-pill-ghost { border-color: var(--af-on-deep-edge); background: transparent; color: var(--af-on-deep); font-weight: 500; }
+.af-pill-ghost:hover { border-color: var(--af-on-deep); background: var(--af-on-deep-wash); }
+.af-pill-danger { border-color: color-mix(in oklab, var(--af-bad) 45%, var(--af-white)); color: var(--af-bad); }
 .af-pill-danger:hover { border-color: var(--af-bad); }
+/* A text action in running copy. */
+.af-link { font-weight: 600; color: var(--af-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; cursor: pointer; }
+.af-link:hover { text-decoration-thickness: 2px; }
 
-/* Fields */
-.af-field { display: flex; min-width: 0; flex-direction: column; gap: 0.375rem; }
-.af-field-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--af-ink-2); }
+/* ── Fields ────────────────────────────────────────────────────────────────────────────────────────────────── */
+.af-field { display: flex; min-width: 0; flex-direction: column; gap: var(--af-space-2); }
+.af-field-label { font-size: var(--af-text-xs); font-weight: 600; letter-spacing: var(--af-track-caps); text-transform: uppercase; color: var(--af-ink-2); }
 .af-input {
   width: 100%;
   min-width: 0;
-  min-height: 2.875rem;
-  padding: 0 0.875rem;
-  border-radius: var(--af-radius);
+  min-height: var(--af-control);
+  padding: 0 var(--af-field-pad);
   border: 1px solid var(--af-line-2);
+  border-radius: var(--af-radius);
   background: var(--af-card);
   color: var(--af-ink);
-  font-size: 1rem;
+  font-size: var(--af-text-base);
   font-weight: 500;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition: border-color var(--af-ease), box-shadow var(--af-ease);
 }
-/* Safari renders native date inputs with an intrinsic width and short height; make them a normal block field */
-.af-input[type="date"] { display: block; -webkit-appearance: none; appearance: none; height: 2.875rem; line-height: 2.875rem; text-align: left; max-width: 100%; }
-.af-input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
-.af-input[type="date"]::-webkit-datetime-edit { padding: 0; }
 .af-input::placeholder { color: var(--af-ink-3); font-weight: 400; }
-.af-input:focus { outline: none; border-color: var(--af-accent); box-shadow: 0 0 0 1px var(--af-accent); }
+.af-input:hover:not(:disabled) { border-color: var(--af-ink-3); }
+.af-input:focus, .af-input:focus-visible { outline: none; border-color: var(--af-accent); box-shadow: 0 0 0 1px var(--af-accent); }
+.af-input[aria-invalid="true"] { border-color: var(--af-bad); }
 .af-input:disabled { opacity: 0.6; }
-.af-input.af-trigger { height: auto; min-height: 2.875rem; border-radius: var(--af-radius); border: 1px solid var(--af-line-2); background: var(--af-card); color: var(--af-ink); font-size: 1rem; font-weight: 500; padding: 0 0.875rem; }
-.af-icon-field .af-input.af-trigger { padding-left: 2.75rem; }
+/* Safari draws a native date input at its intrinsic width and a short height; this makes it a normal field. */
+.af-input[type="date"] { display: block; max-width: 100%; height: var(--af-control); line-height: var(--af-control); text-align: left; -webkit-appearance: none; appearance: none; }
+.af-input[type="date"]::-webkit-date-and-time-value { margin: 0; text-align: left; }
+.af-input[type="date"]::-webkit-datetime-edit { padding: 0; }
+/* Picker buttons (airport, date, travelers): an input-sized button with an icon, the value and a chevron. */
+.af-input.af-trigger { display: flex; height: auto; align-items: center; gap: var(--af-space-2); text-align: left; cursor: pointer; }
 .af-input.af-trigger:hover { background: var(--af-card); }
-.af-input.af-trigger:focus-visible { border-color: var(--af-accent); box-shadow: 0 0 0 1px var(--af-accent); }
-.af-input-code { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+.af-input.af-trigger > svg:first-child { width: var(--af-icon); height: var(--af-icon); color: var(--af-ink); }
+.af-input.af-trigger > svg:last-child:not(:first-child) { width: var(--af-icon-sm); height: var(--af-icon-sm); color: var(--af-ink-3); }
+.af-input-code { text-transform: uppercase; letter-spacing: var(--af-track-caps); font-weight: 700; }
+/* A leading icon outside the button (airport and traveler pickers), placed exactly where the date picker draws its
+   own: one border plus the field padding in, and centred on the control. */
+.af-icon-field { position: relative; }
+.af-icon-field > svg { position: absolute; left: calc(var(--af-field-pad) + 1px); bottom: calc((var(--af-control) - var(--af-icon)) / 2); z-index: 1; width: var(--af-icon); height: var(--af-icon); color: var(--af-ink); pointer-events: none; }
+.af-icon-field .af-input { padding-left: calc(var(--af-field-pad) + var(--af-icon) + var(--af-space-2)); }
 
-/* State marker */
-.af-title-line { display: flex; min-width: 0; align-items: baseline; gap: 0.5rem; }
-.af-dot { display: inline-block; width: 0.5rem; height: 0.5rem; flex-shrink: 0; border-radius: 50%; background: var(--af-idle); transform: translateY(-0.1em); }
+/* ── State ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+.af-title-line { display: flex; min-width: 0; align-items: baseline; gap: var(--af-space-2); }
+.af-dot { display: inline-block; width: var(--af-dot); height: var(--af-dot); flex-shrink: 0; border-radius: 50%; background: var(--af-idle); transform: translateY(-0.1em); }
 .af-dot[data-tone="ok"] { background: var(--af-dot-ok, var(--af-ok)); }
-.af-dot[data-tone="warn"] { background: var(--af-dot-warn, #c98300); }
-.af-dot[data-tone="bad"] { background: var(--af-bad); }
-.af-dot[data-tone="accent"] { background: var(--af-dot-accent, var(--af-accent)); }
+.af-dot[data-tone="warn"] { background: var(--af-dot-warn, var(--af-warn)); }
+.af-dot[data-tone="bad"] { background: var(--af-dot-bad, var(--af-bad)); }
+.af-dot[data-tone="info"], .af-dot[data-tone="accent"] { background: var(--af-dot-accent, var(--af-accent)); }
+/* Notices: the tone tints the edge and the ground; the text stays ink. */
+.af-notice { --af-tone: var(--af-ink-3); display: flex; align-items: baseline; gap: var(--af-space-2); padding: var(--af-space-3) var(--af-space-4); border: 1px solid color-mix(in oklab, var(--af-tone) 32%, var(--af-white)); border-radius: var(--af-radius); background: color-mix(in oklab, var(--af-tone) 6%, var(--af-white)); color: var(--af-ink); font-size: var(--af-text-base); line-height: var(--af-leading); }
+.af-notice[data-tone="ok"] { --af-tone: var(--af-ok); }
+.af-notice[data-tone="warn"] { --af-tone: var(--af-warn); }
+.af-notice[data-tone="bad"] { --af-tone: var(--af-bad); }
+.af-notice[data-tone="info"] { --af-tone: var(--af-info); }
 
-/* Notices: results and errors */
-.af-notice { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.875rem 1rem; border-radius: var(--af-radius); font-size: 0.9375rem; line-height: 1.5; background: var(--af-card); border: 1px solid var(--af-line); color: var(--af-ink); }
-.af-notice[data-tone="warn"] { background: #fff8e6; border-color: #e7c36a; color: #4d3200; }
-.af-notice[data-tone="bad"] { background: #fdf0ee; border-color: #e7a59d; color: #6b130b; }
-.af-notice[data-tone="ok"] { background: #eef7f2; border-color: #9ccdb3; color: #0b4129; }
-
-/* Boarding pass and confirmation: a card with a deep head and a stub behind a dashed fold. */
-.af-pass { position: relative; display: grid; background: var(--af-card); border: 1px solid var(--af-line-2); border-radius: var(--af-radius-lg); box-shadow: var(--af-shadow); overflow: hidden; }
-@media (min-width: 768px) { .af-pass { grid-template-columns: minmax(0, 1fr) 17rem; } }
-.af-pass-head { background: var(--af-deep); color: #fff; }
-.af-pass-head .af-eyebrow { color: rgb(255 255 255 / 0.85); }
+/* ── Boarding pass and confirmation: a card with a deep head and a stub behind a dashed fold ───────────────── */
+.af-pass { position: relative; display: grid; overflow: hidden; border: 1px solid var(--af-line-2); border-radius: var(--af-radius-lg); background: var(--af-card); box-shadow: var(--af-shadow); }
+@media (min-width: 768px) { .af-pass { grid-template-columns: minmax(0, 1fr) var(--af-stub-w); } }
+.af-pass-head { background: var(--af-deep); color: var(--af-on-deep); }
+.af-pass-head .af-eyebrow { color: var(--af-on-deep-2); }
 .af-pass-stub { position: relative; background: var(--af-card); }
 .af-pass-stub::before { content: ""; position: absolute; inset: 0 auto auto 0; width: 100%; height: 0; border-top: 1px dashed var(--af-line-2); }
 @media (min-width: 768px) { .af-pass-stub::before { width: 0; height: 100%; border-top: 0; border-left: 1px dashed var(--af-line-2); } }
 
-/* Seat map */
-.af-seat {
-  display: grid;
-  place-items: center;
-  min-height: 2.75rem;
-  border-radius: 8px 8px 4px 4px;
-  border: 1px solid var(--af-line-2);
-  background: var(--af-card);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--af-ink);
-  transition: background-color 120ms ease, border-color 120ms ease;
-}
+/* ── Seat map: seat-back corners, rounder at the top ───────────────────────────────────────────────────────── */
+.af-seat { display: grid; place-items: center; min-height: var(--af-control-sm); border: 1px solid var(--af-line-2); border-radius: var(--af-radius) var(--af-radius) var(--af-radius-sm) var(--af-radius-sm); background: var(--af-card); font-size: var(--af-text-sm); font-weight: 700; color: var(--af-ink); transition: background-color var(--af-ease), border-color var(--af-ease); }
 .af-seat:hover:not(:disabled) { border-color: var(--af-accent); }
-.af-seat[data-state="selected"] { background: var(--af-accent); border-color: var(--af-accent); color: #fff; }
+.af-seat:disabled { cursor: not-allowed; }
+.af-seat[data-state="selected"] { border-color: var(--af-accent); background: var(--af-accent); color: var(--af-white); }
 .af-seat[data-state="taken"] { background: var(--af-paper-2); color: var(--af-ink-3); text-decoration: line-through; }
 .af-seat[data-state="paid"] { background: repeating-linear-gradient(135deg, var(--af-paper-2) 0 4px, var(--af-card) 4px 8px); color: var(--af-ink-3); }
-.af-seat:disabled { cursor: not-allowed; }
-
-.af-link { color: var(--af-accent); font-weight: 600; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
-.af-link:hover { text-decoration-thickness: 2px; }
 
 /* Flight path line between two airport codes */
-.af-path { position: relative; flex: 1 1 auto; height: 1px; min-width: 2rem; background: currentColor; opacity: 0.35; }
+.af-path { position: relative; flex: 1 1 auto; height: 1px; min-width: var(--af-space-8); background: currentColor; opacity: 0.35; }
 
-/* Timetable: route groups with day-of-operation columns. */
-.af-days { display: inline-grid; grid-template-columns: repeat(7, 1.375rem); gap: 2px; }
-.af-day { display: grid; place-items: center; height: 1.375rem; font-size: 0.75rem; font-weight: 700; color: var(--af-line-2); border: 1px solid var(--af-line); border-radius: 4px; }
-.af-day[data-on="true"] { color: #fff; background: var(--af-accent); border-color: var(--af-accent); }
+/* ── Timetable: route groups with day-of-operation columns ─────────────────────────────────────────────────── */
 .af-timetable td:nth-child(n+2), .af-timetable th:nth-child(n+2) { font-variant-numeric: tabular-nums; }
-.af-daily { font-size: 0.8125rem; font-weight: 700; color: var(--af-accent); }
-
-@media (prefers-reduced-motion: reduce) {
-  .af * { transition: none !important; }
-}
-
-/* Phones: let the table size to its content and use compact day chips so the seven-day column fits 402px. */
+.af-days { display: inline-grid; grid-template-columns: repeat(7, var(--af-chip)); gap: 2px; }
+.af-day { display: grid; place-items: center; height: var(--af-chip); border: 1px solid var(--af-line); border-radius: var(--af-radius-sm); font-size: var(--af-text-xs); font-weight: 700; color: var(--af-line-2); }
+.af-day[data-on="true"] { border-color: var(--af-accent); background: var(--af-accent); color: var(--af-white); }
+.af-daily { font-size: var(--af-text-sm); font-weight: 700; color: var(--af-accent); }
+/* Phones: the table sizes to its content and the day chips shrink so the seven-day column fits 402px. */
 @media (max-width: 639px) {
   .af-timetable { table-layout: auto; }
   .af-timetable col { width: auto; }
-  .af-timetable td, .af-timetable th { padding-right: 0.375rem; }
+  .af-timetable td, .af-timetable th { padding-right: var(--af-space-2); }
   .af-timetable td:last-child, .af-timetable th:last-child { padding-right: 0; }
-  .af-days { grid-template-columns: repeat(7, 1.125rem); gap: 1px; }
-  .af-day { height: 1.125rem; }
+  .af-days { grid-template-columns: repeat(7, var(--af-chip-sm)); gap: 1px; }
+  .af-day { height: var(--af-chip-sm); }
 }
 /* The narrowest phones (320px): flight numbers wrap under the carrier code and the days fold into two rows. */
 @media (max-width: 379px) {
-  .af-timetable td:nth-child(2), .af-timetable th:nth-child(2) { white-space: normal; }
-  .af-timetable { font-size: 0.75rem; }
-  .af-timetable td, .af-timetable th { padding-right: 0.25rem; }
-  .af-timetable td:nth-child(n+3) { white-space: normal; }
-  .af-days { grid-template-columns: repeat(4, 1.125rem); }
+  .af-timetable { font-size: var(--af-text-xs); }
+  .af-timetable td, .af-timetable th { padding-right: var(--af-space-1); }
+  .af-timetable td:nth-child(2), .af-timetable th:nth-child(2), .af-timetable td:nth-child(n+3) { white-space: normal; }
+  .af-days { grid-template-columns: repeat(4, var(--af-chip-sm)); }
 }
 
-/* Inner pages: the routes as rows, photo left and the fare with its Book now button right. */
-.af-dest-grid[data-rows="true"] { gap: 1.25rem; max-width: 64rem; }
-@media (min-width: 1024px) {
-  .af-dest-grid[data-rows="true"] { grid-template-columns: minmax(0, 1fr); }
-  .af-dest-grid[data-rows="true"] .af-dest { display: grid; aspect-ratio: auto; border: 1px solid var(--af-line); color: var(--af-ink); min-height: 11rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .af-dest-grid[data-rows="true"] .af-dest-photo { position: relative; inset: auto; min-height: 11rem; }
-  .af-dest-grid[data-rows="true"] .af-dest:hover .af-dest-photo { transform: none; }
-  .af-dest-grid[data-rows="true"] .af-dest-photo::after { display: none; }
-  .af-dest-grid[data-rows="true"] .af-dest-body { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 1.5rem; padding: 1.5rem 2rem; }
-  .af-dest-grid[data-rows="true"] .af-dest-body > :not(.af-dest-cta) { grid-column: 1; }
-  .af-dest-grid[data-rows="true"] .af-dest-cta { display: inline-flex; grid-column: 2; grid-row: 1 / span 4; margin-top: 0; }
-  .af-dest-grid[data-rows="true"] .af-dest .af-dest-note { display: block; }
-  .af-dest-grid[data-rows="true"] .af-dest-tag { color: var(--af-ink-2); }
-  .af-dest-grid[data-rows="true"] .af-dest-city { font-size: 1.875rem; }
-  .af-dest-grid[data-rows="true"] .af-dest-price { margin-top: 0.5rem; font-size: 1.75rem; font-weight: 600; }
-  .af-dest-grid[data-rows="true"] .af-dest-arrow { display: none; }
-}
-
-/* Phone menu: a full-height drawer from the left; title and close button share one row. */
-.af-drawer-scrim { position: fixed; inset: 0; z-index: 50; background: rgb(3 8 22 / 0.55); }
-.af-drawer { position: fixed; inset: 0 auto 0 0; z-index: 51; display: flex; flex-direction: column; width: min(21rem, 88vw); height: 100dvh; background: var(--af-card); color: var(--af-ink); box-shadow: var(--af-shadow); padding-bottom: env(safe-area-inset-bottom); }
+/* ── Phone menu: a full-height drawer from the left; title and close button share one row ──────────────────── */
+.af-drawer-scrim { position: fixed; inset: 0; z-index: 50; background: var(--af-scrim); }
+.af-drawer { position: fixed; inset: 0 auto 0 0; z-index: 51; display: flex; flex-direction: column; width: min(var(--af-drawer-w), 88vw); height: 100dvh; padding-bottom: env(safe-area-inset-bottom); background: var(--af-card); color: var(--af-ink); box-shadow: var(--af-shadow-pop); }
 .af-drawer:focus { outline: none; }
-.af-drawer-head { display: flex; align-items: center; justify-content: space-between; min-height: 4rem; padding: 0 0.5rem 0 1.25rem; border-bottom: 1px solid var(--af-line); }
-.af-drawer-close { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: var(--af-radius); color: var(--af-ink); cursor: pointer; }
+.af-drawer-head { display: flex; align-items: center; justify-content: space-between; min-height: var(--af-header-h); padding: 0 var(--af-space-2) 0 var(--af-space-5); border-bottom: 1px solid var(--af-line); }
+.af-drawer-title { font-size: var(--af-text-lg); font-weight: 600; }
+.af-drawer-close { display: grid; place-items: center; width: var(--af-control-sm); height: var(--af-control-sm); border-radius: var(--af-radius); color: var(--af-ink); cursor: pointer; }
+.af-drawer-close svg { width: var(--af-icon-lg); height: var(--af-icon-lg); }
 .af-drawer-close:hover { background: var(--af-paper-2); }
-.af-drawer-nav { flex: 1; overflow-y: auto; padding: 0.5rem 0; }
-.af-drawer-link { display: flex; align-items: center; min-height: 3.25rem; padding: 0 1.25rem; font-size: 1.0625rem; font-weight: 500; color: var(--af-ink); }
+.af-drawer-nav { flex: 1; overflow-y: auto; padding: var(--af-space-2) 0; }
+.af-drawer-link { display: flex; align-items: center; min-height: var(--af-control-lg); padding: 0 var(--af-space-5); font-size: var(--af-text-lg); font-weight: 500; color: var(--af-ink); }
 .af-drawer-link:hover { background: var(--af-paper); }
 .af-drawer-link[aria-current="page"] { font-weight: 700; box-shadow: inset 3px 0 0 var(--af-accent); }
-.af-drawer-foot { padding: 1rem 1.25rem; border-top: 1px solid var(--af-line); }
+.af-drawer-foot { padding: var(--af-space-4) var(--af-space-5); border-top: 1px solid var(--af-line); }
 @media (prefers-reduced-motion: no-preference) {
   .af-drawer[data-state="open"] { animation: af-drawer-in 220ms cubic-bezier(0.32, 0.72, 0, 1); }
   .af-drawer-scrim[data-state="open"] { animation: af-scrim-in 180ms ease-out; }
@@ -395,14 +549,37 @@
 @keyframes af-drawer-in { from { transform: translateX(-100%); } }
 @keyframes af-scrim-in { from { opacity: 0; } }
 
-/* Phones: one action in the hero, From and To on their own rows so the city names fit, and the hero folds to a
-   one-line trip summary once there are results or a booking. */
+/* ── Phones: one action in the hero, From and To on their own rows so the city names fit, and the hero folds to
+   a trip summary once there are results or a booking ───────────────────────────────────────────────────────── */
 .af-trip-summary { display: none; }
 @media (max-width: 639px) {
   .af-lead .af-pill-ghost { display: none; }
   .af-field-wide { grid-column: span 2; }
   .af-hero[data-compact="true"] .af-lead, .af-hero[data-compact="true"] .af-widget { display: none; }
-  .af-hero[data-compact="true"] .af-hero-inner { padding-bottom: 0.875rem; }
-  .af-hero[data-compact="true"] .af-trip-summary { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; min-height: 3rem; padding: 0 1rem; border-radius: var(--af-radius-lg); background: #fff; color: var(--af-ink); font-size: 1rem; font-weight: 500; text-align: left; cursor: pointer; }
+  .af-hero[data-compact="true"] .af-hero-inner { padding-bottom: var(--af-space-4); }
+  .af-hero[data-compact="true"] .af-trip-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--af-space-3); width: 100%; min-height: var(--af-control-lg); padding: var(--af-space-2) var(--af-space-4); border-radius: var(--af-radius-lg); background: var(--af-card); color: var(--af-ink); font-size: var(--af-text-base); font-weight: 500; line-height: var(--af-leading-snug); text-align: left; cursor: pointer; }
 }
-@media (min-width: 1280px) { .af-menu-toggle { display: none; } }
+
+/* ── Popovers (airport list, calendar, travelers): the storefront's surface, corners and 44px targets ──────── */
+body:has(.af) [data-radix-popper-content-wrapper] > [role="dialog"] { border: 1px solid var(--af-line); border-radius: var(--af-radius-lg); background: var(--af-card); color: var(--af-ink); box-shadow: var(--af-shadow-pop); }
+body:has(.af) [data-radix-popper-content-wrapper] [role="option"] { min-height: var(--af-control-sm); gap: var(--af-space-2); padding: 0 var(--af-space-3); border-radius: var(--af-radius); font-size: var(--af-text-base); }
+body:has(.af) [data-radix-popper-content-wrapper] [role="option"][aria-selected="true"] { font-weight: 600; }
+body:has(.af) [data-radix-popper-content-wrapper] input[type="search"] { height: var(--af-control-sm); border-radius: var(--af-radius); font-size: var(--af-text-base); }
+body:has(.af) .rdp-root { --af-day: var(--af-control-sm); font-size: var(--af-text-base); }
+body:has(.af) .rdp-root nav button { width: var(--af-day); height: var(--af-day); border-radius: var(--af-radius); color: var(--af-ink-2); }
+body:has(.af) .rdp-root nav button svg { width: var(--af-icon); height: var(--af-icon); }
+body:has(.af) .rdp-root div:has(> [role="status"]) { height: var(--af-day); margin-inline: calc(var(--af-day) + var(--af-space-1)); }
+body:has(.af) .rdp-root [role="status"] { font-size: var(--af-text-base); font-weight: 600; }
+body:has(.af) .rdp-weekdays th { width: var(--af-day); height: var(--af-space-8); font-size: var(--af-text-xs); font-weight: 600; color: var(--af-ink-3); }
+body:has(.af) .rdp-week td { width: var(--af-day); height: var(--af-day); padding: 0; font-size: var(--af-text-base); }
+body:has(.af) .rdp-week td > button { width: var(--af-day); height: var(--af-day); border-radius: var(--af-radius); }
+body:has(.af) .rdp-root + div > button { min-height: var(--af-control-sm); padding: 0 var(--af-space-3); border-radius: var(--af-radius); font-size: var(--af-text-sm); }
+/* At 320px seven 44px days and the popover edge do not fit; the days close up to 40px. */
+@media (max-width: 359px) {
+  body:has(.af) .rdp-root { --af-day: var(--af-space-10); }
+  body:has(.af) [data-radix-popper-content-wrapper] > [role="dialog"]:has(.rdp-root) { padding: var(--af-space-1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .af * { transition: none !important; }
+}

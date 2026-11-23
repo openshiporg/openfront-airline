@@ -16,12 +16,23 @@ function checkedBagPieces(value: unknown) {
   return Number.isInteger(pieces) && pieces > 0 ? pieces : 0
 }
 
+// The two reads below, typed by the fields they select.
+type NetworkAirportRow = { iataCode: string | null; city: string; name: string; timezone?: string | null }
+type NetworkRouteRow = { origin: NetworkAirportRow | null; destination: NetworkAirportRow | null }
+type NetworkFlightRow = {
+  serviceDate: Date; flightNumber: string | null; scheduledDepartureAt: Date; scheduledArrivalAt: Date
+  origin: Pick<NetworkAirportRow, 'iataCode' | 'timezone'> | null; destination: Pick<NetworkAirportRow, 'iataCode' | 'timezone'> | null
+  inventoryBuckets?: Array<{ baseAmount: unknown; taxAmount: unknown; currencyCode: string | null; fareBrand: { includedBaggage: unknown } | null }>
+}
+type FindMany<Row> = { findMany(args: object): Promise<Row[]> }
+const networkDb = () => keystoneContext.prisma as unknown as { route: FindMany<NetworkRouteRow>; flightInstance: FindMany<NetworkFlightRow> }
+
 export const routeDatesKey = (origin: string, destination: string) => `${origin}-${destination}`
 
 // The carrier's active routes, for the search console's airport pickers. Public data: codes, cities and names only.
 export const getStorefrontNetwork = cache(async (carrierId: string): Promise<StorefrontNetwork> => {
   try {
-    const routes = await (keystoneContext.prisma as any).route.findMany({
+    const routes = await networkDb().route.findMany({
       where: { carrierId, status: 'active', origin: { isActive: true }, destination: { isActive: true } },
       select: { origin: { select: { iataCode: true, city: true, name: true } }, destination: { select: { iataCode: true, city: true, name: true } } },
       orderBy: [{ origin: { iataCode: 'asc' } }, { destination: { iataCode: 'asc' } }],
@@ -36,7 +47,7 @@ export const getStorefrontNetwork = cache(async (carrierId: string): Promise<Sto
       pairs.push({ origin: route.origin.iataCode, destination: route.destination.iataCode })
     }
     // Upcoming dates with a flight on sale, per route, so search can start on (and point to) a date that flies.
-    const flights = await (keystoneContext.prisma as any).flightInstance.findMany({
+    const flights = await networkDb().flightInstance.findMany({
       where: { carrierId, status: { in: ['scheduled', 'open_for_sale', 'delayed'] }, scheduledDepartureAt: { gt: new Date() } },
       select: { serviceDate: true, flightNumber: true, scheduledDepartureAt: true, scheduledArrivalAt: true, origin: { select: { iataCode: true, timezone: true } }, destination: { select: { iataCode: true, timezone: true } }, inventoryBuckets: { where: { status: 'open', fareBrand: { status: 'active' } }, select: { baseAmount: true, taxAmount: true, currencyCode: true, fareBrand: { select: { includedBaggage: true } } }, take: 3 } },
       orderBy: [{ scheduledDepartureAt: 'asc' }],
