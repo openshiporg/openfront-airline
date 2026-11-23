@@ -1,5 +1,6 @@
 'use client'
 import { ViewerTime } from '@/features/dashboard/components/ViewerTime'
+import { formatAirportTime } from '@/features/airline/lib/time'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -296,7 +297,7 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
               <p className="break-words font-medium text-foreground">{booking.passengers?.length ? booking.passengers.map(entry => `${entry.passenger?.givenName ?? ''} ${entry.passenger?.familyName ?? ''}`.trim() + (entry.passengerType && entry.passengerType !== 'adult' ? ` (${entry.passengerType === 'child' ? 'child' : 'infant'})` : '')).join(', ') : <span className="text-muted-foreground">Travelers restricted</span>}{(booking.passengersCount ?? 0) > (booking.passengers?.length ?? 0) ? ` +${(booking.passengersCount ?? 0) - (booking.passengers?.length ?? 0)}` : ''}</p>
               <p className="break-words text-xs text-muted-foreground">{[booking.contactEmail, booking.contactPhone].filter(Boolean).join(' · ') || 'No contact'}</p>
             </div>
-            {booking.segments?.length ? <ul className="min-w-0 space-y-1">{booking.segments.map(segment => <li key={segment.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"><span className="w-12 font-semibold tabular-nums">{segment.marketingFlightNumber}</span><Route from={segment.originCode} to={segment.destinationCode} /><span className="tabular-nums text-muted-foreground"><ViewerTime value={segment.scheduledDepartureAt} style="datetime" /></span></li>)}</ul> : <span className="text-xs text-muted-foreground">No segments</span>}
+            {booking.segments?.length ? <ul className="min-w-0 space-y-1">{booking.segments.map(segment => <li key={segment.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"><span className="w-12 font-semibold tabular-nums">{segment.marketingFlightNumber}</span><Route from={segment.originCode} to={segment.destinationCode} /><span className="tabular-nums text-muted-foreground">{formatAirportTime(segment.scheduledDepartureAt, segment.origin?.timezone) ?? 'Time unavailable'}</span></li>)}</ul> : <span className="text-xs text-muted-foreground">No segments</span>}
             <div className="flex min-w-0 flex-col gap-0.5">
               <StatusLabel status={booking.status} />
               <StateLabel label="Pay" status={booking.paymentStatus} />

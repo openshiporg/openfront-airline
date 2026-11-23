@@ -536,7 +536,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
       </div>
     </section>}
     {shoppingEnabled && flights.length > 0 && <section aria-label="Available flights" className="af-table space-y-4">
-    <p className="flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem] text-[var(--af-ink-3)] [&>span+span]:before:mr-4 [&>span+span]:before:text-[var(--af-line-2)] [&>span+span]:before:content-['/']">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
+    <p className="grid gap-1 text-[0.8125rem] text-[var(--af-ink-3)] sm:grid-cols-2">{carrier.onlinePaymentEnabled ? <span>Pay online by card</span> : <><span>Reservation only</span><span>Pay the airline directly</span></>}<span>Unpaid holds expire in 24 h</span><span>One traveler 18+ per booking</span><span>Infants have their own seat</span></p>
       <p className="af-results-head">{returnSearch && <><span className="font-semibold">{leg === 'return' ? 'Return' : 'Outbound'}</span><span aria-hidden="true" className="af-sep" /></>}{airportCity(flights[0].originCode)} {flights[0].originCode} to {airportCity(flights[0].destinationCode)} {flights[0].destinationCode}<span aria-hidden="true" className="af-sep" />{shortDate.format(new Date(`${flights[0].serviceDate}T00:00:00.000Z`))}, <span className="capitalize">{flights[0].passengerCount} passenger{flights[0].passengerCount === 1 ? '' : 's'}</span></p>
       {flights.map(flight => {
         const duration = flightDuration(flight.scheduledDepartureAt, flight.scheduledArrivalAt)
