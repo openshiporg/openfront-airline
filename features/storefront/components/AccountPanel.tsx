@@ -15,7 +15,7 @@ type View = 'signin' | 'signup' | 'forgot' | 'reset'
 const PROFILE = 'email emailVerified givenName familyName dateOfBirth phone'
 
 function tripState(trip: Trip) {
-  if (trip.status === 'cancelled') return { label: 'Cancelled', tone: 'warn' }
+  if (trip.status === 'cancelled') return { label: 'Cancelled', tone: 'bad' }
   if (['unpaid', 'failed'].includes(trip.paymentStatus)) return { label: 'Payment due', tone: 'warn' }
   if (trip.ticketingStatus === 'ticketed') return { label: 'Ticketed', tone: 'ok' }
   return { label: 'Confirmed', tone: 'ok' }
@@ -69,14 +69,18 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
 
   const notice = status && <p role="status" className="af-notice" data-tone={status.tone}><span className="af-dot" data-tone={status.tone} />{status.text}</p>
 
-  if (profile === undefined) return <p className="text-sm text-[var(--af-ink-2)]">Loading your account…</p>
+  // Loading: the sign-in card's outline, so the page doesn't jump when the account arrives.
+  if (profile === undefined) return <div role="status" aria-busy="true" className="af-card mx-auto grid w-full max-w-md gap-4 p-5 sm:p-6">
+    <span className="sr-only">Loading your account…</span>
+    <span aria-hidden="true" className="af-skeleton" data-size="title" /><span aria-hidden="true" className="af-skeleton" /><span aria-hidden="true" className="af-skeleton" /><span aria-hidden="true" className="af-skeleton" data-size="button" />
+  </div>
 
   if (!profile) {
     const titles: Record<View, string> = { signin: 'Sign in', signup: 'Create an account', forgot: 'Reset your password', reset: 'Choose a new password' }
     return <div className="mx-auto grid w-full max-w-md grid-cols-[minmax(0,1fr)] gap-5">
       {notice}
       <form onSubmit={submit} className="af-card grid gap-4 p-5 sm:p-6">
-        <h2 className="text-2xl font-medium tracking-[-0.01em]">{titles[view]}</h2>
+        <h2 className="af-card-title">{titles[view]}</h2>
         {view === 'signup' && <div className="grid grid-cols-2 gap-3">
           <label className="af-field"><span className="af-field-label">First name</span><input name="givenName" required autoComplete="given-name" className="af-input" /></label>
           <label className="af-field"><span className="af-field-label">Last name</span><input name="familyName" required autoComplete="family-name" className="af-input" /></label>
@@ -84,14 +88,14 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
         {view !== 'reset' && <label className="af-field"><span className="af-field-label">Email</span><input name="email" type="email" required autoComplete="email" className="af-input" /></label>}
         {view !== 'forgot' && <label className="af-field"><span className="af-field-label">{view === 'reset' ? 'New password' : 'Password'}</span><input name="password" type="password" required minLength={view === 'signin' ? undefined : 10} autoComplete={view === 'signin' ? 'current-password' : 'new-password'} className="af-input" />{view !== 'signin' && <span className="text-xs text-[var(--af-ink-3)]">At least 10 characters.</span>}</label>}
         <button disabled={busy} className="af-pill af-pill-primary w-full">{busy ? 'One moment…' : view === 'signin' ? 'Sign in' : view === 'signup' ? 'Create account' : view === 'forgot' ? 'Email me a reset link' : 'Save password'}</button>
-        <div className="flex flex-wrap justify-between gap-x-4 gap-y-2 text-sm">
+        <div className="-my-2 flex flex-wrap justify-between gap-x-4 text-sm">
           {view === 'signin' ? <>
-            <button type="button" onClick={() => { setView('signup'); setStatus(null) }} className="font-semibold underline underline-offset-4">Create an account</button>
-            <button type="button" onClick={() => { setView('forgot'); setStatus(null) }} className="underline underline-offset-4">Forgot password?</button>
-          </> : <button type="button" onClick={() => { setView('signin'); setStatus(null) }} className="font-semibold underline underline-offset-4">Back to sign in</button>}
+            <button type="button" onClick={() => { setView('signup'); setStatus(null) }} className="af-link af-link-target">Create an account</button>
+            <button type="button" onClick={() => { setView('forgot'); setStatus(null) }} className="af-link af-link-target">Forgot password?</button>
+          </> : <button type="button" onClick={() => { setView('signin'); setStatus(null) }} className="af-link af-link-target">Back to sign in</button>}
         </div>
       </form>
-      <p className="text-center text-sm text-[var(--af-ink-2)]">No account? You can still <Link href="/manage-booking" className="font-semibold underline underline-offset-4">find a booking</Link> with its reference and your last name.</p>
+      <p className="text-center text-sm text-[var(--af-ink-2)]">No account? You can still <Link href="/manage-booking" className="af-link">find a booking</Link> with its reference and your last name.</p>
     </div>
   }
 
@@ -99,7 +103,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
     <section aria-labelledby="trips-title" className="grid min-w-0 gap-4">
       {notice}
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id="trips-title" className="text-2xl font-medium tracking-[-0.01em]">My trips</h2>
+        <h2 id="trips-title" className="af-card-title">Bookings</h2>
         <Link href="/#book" className="af-pill af-pill-sm">Book a flight</Link>
       </div>
       {!profile.emailVerified ? <div className="af-card grid gap-3 p-5">
@@ -125,7 +129,7 @@ export function AccountPanel({ carrierCode }: { carrierCode: string }) {
     </section>
     <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
       <form onSubmit={event => { event.preventDefault(); const f = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>; void run(async () => setProfile((await graphql<{ updateCustomerTraveler: Profile }>(`mutation($g:String!,$f:String!,$d:String!,$p:String!){updateCustomerTraveler(givenName:$g,familyName:$f,dateOfBirth:$d,phone:$p){${PROFILE}}}`, { g: f.givenName, f: f.familyName, d: f.dateOfBirth, p: f.phone })).updateCustomerTraveler), 'Saved. We’ll fill these in when you book.') }} className="af-card grid gap-3 p-5">
-        <h2 className="text-lg font-semibold">Traveler details</h2>
+        <h2 className="af-card-title">Traveler details</h2>
         <p className="-mt-1 text-sm text-[var(--af-ink-2)]">Filled in for you when you book.</p>
         <div className="grid grid-cols-2 gap-3">
           <label className="af-field"><span className="af-field-label">First name</span><input name="givenName" defaultValue={profile.givenName} required autoComplete="given-name" className="af-input" /></label>

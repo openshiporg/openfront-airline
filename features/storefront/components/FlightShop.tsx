@@ -16,6 +16,7 @@ import { parseBookingAccessForm, parseStorefrontPassengers, parseStorefrontSearc
 import { bookingIntentVariables, CUSTOMER_BOOKING_COMMAND, CUSTOMER_BOOKING_READ, parsePendingBookingIntent, type BookingReceipt, type PendingBookingIntent } from '@/features/storefront/lib/booking-intent'
 import { formatMinorUnits } from '@/features/keystone/lib/money'
 import { formatAirportClock, formatAirportTime } from '@/features/airline/lib/time'
+import { airportClock, dayShift, formatServiceDay } from '@/features/storefront/lib/airport-time'
 import { OutcomeUnknownError, postGraphql as graphql } from '@/features/storefront/lib/request-errors'
 
 type Flight = {
@@ -71,26 +72,6 @@ const segmentTone = (status: string): Tone => ['confirmed', 'checked_in', 'board
 const checkInTone = (status: string): Tone => ['checked_in', 'boarded'].includes(status) ? 'ok' : 'bad'
 const passengerFieldLabels = { givenName: 'First name', familyName: 'Last name', dateOfBirth: 'Date of birth', email: 'Email', phone: 'Phone (optional)' } as const
 const fieldLabel = (field: keyof typeof passengerFieldLabels, index: number) => field === 'email' && index > 0 ? 'Email (optional)' : passengerFieldLabels[field]
-
-// One day format across the flow: "Tue, Nov 24" while shopping, "Tue, Nov 24, 2026" on a booking.
-function formatServiceDay(value: string, withYear = true) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-  if (!match) return value
-  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' })
-}
-
-// Flight times read in each airport's own clock, as on every airline's results; an unknown zone falls back to UTC.
-function knownZone(timeZone: string | null | undefined) {
-  try { new Intl.DateTimeFormat('en-US', { timeZone: timeZone || 'UTC' }); return timeZone || 'UTC' } catch { return 'UTC' }
-}
-function airportClock(value: string, timeZone: string | null | undefined) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: knownZone(timeZone) }).format(new Date(value))
-}
-// Whole days between departure (origin clock) and arrival (destination clock): 1 for an overnight arrival.
-function dayShift(departure: string, departureZone: string | null | undefined, arrival: string, arrivalZone: string | null | undefined) {
-  const day = (value: string, zone: string | null | undefined) => Date.parse(`${new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: knownZone(zone) }).format(new Date(value))}T00:00:00Z`)
-  return Math.round((day(arrival, arrivalZone) - day(departure, departureZone)) / 86_400_000)
-}
 
 // Mirrors the server gate in assignCustomerSeat: ticket issuance refuses bookings that already hold seat artifacts.
 function seatSelectionOpen(booking: { status: string; paymentStatus: string; ticketingStatus: string }) {
@@ -528,7 +509,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
   const manageBlock = <>
     <div className={inWidget ? '' : 'af-card p-4 sm:p-6'}>
       <form ref={manageForm} onSubmit={manage}>
-        <h2 className={inWidget ? 'sr-only' : 'text-xl font-semibold'}>{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
+        <h2 className={inWidget ? 'sr-only' : 'af-card-title'}>{mode === 'check-in' ? `Check in with ${carrier.name}` : `Manage ${carrier.name} booking`}</h2>
         <div className={`grid gap-4 sm:grid-cols-[1fr_1.6fr_auto] sm:items-end ${inWidget ? '' : 'mt-4'}`}>
           <label className="af-field"><span className="af-field-label">Booking reference</span><input ref={recordLocatorInput} aria-label="Booking reference" name="recordLocator" defaultValue="" autoCapitalize="characters" autoComplete="off" placeholder="ABC123" required className="af-input af-input-code" /></label>
           <label className="af-field"><span className="af-field-label">Last name</span><input aria-label="Last name" name="lastName" autoComplete="family-name" autoCapitalize="words" placeholder="As on the booking" className="af-input" /></label><input ref={accessTokenInput} type="hidden" name="accessToken" defaultValue="" />

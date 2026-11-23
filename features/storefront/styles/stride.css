@@ -185,6 +185,7 @@
 @media (min-width: 640px) { .af-lead-text { font-size: var(--af-text-xl); } }
 
 /* ── The deep ground: header, hero, page heads, footer, flight heads ──────────────────────────────────────── */
+.af-board-card { overflow: hidden; border-radius: var(--af-radius-lg); }
 .af-board { background: var(--af-board); color: var(--af-board-ink); --af-board-ink-2: var(--af-on-deep-2); --af-board-line: var(--af-on-deep-line); --af-signal: var(--af-sky); --af-dot-ok: var(--af-ok-on-deep); --af-dot-warn: var(--af-warn-on-deep); --af-dot-bad: var(--af-bad-on-deep); --af-dot-accent: var(--af-on-deep); }
 .af-card, .af-table, .af-pass, .af-notice, .af-well, .af-widget-panel { color: var(--af-ink); --af-board-ink-2: var(--af-ink-3); --af-board-line: var(--af-line); --af-signal: var(--af-accent); --af-dot-ok: var(--af-ok); --af-dot-warn: var(--af-warn); --af-dot-bad: var(--af-bad); --af-dot-accent: var(--af-accent); }
 .af-board .af-eyebrow { color: var(--af-board-ink-2); }
@@ -444,6 +445,33 @@
 /* A text action in running copy. */
 .af-link { font-weight: 600; color: var(--af-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; cursor: pointer; }
 .af-link:hover { text-decoration-thickness: 2px; }
+/* A text button standing alone (not inside a sentence) still gets a 44px tap target. */
+.af-link-target { display: inline-flex; align-items: center; min-height: var(--af-control-sm); }
+/* One card title everywhere: account, manage, contact, policies. */
+.af-card-title { font-size: var(--af-text-xl); font-weight: 600; line-height: var(--af-leading-snug); letter-spacing: var(--af-track-tight); }
+
+/* Link lists (help topics, policies, contact): full-width rows split by hairlines, title over a note. */
+.af-list > li + li { border-top: 1px solid var(--af-line); }
+.af-list-link { display: flex; align-items: center; gap: var(--af-space-3); min-height: var(--af-space-14); padding-block: var(--af-space-3); color: var(--af-ink); transition: color var(--af-ease); }
+.af-list-link[data-size="lg"] { min-height: var(--af-space-16); }
+.af-list-link > svg:last-child { width: var(--af-icon); height: var(--af-icon); flex-shrink: 0; color: var(--af-ink-3); transition: transform var(--af-ease); }
+.af-list-link:hover { color: var(--af-accent); }
+.af-list-link:hover > svg:last-child { transform: translateX(2px); color: var(--af-accent); }
+.af-list-icon { width: var(--af-icon-md); height: var(--af-icon-md); flex-shrink: 0; color: var(--af-accent); }
+.af-list-title { display: block; font-weight: 600; }
+.af-list-link[data-size="lg"] .af-list-title { font-size: var(--af-text-lg); }
+.af-list-note { display: block; margin-top: 2px; font-size: var(--af-text-sm); color: var(--af-ink-3); }
+
+/* Side navigation (policies): the current page carries the accent bar, as in the header. */
+.af-side-nav { display: grid; align-content: start; border-left: 1px solid var(--af-line); }
+.af-side-nav a { display: flex; align-items: center; min-height: var(--af-control-sm); margin-left: -1px; padding-inline: var(--af-space-4); border-left: 2px solid transparent; font-weight: 500; color: var(--af-ink-2); transition: color var(--af-ease); }
+.af-side-nav a:hover { color: var(--af-accent); }
+.af-side-nav a[aria-current="page"] { border-left-color: var(--af-accent); font-weight: 600; color: var(--af-ink); }
+
+/* Loading placeholders: quiet blocks in the shape of what is coming. */
+.af-skeleton { display: block; height: var(--af-control); border-radius: var(--af-radius); background: var(--af-paper-2); }
+.af-skeleton[data-size="title"] { width: 40%; height: var(--af-space-6); }
+.af-skeleton[data-size="button"] { background: color-mix(in oklab, var(--af-accent) 14%, var(--af-paper-2)); }
 
 /* ── Fields ────────────────────────────────────────────────────────────────────────────────────────────────── */
 .af-field { display: flex; min-width: 0; flex-direction: column; gap: var(--af-space-2); }
@@ -530,6 +558,16 @@
 .af-day { display: grid; place-items: center; height: var(--af-chip); border: 1px solid var(--af-line); border-radius: var(--af-radius-sm); font-size: var(--af-text-xs); font-weight: 700; color: var(--af-line-2); }
 .af-day[data-on="true"] { border-color: var(--af-accent); background: var(--af-accent); color: var(--af-white); }
 .af-daily { font-size: var(--af-text-sm); font-weight: 700; color: var(--af-accent); }
+.af-timetable-head { display: flex; align-items: baseline; gap: var(--af-space-3); padding-bottom: var(--af-space-2); border-bottom: 2px solid var(--af-accent); font-size: var(--af-text-2xl); font-weight: 500; letter-spacing: var(--af-track-tight); }
+.af-timetable-code { font-size: var(--af-text-sm); font-weight: 700; letter-spacing: var(--af-track-caps); color: var(--af-accent); }
+.af-timetable-code[data-muted] { font-size: var(--af-text-xs); color: var(--af-ink-3); }
+.af-timetable thead tr { text-align: left; font-size: var(--af-text-xs); font-weight: 600; letter-spacing: var(--af-track-caps); text-transform: uppercase; color: var(--af-ink-2); }
+.af-timetable th { padding-block: var(--af-space-2); font-weight: 600; }
+.af-timetable tbody tr { vertical-align: middle; }
+.af-timetable td { padding-block: 0; }
+/* The destination link is the row's 44px tap target, so the row needs no extra padding. */
+.af-timetable-link { display: inline-flex; align-items: center; min-height: var(--af-control-sm); font-weight: 600; text-underline-offset: 4px; }
+.af-timetable tr:hover .af-timetable-link { text-decoration: underline; }
 /* Phones: the table sizes to its content and the day chips shrink so the seven-day column fits 402px. */
 @media (max-width: 639px) {
   .af-timetable { table-layout: auto; }
@@ -587,7 +625,9 @@ body:has(.af) [data-radix-popper-content-wrapper] input[type="search"] { height:
 body:has(.af) .rdp-root { --af-day: var(--af-control-sm); font-size: var(--af-text-base); }
 body:has(.af) .rdp-root nav button { width: var(--af-day); height: var(--af-day); border-radius: var(--af-radius); color: var(--af-ink-2); }
 body:has(.af) .rdp-root nav button svg { width: var(--af-icon); height: var(--af-icon); }
-body:has(.af) .rdp-root div:has(> [role="status"]) { height: var(--af-day); margin-inline: calc(var(--af-day) + var(--af-space-1)); }
+/* The caption row (label, or month and year selects) clears the arrow buttons; the selects' own wrapper is left alone. */
+body:has(.af) .rdp-root div:not(.rdp-dropdowns):has(> [role="status"]), body:has(.af) .rdp-root div:has(> .rdp-dropdowns) { height: var(--af-day); margin-inline: calc(var(--af-day) + var(--af-space-1)); }
+body:has(.af) .rdp-root .rdp-dropdowns { justify-content: center; }
 body:has(.af) .rdp-root [role="status"] { font-size: var(--af-text-base); font-weight: 600; }
 body:has(.af) .rdp-weekdays th { width: var(--af-day); height: var(--af-space-8); font-size: var(--af-text-xs); font-weight: 600; color: var(--af-ink-3); }
 body:has(.af) .rdp-week td { width: var(--af-day); height: var(--af-day); padding: 0; font-size: var(--af-text-base); }

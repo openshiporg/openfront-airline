@@ -6,7 +6,8 @@ import { PlatformDateInput } from '@/features/platform/components/PlatformDateTi
 
 import type { PublicCarrierIdentity } from '@/features/storefront/lib/carrier'
 import { customerSafeMessage } from '@/features/storefront/lib/request-errors'
-import { formatAirportTime } from '@/features/airline/lib/time'
+import { formatAirportClock } from '@/features/airline/lib/time'
+import { dayShift, formatServiceDay } from '@/features/storefront/lib/airport-time'
 
 type FlightStatus = {
   id: string
@@ -46,21 +47,29 @@ function publicStatus(flight: Pick<FlightStatus, 'status' | 'scheduledDepartureA
 }
 const statusTone = (status: PublicStatus) => status === 'Cancelled' ? 'bad' : status === 'Delayed' ? 'warn' : 'ok'
 
-// Each time is shown in its own airport's zone and says whether it is actual, estimated, or scheduled.
+// Each time is shown in its own airport's clock and says whether it is actual, estimated, or scheduled; a revised
+// time keeps the original schedule beside it.
 function airportTime(flight: FlightStatus, leg: 'Departure' | 'Arrival', fallbackZone: string) {
   const actual = leg === 'Departure' ? flight.actualDepartureAt : flight.actualArrivalAt
   const estimated = leg === 'Departure' ? flight.estimatedDepartureAt : flight.estimatedArrivalAt
   const scheduled = leg === 'Departure' ? flight.scheduledDepartureAt : flight.scheduledArrivalAt
   const zone = (leg === 'Departure' ? flight.originTimezone : flight.destinationTimezone) || fallbackZone
-  const format = (value: string) => formatAirportTime(value, zone) ?? value
-  if (actual) return `${format(actual)} (actual)`
-  if (estimated) return `${format(estimated)} (estimated; scheduled ${format(scheduled)})`
-  return `${format(scheduled)} (scheduled)`
+  const shown = actual ?? estimated ?? scheduled
+  const later = leg === 'Arrival' ? dayShift(flight.scheduledDepartureAt, flight.originTimezone || fallbackZone, shown, zone) : 0
+  return {
+    kind: actual ? 'Actual' : estimated ? 'Estimated' : 'Scheduled',
+    clock: formatAirportClock(shown, zone) ?? shown,
+    later,
+    scheduled: !actual && estimated ? formatAirportClock(scheduled, zone) : null,
+  }
 }
+type MessageTone = 'info' | 'warn' | 'bad'
 
 export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCarrierIdentity; initialDate: string }) {
   const [results, setResults] = useState<FlightStatus[]>([])
-  const [message, setMessage] = useState('')
+  const [message, setMessageText] = useState('')
+  const [messageTone, setMessageTone] = useState<MessageTone>('info')
+  function setMessage(next: string, tone: MessageTone = 'info') { setMessageText(next); setMessageTone(tone) }
   const [busy, setBusy] = useState(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -69,31 +78,35 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
       const formData = new FormData(event.currentTarget)
       const flightNumber = String(formData.get('flightNumber') ?? '').trim().toUpperCase()
       const serviceDate = String(formData.get('serviceDate') ?? '')
-      if (!/^[A-Z0-9]{1,6}$/.test(flightNumber)) throw new Error('Enter a valid carrier flight number.')
+      if (!/^[A-Z0-9]{1,6}$/.test(flightNumber)) { setMessage(`Enter the ${carrier.code} flight number, for example 101.`, 'warn'); setBusy(false); return }
       const response = await fetch('/api/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: `query($carrier:String!,$flight:String!,$date:String!){publicFlightStatuses(carrierCode:$carrier,flightNumber:$flight,serviceDate:$date){id flightNumber serviceDate status scheduledDepartureAt scheduledArrivalAt estimatedDepartureAt estimatedArrivalAt actualDepartureAt actualArrivalAt departureTerminal departureGate arrivalTerminal arrivalGate originCode originCity originTimezone destinationCode destinationCity destinationTimezone disruption{type status publicSummary publishedAt}}}`, variables: { carrier: carrier.code, flight: flightNumber, date: serviceDate } }) })
       const payload = await response.json() as { data?: { publicFlightStatuses: FlightStatus[] }; errors?: Array<{ message: string }> }
       if (!response.ok || payload.errors?.length || !payload.data) throw new Error(customerSafeMessage(payload.errors?.[0]?.message, 'Flight status is unavailable right now. Please try again.'))
       setResults(payload.data.publicFlightStatuses)
-      if (!payload.data.publicFlightStatuses.length) setMessage(`No ${carrier.name} flight ${flightNumber} was found on ${serviceDate}. Check the flight number and the local departure date.`)
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Flight status is unavailable.') }
+      if (!payload.data.publicFlightStatuses.length) setMessage(`No ${carrier.name} flight ${flightNumber} on ${formatServiceDay(serviceDate)}. Check the flight number and the local departure date.`)
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Flight status is unavailable.', 'bad') }
     setBusy(false)
   }
 
   return <div className="space-y-6">
     <form onSubmit={submit} className="af-card grid gap-4 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-6">
-      <label className="af-field"><span className="af-field-label">{carrier.code} flight number</span><input aria-label="Flight number" name="flightNumber" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{1,6}" maxLength={6} required placeholder="101" className="af-input af-input-code text-lg" /></label>
+      <label className="af-field"><span className="af-field-label">{carrier.code} flight number</span><input aria-label="Flight number" name="flightNumber" autoCapitalize="characters" autoComplete="off" inputMode="text" pattern="[A-Za-z0-9]{1,6}" maxLength={6} required placeholder="101" className="af-input af-input-code" /></label>
       <div className="af-field relative"><span className="af-field-label">Departure date (local)</span><PlatformDateInput aria-label="Departure date" name="serviceDate" defaultValue={initialDate} required className="af-input af-trigger" /></div>
-      <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary min-h-11 px-6">{busy ? 'Checking…' : 'Check status'}</button></div>
+      <div className="af-track" data-block="true"><button disabled={busy} className="af-pill af-pill-primary">{busy ? 'Checking…' : 'Check status'}</button></div>
     </form>
-    {message && <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />{message}</p>}
-    {results.map(flight => <article key={flight.id} className="af-board overflow-hidden rounded-xl">
-      <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pt-5 sm:px-6"><p className="af-board-cell af-signal text-sm font-semibold">{carrier.code} {flight.flightNumber} · {flight.serviceDate}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={statusTone(publicStatus(flight))} />{publicStatus(flight)}</p></div>
-      <h2 className="flex items-center gap-3 px-5 pt-3 text-5xl font-semibold tracking-[-0.01em] sm:px-6 sm:text-6xl">{flight.originCode}<span className="af-path" />{flight.destinationCode}</h2>
+    {message && <p role="status" className="af-notice" data-tone={messageTone}><span className="af-dot" data-tone={messageTone} />{message}</p>}
+    {results.map(flight => <article key={flight.id} className="af-board af-board-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pt-5 sm:px-6"><p className="af-board-cell af-signal text-sm font-semibold">{carrier.code} {flight.flightNumber} · {formatServiceDay(flight.serviceDate)}</p><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone={statusTone(publicStatus(flight))} />{publicStatus(flight)}</p></div>
+      <h2 className="af-display flex items-center gap-3 px-5 pt-3 text-5xl uppercase sm:px-6">{flight.originCode}<span className="af-path" />{flight.destinationCode}</h2>
       <p className="px-5 pt-1 text-sm text-[var(--af-board-ink-2)] sm:px-6">{flight.originCity} to {flight.destinationCity}</p>
       <dl className="af-board-row mt-5 grid sm:grid-cols-2">
         {(['Departure', 'Arrival'] as const).map(leg => <div key={leg} className="px-5 py-4 sm:px-6 sm:[&:last-child]:border-l sm:[&:last-child]:border-[var(--af-board-line)]">
-          <dt className="af-eyebrow">{leg}</dt>
-          <dd className="af-board-cell mt-1 text-sm">{airportTime(flight, leg, carrier.defaultTimezone)}</dd>
+          {(() => {
+            const time = airportTime(flight, leg, carrier.defaultTimezone)
+            return <><dt className="af-eyebrow">{leg === 'Departure' ? 'Departs' : 'Arrives'} · {time.kind}</dt>
+              <dd className="af-board-cell af-time mt-1">{time.clock}{time.later > 0 ? <sup className="af-day-shift"><span className="sr-only">, </span>+{time.later}<span className="sr-only"> {time.later === 1 ? 'day' : 'days'}</span></sup> : null}</dd>
+              {time.scheduled && <dd className="mt-1 text-sm text-[var(--af-board-ink-2)]">Scheduled {time.scheduled}</dd>}</>
+          })()}
           {(() => {
             // A label shows only with a value: no bare "Terminal"/"Gate" before the station assigns them.
             const terminal = (leg === 'Departure' ? flight.departureTerminal : flight.arrivalTerminal)?.trim()

@@ -29,6 +29,11 @@ function FormValue({ name, value, required, triggerId }: { name?: string; value:
 }
 
 /** The calendar's month and year pickers as platform selects; DayPicker reads the choice from `target.value`. */
+// Month and year selects side by side in the calendar header (DayPicker's own wrapper is a plain block).
+function CalendarDropdownNav({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div {...props} className={cn(className, "flex items-center gap-2")} />;
+}
+
 function CalendarDropdown({ options, value, onChange, disabled, "aria-label": label }: DropdownProps) {
   return (
     <PlatformSelect
@@ -128,7 +133,7 @@ export function PlatformDateInput({
             disabled={outOfRange.length ? outOfRange : undefined}
             onSelect={(day) => { set(day ? dateKey(day) : ""); setOpen(false); }}
             autoFocus
-            {...(yearRange ? { captionLayout: "dropdown" as const, reverseYears: true, ...yearRange, components: { Dropdown: CalendarDropdown }, formatters: { formatMonthDropdown: (month: Date) => month.toLocaleString("en-US", { month: "short" }) } } : {})}
+            {...(yearRange ? { captionLayout: "dropdown" as const, reverseYears: true, ...yearRange, components: { Dropdown: CalendarDropdown, DropdownNav: CalendarDropdownNav }, formatters: { formatMonthDropdown: (month: Date) => month.toLocaleString("en-US", { month: "short" }) } } : {})}
           />
           {clearable && current ? (
             <div className="flex justify-end border-t px-1 pt-2">

@@ -26,10 +26,10 @@ export function Timetable({ network, carrierCode }: { network: StorefrontNetwork
   if (!origins.length) return null
   return <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
     {origins.map(origin => <section key={origin} aria-label={`From ${city(origin)}`} className="min-w-0">
-      <h3 className="flex items-baseline gap-3 border-b-2 border-[var(--af-accent)] pb-2"><span className="text-2xl font-medium tracking-[-0.01em]">From {city(origin)}</span><span className="text-sm font-bold tracking-[0.08em] text-[var(--af-accent)]">{origin}</span></h3>
+      <h3 className="af-timetable-head"><span>From {city(origin)}</span><span className="af-timetable-code">{origin}</span></h3>
       <table className="af-timetable w-full text-sm">
         <colgroup><col className="w-[34%]" /><col className="w-[17%]" /><col className="w-[17%]" /><col className="w-[17%]" /><col /></colgroup>
-        <thead><tr className="text-left text-xs uppercase tracking-[0.1em] text-[var(--af-ink-2)] [&>th]:py-2.5 [&>th]:font-semibold"><th scope="col">To</th><th scope="col">Flight</th><th scope="col">Dep</th><th scope="col">Arr</th><th scope="col"><span className="sr-only">Days of operation</span><span aria-hidden="true">Days</span></th></tr></thead>
+        <thead><tr><th scope="col">To</th><th scope="col">Flight</th><th scope="col">Dep</th><th scope="col">Arr</th><th scope="col"><span className="sr-only">Days of operation</span><span aria-hidden="true">Days</span></th></tr></thead>
         <tbody className="divide-y divide-[var(--af-line)] border-t border-[var(--af-line)]">
           {network.routes.filter(route => route.origin === origin).map(route => {
             const key = routeDatesKey(route.origin, route.destination)
@@ -37,8 +37,8 @@ export function Timetable({ network, carrierCode }: { network: StorefrontNetwork
             const dates = network.serviceDates[key]
             const days = operatingDays(dates)
             const query = new URLSearchParams({ from: route.origin, to: route.destination, ...(dates?.[0] ? { date: dates[0] } : {}) })
-            return <tr key={key} className="group align-baseline [&>td]:py-3">
-              <td className="pr-3"><Link href={`/?${query.toString()}#book`} className="inline-flex min-h-11 items-center font-semibold underline-offset-4 group-hover:underline">{city(route.destination)}</Link> <span className="text-xs font-bold tracking-[0.06em] text-[var(--af-ink-3)]">{route.destination}</span></td>
+            return <tr key={key} className="group">
+              <td className="pr-3"><Link href={`/?${query.toString()}#book`} className="af-timetable-link">{city(route.destination)}</Link> <span className="af-timetable-code" data-muted="true">{route.destination}</span></td>
               <td className="whitespace-nowrap pr-3 text-[var(--af-ink-2)]">{line ? `${carrierCode} ${line.flightNumber}` : '—'}</td>
               <td className="whitespace-nowrap pr-3 font-semibold">{line ? clock(line.departsAt, line.originTimezone) : '—'}</td>
               <td className="whitespace-nowrap pr-3">{line ? clock(line.arrivesAt, line.destinationTimezone) : '—'}</td>

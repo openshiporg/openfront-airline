@@ -15,6 +15,6 @@ export default async function ManageBookingPage() {
   const carrier = await getStorefrontCarrierIdentity()
   const initialDate = carrierDateFromToday(14, carrier?.defaultTimezone ?? 'UTC')
   return <PublicPageShell carrier={carrier} current="/manage-booking" eyebrow="Your trip" title="Manage booking">
-    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="manage" /> : <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />Online booking management isn&apos;t available right now.</p>}
+    {carrier ? <FlightShop initialDate={initialDate} carrier={carrier} mode="manage" /> : <p role="status" className="af-notice" data-tone="warn"><span className="af-dot" data-tone="warn" />Online booking management isn’t available right now.</p>}
   </PublicPageShell>
 }
