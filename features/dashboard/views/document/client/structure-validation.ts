@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod/v3'
 import { type RelationshipData } from './DocumentEditor/component-blocks/api-shared'
 import { isValidURL } from './DocumentEditor/isValidURL'
 
