@@ -55,6 +55,8 @@ const yoga = createYoga({
   // hidden behind a logged correlation ID.
   maskedErrors: { maskError: maskGraphqlError },
   multipart: false,
+  // Yoga 6 logs every request at info level, which floods Railway past its rate limit and drops the lines that matter.
+  logging: 'error',
   plugins: [depthLimitPlugin, anonymousIntrospectionPlugin, authRateLimitPlugin],
 })
 

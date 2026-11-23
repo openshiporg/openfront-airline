@@ -131,8 +131,8 @@ export function DepartureDesk({ manifest, detailBase = '/dashboard/departures', 
         </div>
         <dl className="flex shrink-0 flex-wrap gap-x-6 gap-y-2">
           <FlightFact label="Departs" value={departureDateTime.format(new Date(flight.scheduledDepartureAt))} />
-          <FlightFact label="Terminal" value={flight.departureTerminal ?? 'TBD'} />
-          <FlightFact label="Gate" value={flight.departureGate ?? 'TBD'} large />
+          {flight.departureTerminal?.trim() && <FlightFact label="Terminal" value={flight.departureTerminal} />}
+          {flight.departureGate?.trim() && <FlightFact label="Gate" value={flight.departureGate} large />}
         </dl>
       </header>
       <Panel className="divide-y">{flight.travelers.map(traveler => {

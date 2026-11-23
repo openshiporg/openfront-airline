@@ -275,6 +275,13 @@ export function Panel({ children, className, ...props }: React.HTMLAttributes<HT
   )
 }
 
+/** A label shows only with a value: empty strings and dash placeholders hide the whole row. */
+export function hasFactValue(value: React.ReactNode) {
+  if (value === null || value === undefined || value === false) return false
+  if (typeof value === 'string') return !['', '—', '-', '--', 'TBD'].includes(value.trim())
+  return true
+}
+
 /** Label/value pairs in a two-column list. */
 export function Facts({
   items,
@@ -285,7 +292,7 @@ export function Facts({
 }) {
   return (
     <dl className={cn('divide-y text-sm', className)}>
-      {items.filter(Boolean).map((item, index) => {
+      {items.filter(item => item && hasFactValue(item.value)).map((item, index) => {
         const row = item as { label: React.ReactNode; value: React.ReactNode; mono?: boolean }
         return (
           <div key={index} className="grid min-w-0 grid-cols-[minmax(7rem,40%)_1fr] items-baseline gap-4 py-1.5">

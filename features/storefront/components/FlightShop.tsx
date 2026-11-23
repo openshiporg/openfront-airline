@@ -642,7 +642,7 @@ export function FlightShop({ initialDate, carrier, mode = 'book', network, hero 
                 <div className="min-w-0">
                   <div className="af-pass-head flex items-center justify-between gap-3 px-5 py-2.5"><span className="af-eyebrow !text-white/80">Boarding pass</span><span className="af-mono text-xs font-semibold capitalize">{pass.status.replaceAll('_', ' ')}</span></div>
                   <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
-                    {[['Seat', pass.seatDesignatorSnapshot], ['Group', pass.boardingGroup], ['Terminal', pass.terminalSnapshot], ['Gate', pass.gateSnapshot]].map(([name, value]) => <div key={name}><p className="af-field-label">{name}</p><p className="af-mono mt-1 text-2xl font-semibold">{value ?? 'TBD'}</p></div>)}
+                    {[['Seat', pass.seatDesignatorSnapshot], ['Group', pass.boardingGroup], ['Terminal', pass.terminalSnapshot], ['Gate', pass.gateSnapshot]].filter(([, value]) => value?.trim()).map(([name, value]) => <div key={name}><p className="af-field-label">{name}</p><p className="af-mono mt-1 text-2xl font-semibold">{value}</p></div>)}
                   </div>
                 </div>
                 <div className="af-pass-stub p-5"><p className="af-field-label">Pass</p><p className="af-mono mt-1 font-semibold">{pass.passNumber}</p><code className="af-mono af-well mt-3 block overflow-x-auto px-3 py-2 text-[0.6875rem]">{pass.barcodeToken}</code></div>

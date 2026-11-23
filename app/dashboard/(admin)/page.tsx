@@ -1,3 +1,4 @@
+import { staffTitle } from '@/features/dashboard/lib/staffTitle'
 import { redirect } from 'next/navigation'
 
 import OperationsPage from '@/features/platform/screens/Operations/OperationsPage'
@@ -11,4 +12,8 @@ export default async function DashboardHome() {
   const landing = staffLandingPath(user)
   if (landing) redirect(landing)
   return <OperationsPage />
+}
+
+export async function generateMetadata() {
+  return staffTitle('Overview')
 }

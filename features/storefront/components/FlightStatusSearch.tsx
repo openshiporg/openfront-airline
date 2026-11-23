@@ -94,7 +94,13 @@ export function FlightStatusSearch({ carrier, initialDate }: { carrier: PublicCa
         {(['Departure', 'Arrival'] as const).map(leg => <div key={leg} className="px-5 py-4 sm:px-6 sm:[&:last-child]:border-l sm:[&:last-child]:border-[var(--af-board-line)]">
           <dt className="af-eyebrow">{leg}</dt>
           <dd className="af-board-cell mt-1 text-sm">{airportTime(flight, leg, carrier.defaultTimezone)}</dd>
-          <dd className="mt-3 grid grid-cols-2 gap-3"><span><span className="af-eyebrow block">Terminal</span><span className="af-board-cell text-2xl font-semibold">{(leg === 'Departure' ? flight.departureTerminal : flight.arrivalTerminal) ?? 'TBD'}</span></span><span><span className="af-eyebrow block">Gate</span><span className="af-board-cell af-signal text-2xl font-semibold">{(leg === 'Departure' ? flight.departureGate : flight.arrivalGate) ?? 'TBD'}</span></span></dd>
+          {(() => {
+            // A label shows only with a value: no bare "Terminal"/"Gate" before the station assigns them.
+            const terminal = (leg === 'Departure' ? flight.departureTerminal : flight.arrivalTerminal)?.trim()
+            const gate = (leg === 'Departure' ? flight.departureGate : flight.arrivalGate)?.trim()
+            if (!terminal && !gate) return null
+            return <dd className="mt-3 grid grid-cols-2 gap-3">{terminal && <span><span className="af-eyebrow block">Terminal</span><span className="af-board-cell text-2xl font-semibold">{terminal}</span></span>}{gate && <span><span className="af-eyebrow block">Gate</span><span className="af-board-cell af-signal text-2xl font-semibold">{gate}</span></span>}</dd>
+          })()}
         </div>)}
       </dl>
       {flight.disruption?.publicSummary && <div className="af-board-row px-5 py-4 sm:px-6"><p className="af-title-line text-sm font-semibold"><span className="af-dot" data-tone="warn" />{flight.disruption.type.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase())}</p><p className="mt-1 pl-4 text-sm text-[var(--af-board-ink-2)]">{flight.disruption.publicSummary}</p></div>}

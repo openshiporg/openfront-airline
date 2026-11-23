@@ -4,8 +4,8 @@ import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Openfront Dashboard",
-  description: "Admin interface for Openfront",
+  title: "Airline desk",
+  description: "Staff desk for bookings, departures and payments.",
 };
 
 export default function DashboardLayout({
