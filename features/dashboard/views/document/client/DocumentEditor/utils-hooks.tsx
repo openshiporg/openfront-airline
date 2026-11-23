@@ -27,7 +27,7 @@ export function useElementWithSetNodes<TElement extends Element>(
         typeof changesOrCallback === 'function'
           ? changesOrCallback(currentElement)
           : changesOrCallback
-      Transforms.setNodes(editor, changes, { at: ReactEditor.findPath(editor, currentElement) })
+      Transforms.setNodes<TElement>(editor, changes, { at: ReactEditor.findPath(editor, currentElement) })
       setState({
         element: currentElement,
         elementWithChanges: { ...currentElement, ...changes },
