@@ -675,6 +675,8 @@ export function NetworkDesk({ schedules, flights, defaultCurrencyCode, defaultTi
           </article>
         })}
       </Panel>}
+      {/* The same page links again under a long page, so a phone does not scroll back up for the next one. */}
+      {flights.length > 0 && flightWorklist?.state === 'ready' && <div className="flex justify-end"><PageLinks firstHref={flightFirstHref} nextHref={flightNextHref} nextLabel="Next 50" /></div>}
       {!flights.length && !flightWorklist && <Well>No dated flights provisioned.</Well>}
     </section>
   </DeskSection>

@@ -346,6 +346,8 @@ export function BookingDesk({ offers, bookings, bookingCount, bookingHasNextPage
           </div>}
         </li>})}</ul>
       </div> : <Well>No bookings</Well>}
+      {/* The next page again under a long page, so a phone does not scroll back up for it. */}
+      {bookings.length > 0 && bookingHasNextPage && bookingNextHref && <div className="mt-3 flex justify-end"><Pill asChild><Link href={bookingNextHref}>Next 50<ChevronRight /></Link></Pill></div>}
     </DeskSection>}
 
 
